@@ -7,11 +7,20 @@ import type { NextAuthRequest } from "next-auth";
 
 const checkAccess: (request: NextAuthRequest, event: NextFetchEvent) => Promise<NextResponse> = async (request) => {
   try {
+    const access = routeAccess(request.nextUrl.pathname);
     await authorizeSession(prisma, request.auth,
-      routeAccess(request.nextUrl.pathname) === "admin" ? "ADMIN_REVIEWER" : undefined);
+      access === "admin" ? "ADMIN_REVIEWER" : access === "candidate" ? "CANDIDATE" : undefined);
     return NextResponse.next();
   } catch (error) {
     const status = error instanceof AuthorizationError ? error.status : 401;
+    // Browser page navigation goes to sign-in. APIs, RSC and mutation requests retain
+    // an explicit denial; never redirect/replay an unauthorized POST or Server Action.
+    if (status === 401 && ["GET", "HEAD"].includes(request.method)
+      && request.headers.get("accept")?.includes("text/html") && !request.nextUrl.pathname.startsWith("/api/")) {
+      const response = NextResponse.redirect(new URL("/login", request.url));
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
     return NextResponse.json({ error: status === 403 ? "Forbidden." : "Authentication required." },
       { status, headers: { "Cache-Control": "no-store" } });
   }

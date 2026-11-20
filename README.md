@@ -1,12 +1,13 @@
 # RaterReady
 
-Stage A recruiter demo — `DEMO - SYNTHETIC`.
+Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–3 contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–4 contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
-authentication with server-side RBAC. No login, learner, dashboard, or admin UI
-pages have been built. There is no public registration or role-selection flow.
+authentication with server-side RBAC, accessible sign-in, and protected role landing
+shells. There is no public registration or role-selection flow. Onboarding,
+diagnostics, evaluation workspaces and owner review tools are not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -111,8 +112,9 @@ Routes are private by default. Only `/`, `/login`, `/verify/*`, and the Auth.js
 protocol endpoints are public; framework static assets are excluded. `/admin/*`
 and `/api/admin/*` require the current owner reviewer role. Anonymous requests
 receive generic 401 JSON, candidates receive 403 on admin routes, and permitted
-requests continue. This includes direct URL, API, POST and RSC requests. The
-future login URL currently returns 404 because its UI is deliberately deferred.
+requests continue. `/dashboard/*` additionally requires the candidate role.
+Anonymous browser page GET/HEAD requests go to `/login`; API, RSC and mutation
+requests retain explicit denials. This includes direct URL and Server Action access.
 For production outside Vercel, configure Auth.js's trusted deployment URL/host
 according to your reverse proxy rather than assuming forwarded headers are safe.
 
@@ -126,7 +128,44 @@ fields use a closed enum allowlist, with sharing off by default. Audit triggers
 reject updates, deletes and truncation; a database owner can still change DDL,
 so deployed application connections should use a non-owner role.
 
-`npm run dev` starts the development server; the empty homepage shell returns
-Next.js's default 404. Prisma 6 remains pinned to support `@prisma/client` without
+`npm run dev` starts the development server. Open `http://localhost:3000/login`.
+The root `/` sends anonymous visitors to sign-in and signed-in users to the
+destination for their fresh database role. Candidates land on `/dashboard` and
+the owner reviewer lands on `/admin`. `/login` also redirects existing sessions.
+Both pages authorize independently on the server, display the current identity
+and role, keep the `DEMO - SYNTHETIC` notice visible, and provide sign-out.
+The form uses labeled inputs, associated field errors, an accessible visibility
+toggle, a polite failure live region, and keyboard submission. Generic errors
+never reveal whether an account exists or is disabled; form state never returns
+the submitted password. Successful sign-in uses a fixed `/` gateway rather than
+client-supplied roles or redirect URLs.
+
+For manual browser checks, sign in with each of the three seeded account codes
+and the corresponding password you configured in `.env`. Check password visibility
+and submission using Tab/Enter/Space, try invalid credentials, confirm the role
+destination, revisit `/login` while signed in, try the other role's landing URL
+(403), and sign out. Check a narrow viewport and browser zoom as well.
+
+Automated browser checks run against an isolated **local** test database; they
+refuse a Neon URL and start their own Next.js server on port 3100. Create an empty
+PostgreSQL database named `raterready_test*`; the setup migrates and seeds it with
+test-only passwords. Stop any other development server for this checkout first.
+Do not run the database and browser suites concurrently on
+the same test database because both exercise account status changes.
+
+```sh
+npx playwright install --with-deps chromium
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+```
+
+The browser suite covers all three demo accounts, sign-out, existing-session
+routing, unauthorized direct navigation, generic failures, keyboard focus and
+visibility controls, mobile reflow, 200% text sizing, and axe WCAG 2.2 AA checks.
+Automated accessibility checks supplement manual keyboard and screen-reader
+review. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` optionally selects an existing local
+Chromium executable. A development environment with restricted Turbopack workers
+can preview using `npm run dev -- --webpack`.
+
+Prisma 6 remains pinned to support `@prisma/client` without
 adding a driver adapter. Existing npm audit findings in Prisma 6 CLI dependencies
 remain outside this step's scope.

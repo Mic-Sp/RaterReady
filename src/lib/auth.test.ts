@@ -134,6 +134,16 @@ describe("Credentials and database-authoritative RBAC", () => {
     expect((await protectedRequest("/admin/review/attempt-1", result.cookie))?.headers.get("x-middleware-next")).toBe("1");
     state.cookie = result.cookie;
     await expect(requireCandidate()).rejects.toMatchObject({ status: 403 });
+    expect((await protectedRequest("/dashboard", result.cookie))?.status).toBe(403);
+  });
+
+  it("redirects anonymous browser navigation to sign-in while denying unauthorized mutations", async () => {
+    const headers = { accept: "text/html", host: "localhost", "x-forwarded-proto": "http" };
+    const response = await proxy(new NextRequest("http://localhost/dashboard", { headers }), {} as NextFetchEvent);
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get("location")).toBe("http://localhost/login");
+    const mutation = await proxy(new NextRequest("http://localhost/dashboard", { method: "POST", headers }), {} as NextFetchEvent);
+    expect(mutation?.status).toBe(401);
   });
 
   it.each(["/learner", "/dashboard", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route"])("requires authentication for %s", async (path) => {
