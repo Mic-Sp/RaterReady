@@ -8,6 +8,7 @@ import { testPasswords } from "./test-helpers";
 import { verifyPassword } from "../src/server/auth/passwords";
 import { authenticateCredentials, findActiveSessionUser } from "../src/server/auth/accounts";
 import { authorizeSession } from "../src/server/auth/guards";
+import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
 
 vi.mock("server-only", () => ({}));
 
@@ -61,6 +62,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       await prisma.submissionResponse.deleteMany({ where: { attempt: { candidateId } } });
       await prisma.assessmentAttempt.deleteMany({ where: { candidateId } });
       await prisma.scenarioExposure.deleteMany({ where: { candidateId } });
+      await prisma.moduleProgress.deleteMany({ where: { candidateId } });
+      await prisma.diagnosticSession.deleteMany({ where: { candidateId } });
       await prisma.candidateProfile.delete({ where: { userId: candidateId } });
       await prisma.user.delete({ where: { id: candidateId } });
     }
@@ -217,5 +220,55 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     } finally {
       await prisma.user.update({ where: { id: marcus.id }, data: { accountStatus: marcus.accountStatus } });
     }
+  });
+
+  it("persists diagnostic skipping before any answer without a penalty, reason or level reset", async () => {
+    const before = await getLearningSnapshot(prisma, candidateId);
+    await skipDiagnostic(prisma, candidateId);
+    const after = await getLearningSnapshot(prisma, candidateId);
+    expect(after.diagnosticStatus).toBe("SKIPPED");
+    expect(after.selectedLevel).toBe(before.selectedLevel);
+    expect(after.diagnostic?.answersJson).toEqual({});
+    expect(after.moduleProgress).toEqual(before.moduleProgress);
+    expect(after.diagnostic?.feedbackJson).toBeNull();
+  });
+
+  it("preserves partial selections on skip and rejects a stale tab overwriting skipped state", async () => {
+    const session = await startDiagnostic(prisma, candidateId);
+    await saveDiagnostic(prisma, candidateId, { G1: "0" }, session.revision, false);
+    const saved = await getLearningSnapshot(prisma, candidateId);
+    expect(saved.diagnostic?.answersJson).toEqual({ G1: "0" });
+    await skipDiagnostic(prisma, candidateId);
+    await expect(saveDiagnostic(prisma, candidateId, { G1: "1" }, saved.diagnostic!.revision, true)).rejects.toThrow();
+    const skipped = await getLearningSnapshot(prisma, candidateId);
+    expect(skipped.diagnosticStatus).toBe("SKIPPED");
+    expect(skipped.diagnostic?.answersJson).toEqual({ G1: "0" });
+  });
+
+  it("persists advisory placement while allowing overrides and preserving all lesson completions", async () => {
+    const attemptsBefore = await prisma.assessmentAttempt.count({ where: { candidateId } });
+    const credentialsBefore = await prisma.credential.count({ where: { attempt: { candidateId } } });
+    const completion = await completeLesson(prisma, candidateId, "FOUNDATIONS", "G1");
+    expect(await completeLesson(prisma, candidateId, "FOUNDATIONS", "G1")).toEqual(completion);
+    await selectLearningLevel(prisma, candidateId, "ADVANCED");
+    const session = await startDiagnostic(prisma, candidateId);
+    const feedback = await saveDiagnostic(prisma, candidateId, { G1: "1" }, session.revision, true);
+    expect(feedback.suggestedLevel).toBe("FOUNDATIONS");
+    const finished = await getLearningSnapshot(prisma, candidateId);
+    expect(finished.selectedLevel).toBe("ADVANCED");
+    expect(finished.diagnosticStatus).toBe("COMPLETED");
+    expect(finished.diagnostic?.feedbackJson).toEqual(feedback);
+    await selectLearningLevel(prisma, candidateId, "INTERMEDIATE");
+    await selectLearningLevel(prisma, candidateId, "FOUNDATIONS");
+    const restored = await getLearningSnapshot(prisma, candidateId);
+    expect(restored.moduleProgress).toEqual([completion]);
+    expect(restored.onboardingCompletedAt).not.toBeNull();
+    expect(restored.diagnostic?.suggestedLevel).toBe("FOUNDATIONS");
+    // Diagnostic completion is isolated from assessment/certification tables and never issues a pass.
+    expect(await prisma.assessmentAttempt.count({ where: { candidateId } })).toBe(attemptsBefore);
+    expect(await prisma.credential.count({ where: { attempt: { candidateId } } })).toBe(credentialsBefore);
+    expect(restored.diagnostic).not.toHaveProperty("passed");
+    await skipDiagnostic(prisma, candidateId);
+    expect((await getLearningSnapshot(prisma, candidateId)).diagnosticStatus).toBe("COMPLETED");
   });
 });

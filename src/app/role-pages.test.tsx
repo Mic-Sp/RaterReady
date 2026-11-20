@@ -12,6 +12,8 @@ import type { AuthIdentity } from "../server/auth/accounts";
 const mocks = vi.hoisted(() => ({ requireSession: vi.fn(), requireCandidate: vi.fn(), requireAdmin: vi.fn(), signOut: vi.fn(), redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("../lib/auth", () => mocks);
+vi.mock("../lib/prisma", () => ({ prisma: {} }));
+vi.mock("../server/learning/service", () => ({ getLearningSnapshot: async () => ({ onboardingCompletedAt: new Date() }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
 
@@ -40,10 +42,10 @@ describe("protected role-routing shell", () => {
   it("calls the exact page guard and withholds content from an unauthorized role", async () => {
     mocks.requireCandidate.mockResolvedValue(candidate);
     mocks.requireAdmin.mockRejectedValue(new AuthorizationError(403));
-    expect(await CandidateDashboardPage()).toMatchObject({ props: { user: candidate } });
+    expect(await CandidateDashboardPage({ searchParams: Promise.resolve({}) })).toMatchObject({ props: { user: candidate } });
     await expect(AdminConsolePage()).rejects.toThrow("DENIED");
     mocks.requireCandidate.mockRejectedValue(new AuthorizationError(403));
-    await expect(CandidateDashboardPage()).rejects.toThrow("DENIED");
+    await expect(CandidateDashboardPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("DENIED");
     expect(mocks.requireAdmin).toHaveBeenCalled();
     expect(mocks.requireCandidate).toHaveBeenCalledTimes(2);
   });

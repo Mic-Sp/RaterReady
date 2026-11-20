@@ -2,12 +2,13 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–4 contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–5 contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
-shells. There is no public registration or role-selection flow. Onboarding,
-diagnostics, evaluation workspaces and owner review tools are not implemented yet.
+shells, adaptive Generalist onboarding, an optional diagnostic and a learning
+dashboard. There is no public registration or role-selection flow. Interactive
+practice/capstone workspaces and owner review tools are not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -19,7 +20,7 @@ seed-only inputs for the three `DEMO - SYNTHETIC` accounts; never commit them.
 Prisma 6 loads `.env`, not Next.js's `.env.local`; avoid conflicting values if
 you already created `.env.local` during Step 1. Neither file belongs in Git.
 
-Apply the checked-in migrations (including the Step 3 authentication migration)
+Apply the checked-in migrations (including the Step 5 adaptive learning migration)
 and run the seed twice:
 
 ```sh
@@ -130,8 +131,9 @@ so deployed application connections should use a non-owner role.
 
 `npm run dev` starts the development server. Open `http://localhost:3000/login`.
 The root `/` sends anonymous visitors to sign-in and signed-in users to the
-destination for their fresh database role. Candidates land on `/dashboard` and
-the owner reviewer lands on `/admin`. `/login` also redirects existing sessions.
+destination for their fresh database role. Candidates enter `/dashboard`; new
+learners without an explicit level choice continue to `/onboarding`. The owner
+reviewer lands on `/admin`. `/login` also redirects existing sessions.
 Both pages authorize independently on the server, display the current identity
 and role, keep the `DEMO - SYNTHETIC` notice visible, and provide sign-out.
 The form uses labeled inputs, associated field errors, an accessible visibility
@@ -146,10 +148,42 @@ and submission using Tab/Enter/Space, try invalid credentials, confirm the role
 destination, revisit `/login` while signed in, try the other role's landing URL
 (403), and sign out. Check a narrow viewport and browser zoom as well.
 
+The Step 5 learning flow is candidate-only at both the page and Server Action
+boundaries:
+
+- `/onboarding` offers the optional, untimed, non-certifying skills check and all
+  three levels equally. Choosing any level records that choice in PostgreSQL.
+- `/diagnostic` contains six short `DEMO - SYNTHETIC` selection tasks covering
+  rubric use, comparison, verification, justification selection and independent
+  workflow. No personal narrative or nuanced-prose scoring is collected. Save
+  partial selections or skip before/during the check without an explanation.
+- Completing the check records advisory G1–G6 feedback and a suggested level in
+  `DiagnosticSession`, isolated from assessment and credential tables. Suggestions
+  never assign a level; all levels remain selectable. G1–G6 are RaterReady's
+  internal Generalist competency identifiers, not an industry standard.
+- `/dashboard` reads saved profile/completion records, resumes the next lesson,
+  allows level switching, and shows completions separately for each level.
+  `/learn/G1` through `/learn/G6` are unscored reference lessons with idempotent,
+  self-marked reading completion. These marks are not scored practice results.
+- The separate readiness card remains **Not yet assessed** regardless of lesson
+  or diagnostic completion. The 85% finalized capstone standard is unchanged,
+  and none of these flows issues a credential.
+- `/workflow-lab` and `/technical-preview` are optional orientation/reference
+  entries only; the Technical Preview is explicitly non-credentialing.
+- The native Seven-Step Independent Evaluation Method disclosure is available
+  on demand from onboarding, dashboard, diagnostic and every reference level.
+
+Run `npx prisma generate` and `npx prisma migrate deploy` before browser preview.
+No additional seed data is needed. For a quick manual check, choose Advanced
+Calibration immediately, mark a reference lesson complete, switch levels and
+return to verify its completion remains saved. Start the optional check, skip
+with no answers, resume/save a partial check, finish it and override its suggestion.
+
 Automated browser checks run against an isolated **local** test database; they
 refuse a Neon URL and start their own Next.js server on port 3100. Create an empty
 PostgreSQL database named `raterready_test*`; the setup migrates and seeds it with
-test-only passwords. Stop any other development server for this checkout first.
+test-only passwords. The test server uses a separate `.next-browser-tests` build
+directory so an existing development server is left running.
 Do not run the database and browser suites concurrently on
 the same test database because both exercise account status changes.
 
@@ -161,6 +195,9 @@ TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' np
 The browser suite covers all three demo accounts, sign-out, existing-session
 routing, unauthorized direct navigation, generic failures, keyboard focus and
 visibility controls, mobile reflow, 200% text sizing, and axe WCAG 2.2 AA checks.
+It also covers direct advanced entry, diagnostic skipping before any answer,
+saved partial selections, advisory placement overrides, and persisted progress
+across level switches and reloads.
 Automated accessibility checks supplement manual keyboard and screen-reader
 review. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` optionally selects an existing local
 Chromium executable. A development environment with restricted Turbopack workers

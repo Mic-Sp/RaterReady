@@ -22,6 +22,6 @@ export default defineConfig({
     timeout: 120000,
     env: { DATABASE_URL: testDatabaseUrl, DIRECT_URL: testDatabaseUrl,
       AUTH_SECRET: "DEMO - SYNTHETIC browser test secret only at least 32 characters",
-      AUTH_URL: "http://127.0.0.1:3100", AUTH_TRUST_HOST: "true", ENABLE_LIVE_ZDR_GRADING: "false" },
+      AUTH_URL: "http://127.0.0.1:3100", AUTH_TRUST_HOST: "true", ENABLE_LIVE_ZDR_GRADING: "false", RATERREADY_BROWSER_TEST: "true" },
   },
 });

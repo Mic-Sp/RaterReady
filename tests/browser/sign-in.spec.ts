@@ -56,7 +56,13 @@ for (const [accountCode, destination, name, heading] of [
 ] as const) {
   test(`${accountCode} signs in, routes by role, and signs out`, async ({ page }) => {
     await signIn(page, accountCode);
-    await expect(page).toHaveURL(destination);
+    if (destination === "/dashboard") {
+      await expect(page).toHaveURL(/\/(?:onboarding|dashboard)$/);
+      if (new URL(page.url()).pathname === "/onboarding") {
+        await page.getByRole("button", { name: accountCode === "demo-marcus" ? "Choose Foundations" : "Choose Advanced Calibration", exact: true }).click();
+      }
+    }
+    await expect(page).toHaveURL(new RegExp(`${destination}(?:\\?.*)?$`));
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByLabel("Synthetic demonstration access")).toBeVisible();

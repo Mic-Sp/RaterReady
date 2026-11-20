@@ -146,19 +146,39 @@ model User {
 }
 
 model CandidateProfile {
-  userId           String              @id
-  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
-  selectedLevel    LearningLevel       @default(FOUNDATIONS)
-  track            Track               @default(GENERALIST)
+  userId                String              @id
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  selectedLevel         LearningLevel       @default(FOUNDATIONS)
+  track                 Track               @default(GENERALIST)
   /// Optional, untimed and non-certifying; skipping never blocks level selection.
-  diagnosticStatus DiagnosticStatus    @default(NOT_STARTED)
+  diagnosticStatus      DiagnosticStatus    @default(NOT_STARTED)
+  /// Records an explicit level choice; no diagnostic or beginner prerequisite is required.
+  onboardingCompletedAt DateTime?           @db.Timestamptz(3)
   /// The only accommodation datum: finite numeric multiplier >= 1, with no reason collected.
-  timeMultiplier   Float               @default(1)
-  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
-  moduleProgress   ModuleProgress[]
-  attempts         AssessmentAttempt[]
-  exposures        ScenarioExposure[]
+  timeMultiplier        Float               @default(1)
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @db.Timestamptz(3)
+  moduleProgress        ModuleProgress[]
+  attempts              AssessmentAttempt[]
+  exposures             ScenarioExposure[]
+  diagnostic            DiagnosticSession?
+}
+
+/// Advisory-only selections are isolated from AssessmentAttempt and Credential by design.
+/// No timer, pass/fail score, written-prose grading, or sensitive disclosure fields exist here.
+model DiagnosticSession {
+  candidateId        String           @id
+  candidate          CandidateProfile @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  version            Int              @default(1)
+  status             DiagnosticStatus @default(IN_PROGRESS)
+  answersJson        Json             @default("{}")
+  feedbackJson       Json?
+  suggestedLevel     LearningLevel?
+  revision           Int              @default(0)
+  isSyntheticFixture Boolean          @default(true)
+  demoLabel          String           @default("DEMO - SYNTHETIC")
+  startedAt          DateTime         @default(now()) @db.Timestamptz(3)
+  completedAt        DateTime?        @db.Timestamptz(3)
 }
 
 /// Progress is independent of selectedLevel, so switching levels never deletes completion.
