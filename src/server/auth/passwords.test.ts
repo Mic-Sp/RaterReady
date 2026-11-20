@@ -19,8 +19,8 @@ describe("password hashing", () => {
 
   it("rejects oversized password inputs without authenticating a truncated value", async () => {
     const hash = await hashPassword("DEMO - SYNTHETIC password");
-    expect(await verifyPassword("x".repeat(257), hash)).toBe(false);
-    await expect(hashPassword("short")).rejects.toThrow();
-    await expect(hashPassword("x".repeat(257))).rejects.toThrow();
+    expect(await verifyPassword("x".repeat(129), hash)).toBe(false);
+    await expect(hashPassword("x".repeat(7))).rejects.toThrow();
+    await expect(hashPassword("x".repeat(129))).rejects.toThrow();
   });
 });

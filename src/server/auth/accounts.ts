@@ -20,7 +20,7 @@ const identitySelect = {
 
 const credentialsSchema = z.object({
   accountCode: z.string().trim().min(1).max(64),
-  password: z.string().min(1).max(256),
+  password: z.string().min(8).max(128),
 });
 const sessionIdentitySchema = z.object({ id: z.string().min(1), sessionVersion: z.number().int().nonnegative() });
 const approvedAccounts: Readonly<Record<string, Role>> = {

@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { User } from "@prisma/client";
 import { demoAccounts } from "../../prisma/fixtures";
 import { testPasswords } from "../../prisma/test-helpers";
+import { readDemoPasswords } from "../../prisma/demo-passwords";
 import { hashPassword } from "../server/auth/passwords";
 
 const state = vi.hoisted(() => ({ cookie: "", findUnique: vi.fn() }));
@@ -64,6 +65,19 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("Credentials and database-authoritative RBAC", () => {
+  it.each([8, 128])("accepts a %i-character password from seed validation through authentication", async (length) => {
+    const password = "x".repeat(length);
+    const passwords = readDemoPasswords({
+      NODE_ENV: "test",
+      DEMO_MARCUS_PASSWORD: password,
+      DEMO_ELENA_PASSWORD: testPasswords["demo-elena"],
+      DEMO_MICHAEL_PASSWORD: testPasswords["admin-michael"],
+    });
+    records[0].passwordHash = await hashPassword(passwords["demo-marcus"]);
+    const result = await login("demo-marcus", password);
+    expect((await session(result.cookie)).user).toMatchObject({ accountCode: "demo-marcus", role: "CANDIDATE" });
+  });
+
   it.each(demoAccounts)("authenticates $accountCode with the current database role", async (account) => {
     const result = await login(account.accountCode, testPasswords[account.accountCode]);
     expect(result.body.url).toBe("http://localhost/");

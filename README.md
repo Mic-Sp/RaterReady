@@ -13,7 +13,7 @@ set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
 unpooled connection string for the **same database and branch**. Set a random
 `AUTH_SECRET` of at least 32 characters. Keep `ENABLE_LIVE_ZDR_GRADING="false"`.
 Set distinct random `DEMO_MARCUS_PASSWORD`, `DEMO_ELENA_PASSWORD`, and
-`DEMO_MICHAEL_PASSWORD` values of 16–256 characters before seeding. These are
+`DEMO_MICHAEL_PASSWORD` values of 8–128 characters before seeding. These are
 seed-only inputs for the three `DEMO - SYNTHETIC` accounts; never commit them.
 Prisma 6 loads `.env`, not Next.js's `.env.local`; avoid conflicting values if
 you already created `.env.local` during Step 1. Neither file belongs in Git.

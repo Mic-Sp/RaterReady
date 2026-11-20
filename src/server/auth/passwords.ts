@@ -20,8 +20,8 @@ function deriveKey(password: string, salt: Buffer): Promise<Buffer> {
 
 /** Hash a seed-provisioned password with a fresh 128-bit salt; never persist plaintext. Node-only. */
 export async function hashPassword(password: string): Promise<string> {
-  if (password.length < 16 || password.length > 256) {
-    throw new Error("Demo passwords must contain 16 to 256 characters.");
+  if (password.length < 8 || password.length > 128) {
+    throw new Error("Demo passwords must contain 8 to 128 characters.");
   }
   const salt = randomBytes(16);
   const key = await deriveKey(password, salt);
@@ -33,7 +33,7 @@ export async function verifyPassword(password: string, encodedHash: string | nul
   const parsed = encodedHash?.match(hashPattern);
   const [, salt, expected] = parsed ?? dummyHash.match(hashPattern)!;
   // Bound untrusted inputs without skipping the KDF; never accept a truncated password.
-  const bounded = password.length <= 256;
+  const bounded = password.length >= 8 && password.length <= 128;
   const actual = await deriveKey(bounded ? password : "", Buffer.from(salt, "hex"));
   return timingSafeEqual(actual, Buffer.from(expected, "hex")) && parsed !== null && parsed !== undefined && bounded;
 }
