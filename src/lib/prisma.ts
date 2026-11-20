@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-/** Shared server-side client; schema generation is deferred to Step 2. */
+/** Shared server-side client using the validated pooled Neon connection URL. */
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({

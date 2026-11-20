@@ -1,0 +1,2 @@
+# Keep migration SQL aligned with Neon PostgreSQL.
+provider = "postgresql"

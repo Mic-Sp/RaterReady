@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Neon pooled URL for application traffic; unpooled URL for Prisma migrations.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CANDIDATE
+  ADMIN_REVIEWER
+}
+
+enum LearningLevel {
+  FOUNDATIONS
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum DiagnosticStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum Track {
+  GENERALIST
+  TECHNICAL_PREVIEW
+}
+
+enum Competency {
+  G1
+  G2
+  G3
+  G4
+  G5
+  G6
+}
+
+enum ScenarioBank {
+  DIAGNOSTIC
+  PRACTICE
+  CAPSTONE
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum AssessmentMode {
+  DIAGNOSTIC
+  PRACTICE
+  CAPSTONE
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADING
+  PENDING_REVIEW
+  FINALIZED
+  EXPIRED
+  ABANDONED
+}
+
+enum JudgeJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  INVALID_OUTPUT
+}
+
+enum ReviewTriggerReason {
+  ALPHA_SIGN_OFF
+  JUDGE_DISAGREEMENT
+  API_FAILURE
+  TIMEOUT
+  MALFORMED_JSON
+  APPEAL
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_REVIEW
+  FINALIZED
+  APPEALED
+}
+
+enum CredentialStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+/// A closed allowlist, rather than arbitrary public JSON, supports consent-first sharing.
+enum CredentialPublicField {
+  DISPLAY_NAME
+  TRACK
+  ISSUED_AT
+  COMPETENCIES
+}
+
+enum OpportunityLinkType {
+  PUBLIC_INFORMATION
+  PUBLIC_APPLICATION
+  CAREERS_PAGE
+}
+
+/// Stage A cannot represent an employer partnership.
+enum PartnershipStatus {
+  NO_FORMAL_PARTNERSHIP
+}
+
+model User {
+  id                 String            @id @default(cuid())
+  /// Stage A Credentials account identifier; not a real candidate registration flow.
+  accountCode        String            @unique
+  name               String
+  role               Role
+  isSyntheticFixture Boolean           @default(true)
+  demoLabel          String            @default("DEMO - SYNTHETIC")
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+  candidateProfile   CandidateProfile?
+  ownedReviews       ReviewCase[]      @relation("ReviewOwner")
+  auditEvents        AuditEvent[]
+}
+
+model CandidateProfile {
+  userId           String              @id
+  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  selectedLevel    LearningLevel       @default(FOUNDATIONS)
+  track            Track               @default(GENERALIST)
+  /// Optional, untimed and non-certifying; skipping never blocks level selection.
+  diagnosticStatus DiagnosticStatus    @default(NOT_STARTED)
+  /// The only accommodation datum: finite numeric multiplier >= 1, with no reason collected.
+  timeMultiplier   Float               @default(1)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  moduleProgress   ModuleProgress[]
+  attempts         AssessmentAttempt[]
+  exposures        ScenarioExposure[]
+}
+
+/// Progress is independent of selectedLevel, so switching levels never deletes completion.
+model ModuleProgress {
+  id          String           @id @default(cuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  competency  Competency
+  level       LearningLevel
+  completedAt DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([candidateId, competency, level])
+}
+
+/// All revisions and banks of the same underlying task share this family identity.
+model ScenarioFamily {
+  id        String             @id @default(cuid())
+  code      String             @unique
+  scenarios Scenario[]
+  exposures ScenarioExposure[]
+}
+
+/// Publish a new version instead of changing a rubric already pinned to an assessment.
+model Rubric {
+  id           String         @id @default(cuid())
+  code         String
+  version      Int
+  demoLabel    String         @default("DEMO - SYNTHETIC")
+  /// Written rubric: alignment 0..2, evidence 0..2, clarity 0..1. Never regex-grade prose.
+  criteriaJson Json
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  scenarios    Scenario[]
+  gradingJobs  AiGradingJob[]
+
+  @@unique([code, version])
+}
+
+model Scenario {
+  id                      String               @id @default(cuid())
+  familyId                String
+  family                  ScenarioFamily       @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  version                 Int
+  track                   Track
+  competencies            Competency[]
+  difficulty              LearningLevel
+  bank                    ScenarioBank
+  status                  PublicationStatus    @default(DRAFT)
+  title                   String
+  demoLabel               String               @default("DEMO - SYNTHETIC")
+  isSyntheticFixture      Boolean              @default(true)
+  prompt                  String
+  responseA               String
+  responseB               String
+  evidenceJson            Json
+  rubricId                String
+  rubric                  Rubric               @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  /// Server-only deterministic key. Always select learner-facing fields explicitly in future APIs/RSCs.
+  answerKeyJson           Json
+  /// Server-only, human-approved alternatives receive full credit; do not exact-match nuanced prose.
+  allowedAlternativesJson Json                 @default("[]")
+  /// Immediate feedback in practice only; capstone coaching and explanations stay locked.
+  expertExplanation       String
+  publishedAt             DateTime?            @db.Timestamptz(3)
+  createdAt               DateTime             @default(now()) @db.Timestamptz(3)
+  responses               SubmissionResponse[]
+
+  @@unique([familyId, version, bank])
+  @@index([track, bank, difficulty, status])
+}
+
+/// One ledger row per family, across versions/banks. Practice retries remain unlimited;
+/// future capstone selection excludes previously exposed families.
+model ScenarioExposure {
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  familyId    String
+  family      ScenarioFamily   @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  firstSeenAt DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@id([candidateId, familyId])
+  @@index([familyId])
+}
+
+model AssessmentAttempt {
+  id                            String               @id @default(cuid())
+  candidateId                   String
+  candidate                     CandidateProfile     @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  mode                          AssessmentMode
+  track                         Track
+  level                         LearningLevel
+  status                        AttemptStatus        @default(IN_PROGRESS)
+  isSyntheticFixture            Boolean              @default(true)
+  demoLabel                     String               @default("DEMO - SYNTHETIC")
+  independentWorkPolicyVersion  String?
+  independentWorkAcknowledgedAt DateTime?            @db.Timestamptz(3)
+  /// All lifecycle timestamps are written/enforced by the server, never client clocks.
+  startedAt                     DateTime             @default(now()) @db.Timestamptz(3)
+  /// Required for capstone; diagnostic is untimed. No client-side timer authority.
+  expiresAt                     DateTime?            @db.Timestamptz(3)
+  submittedAt                   DateTime?            @db.Timestamptz(3)
+  finalizedAt                   DateTime?            @db.Timestamptz(3)
+  /// Snapshot of the profile multiplier used when the server computes expiresAt.
+  appliedTimeMultiplier         Float                @default(1)
+  /// Deterministic subtotal: judgment 40 + rubric 30 + verification 25 = 95.
+  deterministicScore            Decimal?             @db.Decimal(5, 2)
+  /// Three independently dual-judged 0..5 justifications normalize to 5 points total.
+  writtenScore                  Decimal?             @db.Decimal(3, 2)
+  finalScore                    Decimal?             @db.Decimal(5, 2)
+  /// NULL until finalized; only a finalized capstone score >= 85 can be a pass.
+  passed                        Boolean?
+  scratchpadNotes               String               @default("")
+  /// Autosave uses compare-and-increment against this server-owned version.
+  revision                      Int                  @default(0)
+  /// A unique final-submission idempotency token; one submission per attempt.
+  submissionKey                 String?              @unique
+  responses                     SubmissionResponse[]
+  reviewCase                    ReviewCase?
+  credential                    Credential?
+
+  @@index([candidateId, mode, startedAt])
+  @@index([status])
+}
+
+model SubmissionResponse {
+  id                   String            @id @default(cuid())
+  attemptId            String
+  attempt              AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  /// Scenario version and its rubric remain pinned through the immutable scenario ID.
+  scenarioId           String
+  scenario             Scenario          @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+  position             Int
+  /// Structured judgment/rubric/verification selections; never trusted scores.
+  selectionsJson       Json              @default("{}")
+  writtenJustification String?
+  revision             Int               @default(0)
+  savedAt              DateTime          @updatedAt @db.Timestamptz(3)
+  gradingJobs          AiGradingJob[]
+
+  @@unique([attemptId, scenarioId])
+  @@unique([attemptId, position])
+  @@index([scenarioId])
+}
+
+model AiGradingJob {
+  id                 String             @id @default(cuid())
+  responseId         String
+  response           SubmissionResponse @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  /// PostgreSQL CHECK allows exactly 1 or 2; uniqueness isolates the two judge slots.
+  judgeSlot          Int
+  modelVersion       String
+  promptVersion      String
+  rubricId           String
+  rubric             Rubric             @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  isSyntheticFixture Boolean            @default(true)
+  demoLabel          String             @default("DEMO - SYNTHETIC")
+  status             JudgeJobStatus     @default(QUEUED)
+  retryCount         Int                @default(0)
+  latencyMs          Int?
+  /// Compare each criterion exactly, not just totals; disagreement requires owner review.
+  alignment          Int?
+  evidence           Int?
+  clarity            Int?
+  rationale          String?
+  /// Store a safe failure category, not raw provider bodies or candidate secrets.
+  errorCode          String?
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  completedAt        DateTime?          @db.Timestamptz(3)
+
+  @@unique([responseId, judgeSlot])
+  @@index([status, createdAt])
+  @@index([rubricId])
+}
+
+model ReviewCase {
+  id                      String              @id @default(cuid())
+  attemptId               String              @unique
+  attempt                 AssessmentAttempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  triggerReason           ReviewTriggerReason
+  status                  ReviewStatus        @default(PENDING)
+  ownerId                 String?
+  owner                   User?               @relation("ReviewOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  /// Future server/UI must withhold AI scores/rationales until Michael saves this rubric-first assessment.
+  ownerPreliminaryJson    Json?
+  ownerPreliminarySavedAt DateTime?           @db.Timestamptz(3)
+  finalScoresJson         Json?
+  /// Required and nonblank when finalized, even if both judges agree (alpha sign-off gate).
+  rationale               String?
+  appealReason            String?
+  appealedAt              DateTime?           @db.Timestamptz(3)
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  finalizedAt             DateTime?           @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([ownerId])
+}
+
+model Credential {
+  id                 String                  @id @default(cuid())
+  /// One credential per finalized passing attempt makes issuance idempotent.
+  attemptId          String                  @unique
+  attempt            AssessmentAttempt       @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  /// Random UUIDv4, never a sequential or candidate-derived public identifier.
+  publicSlug         String                  @unique @default(uuid()) @db.Uuid
+  isDemo             Boolean                 @default(true)
+  demoLabel          String                  @default("DEMO - SYNTHETIC")
+  status             CredentialStatus        @default(ACTIVE)
+  publicShareEnabled Boolean                 @default(false)
+  /// Only these enum-approved fields may ever be projected into public verification.
+  publicFields       CredentialPublicField[] @default([TRACK, ISSUED_AT, COMPETENCIES])
+  publicDisplayName  String?
+  track              Track
+  competencies       Competency[]
+  issuedAt           DateTime                @default(now()) @db.Timestamptz(3)
+  suspendedAt        DateTime?               @db.Timestamptz(3)
+  revokedAt          DateTime?               @db.Timestamptz(3)
+}
+
+model OpportunityListing {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  title              String
+  organization       String
+  url                String              @unique
+  linkType           OpportunityLinkType
+  partnershipStatus  PartnershipStatus   @default(NO_FORMAL_PARTNERSHIP)
+  disclosure         String              @default("NO_FORMAL_PARTNERSHIP — independently curated public link; no endorsement or placement agreement.")
+  limitationsNote    String
+  /// Last actual public-link verification, not the time a seed happens to run.
+  lastVerifiedAt     DateTime            @db.Timestamptz(3)
+  isSyntheticFixture Boolean             @default(true)
+  demoLabel          String              @default("DEMO - SYNTHETIC")
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+}
+
+/// Append-only: migration triggers reject UPDATE, DELETE and TRUNCATE, including raw SQL.
+/// Audit only allowlisted operational metadata; never secrets, diagnoses or candidate prose.
+model AuditEvent {
+  id           String   @id @default(cuid())
+  eventKey     String   @unique
+  actorUserId  String?
+  actor        User?    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  action       String
+  targetType   String
+  targetId     String?
+  metadataJson Json     @default("{}")
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+}
