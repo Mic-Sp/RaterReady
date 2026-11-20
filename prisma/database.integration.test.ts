@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoAccounts } from "./fixtures";
 import { seedSyntheticData } from "./seed-data";
+import { testPasswords } from "./test-helpers";
+import { verifyPassword } from "../src/server/auth/passwords";
+import { authenticateCredentials, findActiveSessionUser } from "../src/server/auth/accounts";
+import { authorizeSession } from "../src/server/auth/guards";
+
+vi.mock("server-only", () => ({}));
 
 // Database tests are opt-in and refuse non-local or non-test database URLs.
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -30,7 +36,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       stdio: "pipe",
     });
     prisma = new PrismaClient({ datasourceUrl: testUrl });
-    await seedSyntheticData(prisma);
+    await seedSyntheticData(prisma, testPasswords);
     const scenario = await prisma.scenario.findFirstOrThrow({ where: { bank: "PRACTICE" } });
     scenarioId = scenario.id;
     rubricId = scenario.rubricId;
@@ -64,7 +70,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
   it("seeds twice without duplicate identities, content, opportunities, or audit events", async () => {
     const before = await prisma.user.findMany({ where: { accountCode: { in: demoAccounts.map(({ accountCode }) => accountCode) } }, orderBy: { accountCode: "asc" } });
     const scenariosBefore = await prisma.scenario.findMany({ orderBy: { id: "asc" } });
-    await seedSyntheticData(prisma);
+    await seedSyntheticData(prisma, testPasswords);
     const after = await prisma.user.findMany({ where: { accountCode: { in: demoAccounts.map(({ accountCode }) => accountCode) } }, orderBy: { accountCode: "asc" } });
     expect(after.map(({ id }) => id)).toEqual(before.map(({ id }) => id));
     expect(after).toHaveLength(3);
@@ -87,7 +93,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     });
     try {
       await prisma.candidateProfile.update({ where: { userId: marcus.id }, data: { selectedLevel: "ADVANCED", diagnosticStatus: "SKIPPED", timeMultiplier: 1.5 } });
-      await seedSyntheticData(prisma);
+      await seedSyntheticData(prisma, testPasswords);
       expect(await prisma.candidateProfile.findUnique({ where: { userId: marcus.id } })).toMatchObject({ selectedLevel: "ADVANCED", diagnosticStatus: "SKIPPED", timeMultiplier: 1.5 });
       expect(await prisma.moduleProgress.findUnique({ where: { id: progress.id } })).toEqual(progress);
     } finally {
@@ -158,5 +164,58 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     await expect(prisma.$executeRaw`DELETE FROM "AuditEvent" WHERE "eventKey" = 'stage-a-synthetic-seed-v1'`).rejects.toThrow(/append-only/);
     await expect(prisma.$executeRaw`TRUNCATE TABLE "AuditEvent"`).rejects.toThrow(/append-only/);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-synthetic-seed-v1" } })).toBe(1);
+  });
+
+  it("provisions salted hashes and preserves passwords, disabled status and session revocation on reseed", async () => {
+    const elena = await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-elena" } });
+    expect(elena.passwordHash).not.toBe(testPasswords["demo-elena"]);
+    expect(await verifyPassword(testPasswords["demo-elena"], elena.passwordHash)).toBe(true);
+    try {
+      await prisma.user.update({ where: { id: elena.id }, data: { accountStatus: "DISABLED" } });
+      await seedSyntheticData(prisma, { ...testPasswords, "demo-elena": "DEMO - SYNTHETIC changed environment password" });
+      const disabled = await prisma.user.findUniqueOrThrow({ where: { id: elena.id } });
+      expect(disabled).toMatchObject({ passwordHash: elena.passwordHash, accountStatus: "DISABLED", sessionVersion: elena.sessionVersion + 1 });
+    } finally {
+      await prisma.user.update({ where: { id: elena.id }, data: { accountStatus: elena.accountStatus } });
+    }
+  });
+
+  it("revokes old sessions on security changes and rejects decreasing session versions", async () => {
+    const original = await prisma.user.findUniqueOrThrow({ where: { id: candidateId } });
+    const disabled = await prisma.user.update({ where: { id: candidateId }, data: { accountStatus: "DISABLED" } });
+    const enabled = await prisma.user.update({ where: { id: candidateId }, data: { accountStatus: "ACTIVE" } });
+    expect(disabled.sessionVersion).toBe(original.sessionVersion + 1);
+    expect(enabled.sessionVersion).toBe(original.sessionVersion + 2);
+    await expect(prisma.user.update({ where: { id: candidateId }, data: { sessionVersion: original.sessionVersion } })).rejects.toThrow();
+    const changed = await prisma.user.update({ where: { id: candidateId }, data: { passwordHash: "DEMO - SYNTHETIC unusable test hash" } });
+    expect(changed.sessionVersion).toBe(enabled.sessionVersion + 1);
+    const revoked = await prisma.user.update({ where: { id: candidateId }, data: { sessionVersion: { increment: 1 } } });
+    expect(revoked.sessionVersion).toBe(changed.sessionVersion + 1);
+  });
+
+  it.each(demoAccounts)("authenticates seeded $accountCode against PostgreSQL", async (account) => {
+    const user = await authenticateCredentials(prisma, { accountCode: account.accountCode, password: testPasswords[account.accountCode] });
+    expect(user).toMatchObject({ accountCode: account.accountCode, role: account.role, demoLabel: "DEMO - SYNTHETIC" });
+    expect(user).not.toHaveProperty("passwordHash");
+  });
+
+  it("rechecks real database account status/version and blocks a learner from admin authority", async () => {
+    const user = await authenticateCredentials(prisma, { accountCode: "demo-marcus", password: testPasswords["demo-marcus"] });
+    expect(user).not.toBeNull();
+    const activeSession = { user, expires: new Date(Date.now() + 60000).toISOString() };
+    await expect(authorizeSession(prisma, activeSession, "ADMIN_REVIEWER")).rejects.toMatchObject({ status: 403 });
+    expect(await authenticateCredentials(prisma, { accountCode: "unknown", password: testPasswords["demo-marcus"] })).toBeNull();
+    expect(await authenticateCredentials(prisma, { accountCode: "demo-marcus", password: "wrong" })).toBeNull();
+    const marcus = await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } });
+    try {
+      await prisma.user.update({ where: { id: marcus.id }, data: { accountStatus: "DISABLED" } });
+      expect(await authenticateCredentials(prisma, { accountCode: "demo-marcus", password: testPasswords["demo-marcus"] })).toBeNull();
+      expect(await findActiveSessionUser(prisma, user)).toBeNull();
+      await prisma.user.update({ where: { id: marcus.id }, data: { accountStatus: "ACTIVE" } });
+      expect(await findActiveSessionUser(prisma, user)).toBeNull();
+      await expect(authorizeSession(prisma, activeSession, "CANDIDATE")).rejects.toMatchObject({ status: 401 });
+    } finally {
+      await prisma.user.update({ where: { id: marcus.id }, data: { accountStatus: marcus.accountStatus } });
+    }
   });
 });

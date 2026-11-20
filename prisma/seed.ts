@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { seedSyntheticData } from "./seed-data";
+import { readDemoPasswords } from "./demo-passwords";
 
 /**
  * Prisma CLI entry point. Validates only database configuration (no auth secret or AI
@@ -8,9 +9,10 @@ import { seedSyntheticData } from "./seed-data";
  */
 async function main(): Promise<void> {
   const databaseUrl = z.url({ protocol: /^postgres(?:ql)?$/ }).parse(process.env.DATABASE_URL);
+  const passwords = readDemoPasswords(process.env);
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
   try {
-    await seedSyntheticData(prisma);
+    await seedSyntheticData(prisma, passwords);
     console.info("DEMO - SYNTHETIC: seed complete (3 accounts, 2 practice scenarios, 2 public information listings).");
   } finally {
     await prisma.$disconnect();

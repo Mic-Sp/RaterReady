@@ -14,6 +14,12 @@ enum Role {
   ADMIN_REVIEWER
 }
 
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+  REVOKED
+}
+
 enum LearningLevel {
   FOUNDATIONS
   INTERMEDIATE
@@ -125,6 +131,11 @@ model User {
   accountCode        String            @unique
   name               String
   role               Role
+  /// Nullable only for migrated/unprovisioned accounts; a missing hash can never authenticate.
+  passwordHash       String?
+  accountStatus      AccountStatus     @default(ACTIVE)
+  /// Bump to revoke all sessions. A migration trigger also bumps on password/status/role changes.
+  sessionVersion     Int               @default(0)
   isSyntheticFixture Boolean           @default(true)
   demoLabel          String            @default("DEMO - SYNTHETIC")
   createdAt          DateTime          @default(now()) @db.Timestamptz(3)

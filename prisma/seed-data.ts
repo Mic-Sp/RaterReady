@@ -1,12 +1,14 @@
 import { PartnershipStatus, PrismaClient, PublicationStatus, Role, ScenarioBank, Track } from "@prisma/client";
 import { DEMO_LABEL, demoAccounts, fixtureDate, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
+import type { DemoPasswords } from "./demo-passwords";
+import { hashPassword } from "../src/server/auth/passwords";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
  * completions, assessments, credentials, and versioned scenario/rubric content are preserved.
  * Accepts a client so integration tests can target an isolated database without Neon access.
  */
-export async function seedSyntheticData(prisma: PrismaClient): Promise<void> {
+export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPasswords): Promise<void> {
   await prisma.$transaction(async (tx) => {
     for (const account of demoAccounts) {
       const existing = await tx.user.findUnique({ where: { accountCode: account.accountCode } });
@@ -14,11 +16,13 @@ export async function seedSyntheticData(prisma: PrismaClient): Promise<void> {
         throw new Error("Synthetic seed refuses to overwrite a non-fixture account.");
       }
 
+      // Provision missing hashes only. Reruns never reset passwords, roles, revocation or disabled status.
+      const passwordHash = existing?.passwordHash ?? await hashPassword(passwords[account.accountCode]);
       const identity = { name: account.name, role: account.role, isSyntheticFixture: true, demoLabel: DEMO_LABEL };
       const user = await tx.user.upsert({
         where: { accountCode: account.accountCode },
-        create: { accountCode: account.accountCode, ...identity },
-        update: identity,
+        create: { accountCode: account.accountCode, ...identity, passwordHash },
+        update: existing?.passwordHash ? {} : { passwordHash },
       });
 
       if (account.role === Role.CANDIDATE) {
