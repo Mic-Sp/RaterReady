@@ -3,6 +3,7 @@ import { DEMO_LABEL, demoAccounts, fixtureDate, generalistRubric, opportunityLis
 import type { DemoPasswords } from "./demo-passwords";
 import { hashPassword } from "../src/server/auth/passwords";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
+import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
@@ -77,6 +78,21 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
       });
     }
 
+    const previewRubric = await tx.rubric.upsert({
+      where: { code_version: { code: technicalRubric.code, version: technicalRubric.version } },
+      create: { ...technicalRubric, demoLabel: DEMO_LABEL }, update: {},
+    });
+    for (const { familyCode, ...scenario } of technicalPreviewScenarios) {
+      const family = await tx.scenarioFamily.upsert({ where: { code: familyCode }, create: { code: familyCode }, update: {} });
+      await tx.scenario.upsert({
+        where: { familyId_version_bank: { familyId: family.id, version: scenario.version, bank: ScenarioBank.PRACTICE } },
+        create: { ...scenario, familyId: family.id, rubricId: previewRubric.id, track: Track.TECHNICAL_PREVIEW, bank: ScenarioBank.PRACTICE,
+          status: PublicationStatus.PUBLISHED, isSyntheticFixture: true, demoLabel: DEMO_LABEL, publishedAt: fixtureDate },
+        // Preserve every published version and historical draft/attempt on repeat seeding.
+        update: {},
+      });
+    }
+
     for (const listing of opportunityListings) {
       await tx.opportunityListing.upsert({
         where: { code: listing.code },
@@ -107,6 +123,10 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
     await tx.auditEvent.createMany({ data: [{
       eventKey: "stage-a-practice-seed-v2", action: "SYNTHETIC_PRACTICE_CATALOG_INSTALLED", targetType: "SEED_VERSION", targetId: "stage-a-practice-v2",
       metadataJson: { demoLabel: DEMO_LABEL, newPracticeScenarioCount: expandedPracticeScenarios.length, rubricVersion: practiceRubric.version },
+    }], skipDuplicates: true });
+    await tx.auditEvent.createMany({ data: [{
+      eventKey: "stage-a-technical-preview-v1", action: "SYNTHETIC_TECHNICAL_PREVIEW_INSTALLED", targetType: "SEED_VERSION", targetId: "stage-a-technical-v1",
+      metadataJson: { demoLabel: DEMO_LABEL, scenarioCount: technicalPreviewScenarios.length, certifying: false },
     }], skipDuplicates: true });
   }, { timeout: 30000 });
 }

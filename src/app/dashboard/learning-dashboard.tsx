@@ -62,7 +62,7 @@ export function LearningDashboard({ user, profile, notice }: { user: AuthIdentit
       <p>The capstone passing standard stays at 85% or higher after owner review and finalization. This dashboard and the skills check do not issue credentials.</p>
     </section>
     <section className="learning-section" aria-labelledby="optional-heading"><h2 id="optional-heading">Optional explorations</h2>
-      <ul><li><Link href="/workflow-lab">Workflow Skills Lab orientation</Link> · optional, unscored</li>
+      <ul><li><Link href="/workflow-lab">Workflow Skills Lab</Link> · optional, unscored, never required for the Generalist credential</li>
         <li><Link href="/technical-preview">Technical Preview</Link> · non-credentialing</li></ul>
     </section><EvaluationReference />
   </section>;

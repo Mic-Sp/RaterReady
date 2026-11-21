@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEMO_LABEL, demoAccounts, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { generalistPracticeCompetencies } from "../src/lib/generalist-competencies";
+import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 
 describe("Stage A synthetic fixtures", () => {
   it("contains exactly the two approved candidates and sole owner reviewer", () => {
@@ -51,5 +52,18 @@ describe("Stage A synthetic fixtures", () => {
     }
     expect(expandedPracticeScenarios.some((item) => item.answerKeyJson.judgment === "TIE")).toBe(true);
     expect(expandedPracticeScenarios.some((item) => item.allowedAlternativesJson.some((key) => key.judgment === "TIE"))).toBe(true);
+  });
+
+  it("provides five distinct original synthetic coding exercises with a separate pinned rubric and approved tie", () => {
+    expect(technicalPreviewScenarios).toHaveLength(5);
+    expect(new Set(technicalPreviewScenarios.map((item) => item.familyCode)).size).toBe(5);
+    expect(technicalRubric.code).not.toBe(practiceRubric.code);
+    expect(technicalRubric.criteriaJson.deterministicWeights).toEqual(practiceRubric.criteriaJson.deterministicWeights);
+    for (const item of technicalPreviewScenarios) {
+      for (const text of [item.title, item.prompt, item.responseA, item.responseB, item.expertExplanation]) expect(text).toContain(DEMO_LABEL);
+      expect(item.responseA).toContain("simulated AI code/text output");
+      expect(item.responseB).toContain("simulated AI code/text output");
+    }
+    expect(technicalPreviewScenarios[4].allowedAlternativesJson[0]).toMatchObject({ judgment: "TIE", approvedByAccountCode: "admin-michael", isSyntheticFixture: true });
   });
 });

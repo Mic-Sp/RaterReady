@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updatePractice } from "./actions";
+import { updatePractice, updateTechnicalPreview } from "./actions";
 import type { PracticeFormState } from "./form-state";
 
 const mocks = vi.hoisted(() => ({ guard: vi.fn(), load: vi.fn(), save: vi.fn(), revalidate: vi.fn() }));
@@ -30,7 +30,7 @@ beforeEach(() => {
 describe("practice Server Action security and state", () => {
   it("allows unanswered draft saves using session ownership and only server-confirmed timestamps", async () => {
     const result = await updatePractice(initial, form("save"));
-    expect(mocks.save).toHaveBeenCalledWith("TEST_DB", "guarded-candidate", { scenarioId: "practice-id", scenarioVersion: 1, rubricVersion: 2, revision: 0, judgment: undefined, rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" }, false);
+    expect(mocks.save).toHaveBeenCalledWith("TEST_DB", "guarded-candidate", { scenarioId: "practice-id", scenarioVersion: 1, rubricVersion: 2, revision: 0, judgment: undefined, rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" }, false, "GENERALIST");
     expect(result).toMatchObject({ revision: 1, savedAt: "2026-11-20T15:00:00.000Z", submittedAt: null });
     expect(JSON.stringify(mocks.save.mock.calls)).not.toContain("PRIVATE_NOTES");
     expect(mocks.revalidate).toHaveBeenCalledWith("/dashboard");
@@ -65,5 +65,18 @@ describe("practice Server Action security and state", () => {
     expect(result.error).toContain("Practice could not be saved");
     expect(JSON.stringify(result)).not.toContain("SECRET_");
     expect(result.revision).toBe(0);
+  });
+
+  it("fixes each action's track on the server, ignoring forged track and credential fields", async () => {
+    const data = form("save"); data.set("track", "GENERALIST"); data.set("passed", "true"); data.set("mode", "CAPSTONE");
+    await updateTechnicalPreview(initial, data);
+    expect(mocks.load).toHaveBeenCalledWith("TEST_DB", "guarded-candidate", "practice-id", "TECHNICAL_PREVIEW");
+    expect(mocks.save.mock.calls[0][4]).toBe("TECHNICAL_PREVIEW");
+    expect(mocks.save.mock.calls[0][2]).not.toHaveProperty("track");
+    expect(mocks.save.mock.calls[0][2]).not.toHaveProperty("passed");
+    mocks.guard.mockRejectedValue(new Error("Forbidden"));
+    mocks.load.mockClear(); mocks.save.mockClear();
+    await expect(updateTechnicalPreview(initial, data)).rejects.toThrow("Forbidden");
+    expect(mocks.load).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import type { loadPracticeWorkspace } from "../../server/practice/workspace";
 import { practiceJudgments } from "../../lib/practice-controls";
 import { EvaluationReference } from "../components/evaluation-reference";
-import { updatePractice } from "./actions";
+import { updatePractice, updateTechnicalPreview } from "./actions";
+import { TechnicalPreviewNotice } from "../components/technical-preview-notice";
 import type { PracticeFormState } from "./form-state";
 
 type WorkspaceData = Awaited<ReturnType<typeof loadPracticeWorkspace>>;
@@ -20,13 +21,15 @@ function serverTime(value: string): string {
  * regions, grouped native controls, and a polite state region. Only the safe DTO enters this client.
  */
 export function PracticeWorkspace({ scenario, draft }: WorkspaceData) {
+  const technical = scenario.track === "TECHNICAL_PREVIEW";
+  const catalogPath = technical ? "/technical-preview" : "/practice";
   const controls = scenario.rubric.practice!;
   const initial: PracticeFormState = {
     sequence: 0, revision: draft?.revision ?? 0, savedAt: draft?.savedAt ?? null, submittedAt: draft?.submittedAt ?? null,
     message: draft?.submittedAt ? "Selections from your last submission are loaded. You can retry anytime." : draft ? "Your server-saved draft is loaded." : "No saved draft yet.",
     values: { judgment: draft?.judgment, rubricSelections: draft?.rubricSelections ?? {}, verifiedSourceIds: draft?.verifiedSourceIds ?? [], writtenJustification: draft?.writtenJustification ?? "" },
   };
-  const [state, action, pending] = useActionState(updatePractice, initial);
+  const [state, action, pending] = useActionState(technical ? updateTechnicalPreview : updatePractice, initial);
   const [editedSequence, setEditedSequence] = useState<number | null>(null);
   const [dismissedFeedback, setDismissedFeedback] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
@@ -46,12 +49,13 @@ export function PracticeWorkspace({ scenario, draft }: WorkspaceData) {
 
   return <article className="page-card learning-page practice-workspace" aria-labelledby="workspace-heading">
     <p className="eyebrow">DEMO - SYNTHETIC · unlimited, untimed practice</p><h1 id="workspace-heading">{scenario.title}</h1>
+    {technical && <TechnicalPreviewNotice />}
     <p className="page-intro">{scenario.competencyDisclosure}</p>
     <p>Scenario version {scenario.version} · pinned rubric {scenario.rubric.code}, version {scenario.rubric.version}</p>
     <section className="learning-section" aria-labelledby="task-heading"><h2 id="task-heading">Task prompt</h2><p>{scenario.prompt}</p></section>
     <div className="practice-columns" role="group" aria-label="Response comparison">
-      <section className="response-panel" aria-labelledby="response-a-heading"><h2 id="response-a-heading">Response A</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p><p className="response-copy">{scenario.responseA}</p></section>
-      <section className="response-panel" aria-labelledby="response-b-heading"><h2 id="response-b-heading">Response B</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p><p className="response-copy">{scenario.responseB}</p></section>
+      <section className="response-panel" aria-labelledby="response-a-heading"><h2 id="response-a-heading">Response A</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p>{technical ? <pre className="response-copy code-response"><code>{scenario.responseA}</code></pre> : <p className="response-copy">{scenario.responseA}</p>}</section>
+      <section className="response-panel" aria-labelledby="response-b-heading"><h2 id="response-b-heading">Response B</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p>{technical ? <pre className="response-copy code-response"><code>{scenario.responseB}</code></pre> : <p className="response-copy">{scenario.responseB}</p>}</section>
     </div>
     <section className="learning-section" aria-labelledby="rubric-heading"><h2 id="rubric-heading">Pinned evaluation rubric</h2>
       <p>{controls.description}</p><p>Evaluation judgment: 40 points · rubric application: 30 points · factual verification: 25 points.</p>
@@ -107,9 +111,9 @@ export function PracticeWorkspace({ scenario, draft }: WorkspaceData) {
       <h3>Expert explanation</h3><p>{result.feedback.expertExplanation}</p>
       <ul>{result.feedback.rubricCriteria.map((criterion) => <li key={criterion.id}>{controls.criteria.find((item) => item.id === criterion.id)?.label ?? criterion.id}: {criterion.aligned ? "Aligned with an accepted interpretation" : "Revisit this criterion with the expert explanation"}</li>)}</ul>
       <p>{result.feedback.reviewGuidance}</p><p>Your written justification is retained. No final score, passing decision or credential is issued. Practice completion does not establish capstone readiness.</p>
-      <p>Review a competency reference: {scenario.competencies.map((item) => <Link key={item.code} href={`/learn/${item.code}`}>{item.code} </Link>)}</p>
+      <p>{technical ? "Optional Generalist habit references (no progress awarded): " : "Review a competency reference: "}{scenario.competencies.map((item) => <Link key={item.code} href={`/learn/${item.code}`}>{item.code} </Link>)}</p>
       <button type="button" className="secondary-button" onClick={() => { setDismissedFeedback(state.sequence); document.getElementsByName("judgment")[0]?.focus(); }}>Try again — unlimited practice</button>
     </section>}
-    <Link href="/practice" className="inline-link">Browse practice scenarios</Link><Link href="/dashboard" className="inline-link">Return to dashboard</Link>
+    <Link href={catalogPath} className="inline-link">{technical ? "Browse Technical Preview exercises" : "Browse practice scenarios"}</Link><Link href="/dashboard" className="inline-link">Return to dashboard</Link>
   </article>;
 }

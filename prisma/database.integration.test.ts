@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoAccounts, practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
+import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 import { loadPracticeScenario, submitPracticeEvaluation } from "../src/server/practice/service";
 import { listPracticeScenarios, loadPracticeWorkspace, saveOrSubmitPractice } from "../src/server/practice/workspace";
 import { seedSyntheticData } from "./seed-data";
@@ -87,8 +88,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(after.map(({ id }) => id)).toEqual(before.map(({ id }) => id));
     expect(after).toHaveLength(3);
     expect(await prisma.scenario.findMany({ orderBy: { id: "asc" } })).toEqual(scenariosBefore);
-    expect(await prisma.rubric.count()).toBe(2);
-    expect(await prisma.scenarioFamily.count()).toBe(practiceScenarios.length + expandedPracticeScenarios.length);
+    expect(await prisma.rubric.count()).toBe(3);
+    expect(await prisma.scenarioFamily.count()).toBe(practiceScenarios.length + expandedPracticeScenarios.length + technicalPreviewScenarios.length);
     expect(await prisma.opportunityListing.count()).toBe(2);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-synthetic-seed-v1" } })).toBe(1);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-practice-seed-v2" } })).toBe(1);
@@ -429,5 +430,63 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       judgment: "TIE", rubricSelections: { accuracy: "BOTH_MEET", instructionFollowing: "BOTH_MEET", safety: "BOTH_MEET" }, verifiedSourceIds: ["public-source"] }, true)).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
     expect(await prisma.practiceDraft.count({ where: { candidateId, scenarioId: invalid.id } })).toBe(0);
     expect(await prisma.assessmentAttempt.count({ where: { candidateId } })).toBe(attemptsBefore);
+  });
+
+  it("seeds five published Technical Preview exercises twice without rewriting pinned content or Generalist progress", async () => {
+    const where = { track: "TECHNICAL_PREVIEW" as const, bank: "PRACTICE" as const };
+    const before = await prisma.scenario.findMany({ where, orderBy: { id: "asc" }, include: { rubric: true } });
+    const learning = await getLearningSnapshot(prisma, candidateId);
+    await seedSyntheticData(prisma, testPasswords);
+    await seedSyntheticData(prisma, testPasswords);
+    expect(await prisma.scenario.findMany({ where, orderBy: { id: "asc" }, include: { rubric: true } })).toEqual(before);
+    expect(before).toHaveLength(5);
+    for (const item of before) expect(item).toMatchObject({ status: "PUBLISHED", isSyntheticFixture: true, rubric: { code: technicalRubric.code, version: 1 } });
+    expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-technical-preview-v1" } })).toBe(1);
+    expect(await getLearningSnapshot(prisma, candidateId)).toEqual(learning);
+    expect((await listPracticeScenarios(prisma)).every((item) => !before.some((technical) => technical.id === item.id))).toBe(true);
+  });
+
+  it.each(technicalPreviewScenarios)("evaluates $familyCode through the shared draft flow without Generalist or credential mutations", async (fixture) => {
+    const scenario = await prisma.scenario.findFirstOrThrow({ where: { family: { code: fixture.familyCode }, track: "TECHNICAL_PREVIEW", bank: "PRACTICE", version: 1 } });
+    const learning = await getLearningSnapshot(prisma, candidateId);
+    const exposures = await prisma.scenarioExposure.findMany({ where: { candidateId }, orderBy: { familyId: "asc" } });
+    const credentials = await prisma.credential.findMany({ where: { attempt: { candidateId } } });
+    const capstones = await prisma.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE" } });
+    const data = { scenarioId: scenario.id, scenarioVersion: 1, rubricVersion: 1, revision: 0, ...fixture.answerKeyJson, writtenJustification: "DEMO - SYNTHETIC: reasoning retained as text, not executed or prose-graded." };
+    await expect(loadPracticeWorkspace(prisma, candidateId, scenario.id)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    await expect(saveOrSubmitPractice(prisma, candidateId, data, true)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    const workspace = await loadPracticeWorkspace(prisma, candidateId, scenario.id, "TECHNICAL_PREVIEW");
+    for (const field of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation"]) expect(JSON.stringify(workspace)).not.toContain(field);
+    const draft = await saveOrSubmitPractice(prisma, candidateId, data, false, "TECHNICAL_PREVIEW");
+    expect(draft).toMatchObject({ revision: 1, result: null, submittedAt: null });
+    const result = await saveOrSubmitPractice(prisma, candidateId, { ...data, revision: 1 }, true, "TECHNICAL_PREVIEW");
+    expect(result.result).toMatchObject({ deterministicScore: 95, certifying: false, writtenScore: null, finalScore: null });
+    const attempt = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: result.result!.attemptId }, include: { credential: true, reviewCase: true, responses: true } });
+    expect(attempt).toMatchObject({ mode: "PRACTICE", track: "TECHNICAL_PREVIEW", status: "SUBMITTED", passed: null, finalScore: null, writtenScore: null, credential: null, reviewCase: null });
+    expect(attempt.responses[0].writtenJustification).toBe(data.writtenJustification);
+    expect(await getLearningSnapshot(prisma, candidateId)).toEqual(learning);
+    expect(await prisma.scenarioExposure.findMany({ where: { candidateId }, orderBy: { familyId: "asc" } })).toEqual(exposures);
+    expect(await prisma.credential.findMany({ where: { attempt: { candidateId } } })).toEqual(credentials);
+    expect(await prisma.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE" } })).toEqual(capstones);
+  });
+
+  it("permits repeated approved technical ties and rejects wrong-track and secure-bank access", async () => {
+    const fixture = technicalPreviewScenarios[4];
+    const scenario = await prisma.scenario.findFirstOrThrow({ where: { family: { code: fixture.familyCode }, bank: "PRACTICE", version: 1 } });
+    const data = { scenarioId: scenario.id, scenarioVersion: 1, rubricVersion: 1, revision: 2, ...fixture.answerKeyJson, judgment: "TIE", writtenJustification: "DEMO - SYNTHETIC: equal contract compliance supports my tie." };
+    const first = await saveOrSubmitPractice(prisma, candidateId, data, true, "TECHNICAL_PREVIEW");
+    const retry = await saveOrSubmitPractice(prisma, candidateId, { ...data, revision: 3 }, true, "TECHNICAL_PREVIEW");
+    expect(first.result?.feedback).toMatchObject({ approvedAlternativeUsed: true, alternativeExplanation: fixture.allowedAlternativesJson[0].rationale });
+    expect(retry.result?.deterministicScore).toBe(95);
+    expect(retry.result?.attemptId).not.toBe(first.result?.attemptId);
+    await expect(loadPracticeWorkspace(prisma, candidateId, scenarioId, "TECHNICAL_PREVIEW")).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    const { familyCode: _family, ...content } = fixture;
+    void _family;
+    const capstone = await prisma.scenario.create({ data: { ...content, familyId: scenario.familyId, rubricId: scenario.rubricId,
+      track: "TECHNICAL_PREVIEW", bank: "CAPSTONE", status: "PUBLISHED", publishedAt: new Date() } });
+    isolatedScenarioIds.push(capstone.id);
+    expect((await listPracticeScenarios(prisma, {}, "TECHNICAL_PREVIEW")).some((item) => item.id === capstone.id)).toBe(false);
+    await expect(loadPracticeWorkspace(prisma, candidateId, capstone.id, "TECHNICAL_PREVIEW")).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    await expect(saveOrSubmitPractice(prisma, candidateId, { ...data, scenarioId: capstone.id, revision: 0 }, true, "TECHNICAL_PREVIEW")).rejects.toMatchObject({ code: "UNAVAILABLE" });
   });
 });

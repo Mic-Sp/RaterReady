@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCandidate } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
-import { loadPracticeScenario } from "../../server/practice/service";
+import { loadPracticeScenario, type PracticeTrack } from "../../server/practice/service";
 import { practiceDraftSchema, PracticeDraftConflict, saveOrSubmitPractice } from "../../server/practice/workspace";
 import { PracticeEvaluationError } from "../../server/domain/practice-scoring";
 import type { PracticeFormState } from "./form-state";
@@ -13,6 +13,16 @@ import type { PracticeFormState } from "./form-state";
  * metadata/controls are checked against the published practice DTO, and errors expose no keys.
  */
 export async function updatePractice(previous: PracticeFormState, formData: FormData): Promise<PracticeFormState> {
+  return updateForTrack(previous, formData, "GENERALIST");
+}
+
+/** Candidate-only Technical action uses a fixed track; posted track/identity/scores cannot change its scope. */
+export async function updateTechnicalPreview(previous: PracticeFormState, formData: FormData): Promise<PracticeFormState> {
+  return updateForTrack(previous, formData, "TECHNICAL_PREVIEW");
+}
+
+/** Shared validation preserves draft/concurrency semantics while both exported actions recheck authorization. */
+async function updateForTrack(previous: PracticeFormState, formData: FormData, track: PracticeTrack): Promise<PracticeFormState> {
   const user = await requireCandidate();
   const sequence = previous.sequence + 1;
   const intent = formData.get("intent");
@@ -28,7 +38,7 @@ export async function updatePractice(previous: PracticeFormState, formData: Form
   const { judgment, rubricSelections, verifiedSourceIds, writtenJustification } = data.data;
   const values = { judgment, rubricSelections, verifiedSourceIds, writtenJustification };
   try {
-    const scenario = await loadPracticeScenario(prisma, user.id, data.data.scenarioId);
+    const scenario = await loadPracticeScenario(prisma, user.id, data.data.scenarioId, track);
     const fieldErrors: Record<string, string> = {};
     if (intent === "submit") {
       if (!judgment) fieldErrors.judgment = "Choose a comparative judgment.";
@@ -39,8 +49,8 @@ export async function updatePractice(previous: PracticeFormState, formData: Form
       if (!writtenJustification.trim()) fieldErrors.writtenJustification = "Explain your judgment using the rubric and supplied evidence.";
     }
     if (Object.keys(fieldErrors).length) return { ...previous, sequence, values, result: undefined, fieldErrors, error: "Complete the highlighted evaluation fields, or save a partial draft." };
-    const saved = await saveOrSubmitPractice(prisma, user.id, data.data, intent === "submit");
-    revalidatePath("/dashboard"); revalidatePath("/practice");
+    const saved = await saveOrSubmitPractice(prisma, user.id, data.data, intent === "submit", track);
+    revalidatePath("/dashboard"); revalidatePath(track === "GENERALIST" ? "/practice" : "/technical-preview");
     return { sequence, revision: saved.revision, savedAt: saved.savedAt, submittedAt: saved.submittedAt, values,
       message: intent === "save" ? "Draft saved on the server. No evaluation was submitted." : "Practice submitted. Your feedback is ready.",
       ...(saved.result ? { result: saved.result } : {}) };

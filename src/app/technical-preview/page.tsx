@@ -2,14 +2,26 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requirePageRole } from "../../server/auth/page-access";
 import { EvaluationReference } from "../components/evaluation-reference";
+import { TechnicalPreviewNotice } from "../components/technical-preview-notice";
+import { prisma } from "../../lib/prisma";
+import { listPracticeScenarios } from "../../server/practice/workspace";
+import { learningLevels } from "../../lib/learning-content";
 
 export const metadata: Metadata = { title: "Technical Preview | RaterReady" };
 
-/** Candidate-only non-credentialing preview entry; does not enable technical grading or a workspace. */
+/** Candidate-only catalog fixes the track on the server and selects public metadata, never keys or capstone banks. */
 export default async function TechnicalPreviewPage() {
   await requirePageRole("CANDIDATE");
-  return <article className="page-card learning-page"><p className="eyebrow">Optional · non-credentialing</p><h1>Technical Preview</h1>
-    <p className="page-intro">Explore how the same evaluation habits apply to technical responses. This preview issues no technical credential and does not change Generalist progress.</p>
-    <p>DEMO - SYNTHETIC: When reviewing a fictional code explanation, check the stated requirements, supplied evidence and limitations before judging correctness. Do not assume that confident wording proves a program works.</p>
-    <p>Technical evaluation exercises are not available in this preview.</p><EvaluationReference /><Link href="/dashboard" className="inline-link">Return to dashboard</Link></article>;
+  const scenarios = await listPracticeScenarios(prisma, {}, "TECHNICAL_PREVIEW");
+  return <article className="page-card learning-page" aria-labelledby="technical-heading"><p className="eyebrow">DEMO - SYNTHETIC · optional · untimed</p><h1 id="technical-heading">Technical Preview</h1>
+    <TechnicalPreviewNotice />
+    <p className="page-intro">Explore original JavaScript review exercises in code comprehension, bug detection, instruction compliance, behavior verification and ranking technical solutions. Start anywhere, save a draft, and retry without limits.</p>
+    <p>Read code as text and compare the supplied contract and hand traces. Written justifications are retained for practice review; their wording is not automatically graded. G1–G6 reference links describe RaterReady’s internal Generalist evaluation habits, not a Technical certification standard.</p>
+    {!scenarios.length && <p role="status">No Technical Preview exercises are published yet. Return after the synthetic seed has been installed.</p>}
+    <ul className="practice-catalog">{scenarios.map((scenario) => <li key={scenario.id}>
+      <h2><Link href={`/technical-preview/${scenario.id}`}>{scenario.title}</Link></h2>
+      <p>{learningLevels.find((level) => level.code === scenario.difficulty)!.title} · scenario version {scenario.version} · non-credentialing</p>
+      <Link href={`/technical-preview/${scenario.id}`} className="inline-link">Open Technical Preview exercise</Link>
+    </li>)}</ul>
+    <EvaluationReference /><Link href="/dashboard" className="inline-link">Return to dashboard</Link></article>;
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { loadPracticeScenario, persistPracticeEvaluation } from "./service";
+import { loadPracticeScenario, persistPracticeEvaluation, type PracticeTrack } from "./service";
 import { practiceSubmissionSchema, PracticeEvaluationError } from "../domain/practice-scoring";
 
 /** Partial draft inputs deliberately allow unanswered controls; research scratchpad is not an accepted field. */
@@ -19,17 +19,17 @@ export class PracticeDraftConflict extends Error {
   constructor() { super("This draft changed in another request. Reload the saved draft before trying again."); this.name = "PracticeDraftConflict"; }
 }
 
-/** Read catalog metadata only; all competencies/levels remain browsable without any capstone bank access. */
-export async function listPracticeScenarios(db: PrismaClient, filters: { competency?: string; level?: string } = {}) {
+/** Read public catalog metadata for the server-selected track; no draft/unpublished/capstone scenarios are browsable. */
+export async function listPracticeScenarios(db: PrismaClient, filters: { competency?: string; level?: string } = {}, track: PracticeTrack = "GENERALIST") {
   const parsed = z.object({ competency: z.enum(["G1", "G2", "G3", "G4", "G5", "G6"]).optional(), level: z.enum(["FOUNDATIONS", "INTERMEDIATE", "ADVANCED"]).optional() }).parse(filters);
-  return db.scenario.findMany({ where: { bank: "PRACTICE", status: "PUBLISHED", track: "GENERALIST", isSyntheticFixture: true,
+  return db.scenario.findMany({ where: { bank: "PRACTICE", status: "PUBLISHED", track, isSyntheticFixture: true,
     ...(parsed.competency ? { competencies: { has: parsed.competency } } : {}), ...(parsed.level ? { difficulty: parsed.level } : {}) },
     select: { id: true, title: true, version: true, competencies: true, difficulty: true }, orderBy: [{ title: "asc" }, { version: "desc" }] });
 }
 
-/** Load only the current learner's resumable selections and a deep key-free scenario DTO. */
-export async function loadPracticeWorkspace(db: PrismaClient, candidateId: string, scenarioId: string) {
-  const scenario = await loadPracticeScenario(db, candidateId, scenarioId);
+/** Load only the current learner's resumable selections and a deep key-free DTO within the server-selected track. */
+export async function loadPracticeWorkspace(db: PrismaClient, candidateId: string, scenarioId: string, track: PracticeTrack = "GENERALIST") {
+  const scenario = await loadPracticeScenario(db, candidateId, scenarioId, track);
   if (!scenario.rubric.practice) throw new PracticeEvaluationError("INVALID_CONFIGURATION");
   const draft = await db.practiceDraft.findUnique({ where: { candidateId_scenarioId: { candidateId, scenarioId } } });
   return { scenario, draft: draft ? { savedAt: draft.savedAt.toISOString(), submittedAt: draft.submittedAt?.toISOString() ?? null,
@@ -49,9 +49,9 @@ function validateDraft(scenario: PracticeScenarioDTO, data: PracticeDraftInput):
  * write no score/attempt/progress. Submission reserves that same revision before grading,
  * so double clicks/stale tabs cannot create duplicate submissions or lose saved work.
  */
-export async function saveOrSubmitPractice(db: PrismaClient, candidateId: string, input: unknown, submit: boolean) {
+export async function saveOrSubmitPractice(db: PrismaClient, candidateId: string, input: unknown, submit: boolean, track: PracticeTrack = "GENERALIST") {
   const data = practiceDraftSchema.parse(input);
-  const scenario = await loadPracticeScenario(db, candidateId, data.scenarioId);
+  const scenario = await loadPracticeScenario(db, candidateId, data.scenarioId, track);
   validateDraft(scenario, data);
   const { revision, ...submission } = data;
   const fullSubmission = submit ? practiceSubmissionSchema.parse(submission) : null;
@@ -67,7 +67,7 @@ export async function saveOrSubmitPractice(db: PrismaClient, candidateId: string
         const changed = await tx.practiceDraft.updateMany({ where: { candidateId, scenarioId: data.scenarioId, revision }, data: { ...draftData, revision: { increment: 1 } } });
         if (changed.count !== 1) throw new PracticeDraftConflict();
       }
-      const result = fullSubmission ? await persistPracticeEvaluation(tx, candidateId, fullSubmission) : null;
+      const result = fullSubmission ? await persistPracticeEvaluation(tx, candidateId, fullSubmission, track) : null;
       return { revision: revision + 1, savedAt: savedAt.toISOString(), submittedAt: submit ? savedAt.toISOString() : null, result };
     });
   } catch (error) {

@@ -35,9 +35,10 @@ export class PracticeEvaluationError extends Error {
   }
 }
 
-/** Check context before inspecting keys: capstone, diagnostic, draft and non-synthetic banks fail closed. */
+/** Only published synthetic practice in Generalist/Technical Preview is eligible; reject other contexts before inspecting keys. */
 export function assertPracticeScenario(scenario: Pick<PracticeScoringScenario, "bank" | "status" | "track" | "isSyntheticFixture">): void {
-  if (scenario.bank !== "PRACTICE" || scenario.status !== "PUBLISHED" || scenario.track !== "GENERALIST" || !scenario.isSyntheticFixture) {
+  if (scenario.bank !== "PRACTICE" || scenario.status !== "PUBLISHED"
+    || !["GENERALIST", "TECHNICAL_PREVIEW"].includes(scenario.track) || !scenario.isSyntheticFixture) {
     throw new PracticeEvaluationError("UNAVAILABLE");
   }
 }

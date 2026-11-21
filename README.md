@@ -2,16 +2,16 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–6B contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–6C contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
 shells, adaptive Generalist onboarding, an optional diagnostic and a learning
 dashboard, plus a server-only deterministic practice evaluator and expanded scenario
 catalog, plus an accessible A/B practice workspace with saved drafts and persisted
-practice participation. There is no public registration or role-selection flow.
-Workflow Skills Lab, Technical Preview exercises, timed capstone workspaces and
-owner review tools are not implemented yet.
+practice participation, an optional Workflow Skills Lab and five non-credentialing
+Technical Preview exercises. There is no public registration or role-selection flow.
+Timed capstone workspaces and owner review tools are not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -43,7 +43,8 @@ The seed transaction upserts `demo-marcus` (Marcus Vance, Generalist/Foundations
 `demo-elena` (Elena Rostova, Technical Preview/Advanced), and `admin-michael`
 (Michael Anthony Sprague, sole owner reviewer). It preserves the two original
 published practice fixtures and rubric v1, and adds six published competency-specific
-Generalist practice families pinned to rubric v2 (eight practice scenarios total).
+Generalist practice families pinned to rubric v2 (eight Generalist practice scenarios),
+plus five Technical Preview practice families pinned to a separate technical rubric v1.
 Approved alternatives include valid ties and alternate preferences. The two
 independent public information links are retained. Only salted scrypt hashes
 are stored, using Node's asynchronous scrypt with N=32768, r=8, p=3 and timing-safe
@@ -327,3 +328,78 @@ Manual check using `demo-marcus` and your configured demo password:
    Switch learning levels and confirm prior lesson/practice progress remains.
 6. Open one scenario in two tabs. Save in one, then save from the stale tab.
    Confirm a reload instruction appears and the newer server draft is preserved.
+
+## Step 6C: Optional Workflow Skills Lab and limited Technical Preview
+
+Candidate-only `/workflow-lab` offers a self-paced guide and five native-checkbox
+self-checks for window arrangement, keyboard/tab navigation, evidence notes, time
+allocation, and primary-source verification/triangulation. The checklist stays in
+page memory, announces changes politely, and can be reset. It writes no database
+progress and is never a Generalist credential prerequisite. The visible rules
+notice reminds learners to follow third-party assessment/employer restrictions.
+
+Candidate-only `/technical-preview` lists five original `DEMO - SYNTHETIC`
+JavaScript review exercises: positive-sum comprehension, a strict-boundary bug,
+input-preserving sorting, empty-input behavior, and ranking equivalent solutions.
+The final exercise accepts an explicitly approved tie. Each published scenario
+pins `demo-technical-evaluation` rubric v1 and supplies a synthetic contract/hand
+trace for verification and expert explanations after submission. Seeding uses
+stable family/version/bank upserts, preserving existing content and learner data.
+
+`/technical-preview/[scenarioId]` reuses the responsive A/B practice workspace,
+reference panel, temporary scratchpad, draft revision checks and deterministic
+40/30/25 evaluation. Code is escaped text inside `pre`/`code`; nothing is executed.
+Written prose remains ungraded, and the deterministic subtotal remains out of 95.
+Catalog and workspace both prominently state that the preview is a future-track
+exploration, grants no Technical credential, and does not alter Generalist capstone
+eligibility. Technical submissions create only unfinalized `PRACTICE` attempts
+tagged `TECHNICAL_PREVIEW` and their own scenario drafts. The fixed server track
+prevents cross-track lookups; technical visits/submissions never update Generalist
+practice progress, lesson completion, exposure history, profile placement, capstone
+attempts, review cases or credentials. G1–G6 links are optional references to
+RaterReady's internal Generalist habits, not Technical mastery credit.
+
+No new schema migration or dependency is needed for Step 6C. Apply all existing
+migrations first (including Step 6B's `PracticeDraft`/`PracticeProgress` tables),
+then seed twice to verify repeatability and restart the development server:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npx prisma db seed
+npm run typecheck
+npm run lint
+npm test
+npm run dev
+```
+
+The full opt-in database and browser suites use a disposable local test database,
+never Neon. Run them sequentially as described earlier:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+```
+
+Tests cover all five deterministic fixtures, the approved tie, repeatable seeds,
+unchanged Generalist/capstone/credential records, fixed-track authorization,
+pre-submission key isolation, checklist labels/live feedback, native keyboard
+controls, desktop/mobile code reflow, axe accessibility and dashboard navigation.
+
+Manual check after signing in with either synthetic learner account:
+
+1. Open Workflow Skills Lab from the dashboard. Read the optional/non-required and
+   third-party rules notices. Use Tab/Space to toggle checks; confirm the announced
+   count, Reset self-check, and reload behavior. Return to the dashboard.
+2. Open Technical Preview. Confirm five exercises and the non-credentialing notice.
+   Open any exercise; check both labeled synthetic code outputs, pinned rubric,
+   contract/trace evidence, and Seven-Step reference. Check desktop and narrow views.
+3. Save a partial draft and reload to verify persistence. Submit your completed
+   comparison and review the immediate structured feedback and expert explanation.
+4. In “Rank technical solutions,” choose “A and B are tied,” rate all three criteria
+   “Both meet the criterion,” select `demo-positive-count-trace`, and justify the
+   equivalence. Confirm 95/95 and the specific approved-alternative explanation.
+5. Retry, browse back to the preview catalog, and return to the dashboard. Generalist
+   lesson/practice counts and capstone readiness should remain unchanged; no
+   Technical credential should appear.
