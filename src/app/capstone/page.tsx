@@ -29,8 +29,8 @@ export default async function CapstoneReadinessPage({ searchParams }: { searchPa
   return <article className="page-card learning-page" aria-labelledby="capstone-heading">
     <p className="eyebrow">DEMO - SYNTHETIC · Generalist capstone</p><h1 id="capstone-heading">Capstone readiness</h1>
     <p className="page-intro">Check eligibility and the Independent-Work Policy before starting a server-timed attempt.</p>
-    <aside className="demo-notice" aria-labelledby="lifecycle-demo-heading"><h2 id="lifecycle-demo-heading">Timer lifecycle demonstration</h2>
-      <p>This screen supports starting, checking and resuming a synthetic timer. Exam questions and final submission controls are not available here. Starting still consumes a fresh synthetic form and begins its deadline.</p></aside>
+    <aside className="demo-notice" aria-labelledby="lifecycle-demo-heading"><h2 id="lifecycle-demo-heading">Timed synthetic capstone</h2>
+      <p>Starting reserves a fresh six-slot form and begins its deadline. Use Resume active attempt to enter the exam. Coaching and expert explanations are disabled; responses lock at final submission or expiry.</p></aside>
     {notice && Object.hasOwn(notices, notice) && <p role="status" className="success-note">{notices[notice]}</p>}
     <section className="learning-section" aria-labelledby="eligibility-heading">
       {/* Announce a changed lock/eligibility state without reading a fresh timestamp every 15 seconds. */}

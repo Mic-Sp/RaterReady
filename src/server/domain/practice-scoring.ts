@@ -58,6 +58,32 @@ function sameSources(left: string[], right: string[]): boolean {
  */
 export function evaluatePracticeScenario(scenario: PracticeScoringScenario, rawSubmission: unknown) {
   assertPracticeScenario(scenario);
+  if (!scenario.expertExplanation.trim()) throw new PracticeEvaluationError("INVALID_CONFIGURATION");
+  const { submission, best, matchingJudgments, criterionIds } = scorePinnedStructuredResponse(scenario, rawSubmission);
+  return {
+    scenarioId: scenario.id, scenarioVersion: scenario.version, rubricId: scenario.rubric.id, rubricVersion: scenario.rubric.version,
+    demoLabel: "DEMO - SYNTHETIC" as const, certifying: false as const,
+    deterministicScore: best.score, deterministicMax: 95 as const, writtenScore: null, finalScore: null,
+    writtenReviewStatus: submission.writtenJustification?.length ? "AWAITING_PRACTICE_REVIEW" as const : "NOT_PROVIDED" as const,
+    breakdown: { evaluationJudgment: { earned: best.judgmentPoints, maximum: 40 }, rubricApplication: { earned: best.rubricPoints, maximum: 30 }, factualVerification: { earned: best.verificationPoints, maximum: 25 } },
+    feedback: {
+      judgmentAccepted: matchingJudgments.length > 0,
+      approvedAlternativeUsed: matchingJudgments.length > 0 && best.alternativeExplanation !== null,
+      alternativeExplanation: matchingJudgments.length > 0 ? best.alternativeExplanation : null,
+      expertExplanation: scenario.expertExplanation,
+      rubricCriteria: criterionIds.map((id) => ({ id, aligned: best.matchedCriteria.includes(id) })),
+      verificationAligned: best.verificationPoints === 25,
+      reviewGuidance: "Review the pinned rubric and supplied evidence. Written justifications are accepted for practice review without automatic prose scoring.",
+    },
+  };
+}
+
+/**
+ * Internal scoring primitive shared by bank-guarded practice/capstone evaluators. Its result
+ * contains private comparison details and MUST NOT be returned by a capstone endpoint.
+ * Callers enforce their bank, ownership, pins and lifecycle before invoking this function.
+ */
+export function scorePinnedStructuredResponse(scenario: Pick<PracticeScoringScenario, "id" | "version" | "rubric" | "answerKeyJson" | "allowedAlternativesJson" | "evidenceJson">, rawSubmission: unknown) {
   const parsed = practiceSubmissionSchema.safeParse(rawSubmission);
   if (!parsed.success) throw new PracticeEvaluationError("INVALID_SUBMISSION");
   const submission = parsed.data;
@@ -67,7 +93,7 @@ export function evaluatePracticeScenario(scenario: PracticeScoringScenario, rawS
   const primary = keySchema.safeParse(scenario.answerKeyJson);
   const alternatives = alternativesSchema.safeParse(scenario.allowedAlternativesJson);
   const rubric = z.object({ deterministicWeights: z.object({ evaluationJudgment: z.literal(40), rubricApplication: z.literal(30), factualVerification: z.literal(25) }), writtenWeight: z.literal(5) }).safeParse(scenario.rubric.criteriaJson);
-  if (!primary.success || !alternatives.success || !rubric.success || !scenario.expertExplanation.trim()) {
+  if (!primary.success || !alternatives.success || !rubric.success) {
     throw new PracticeEvaluationError("INVALID_CONFIGURATION");
   }
   const evidence = z.object({ sources: z.array(z.object({ id: z.string().min(1) })) }).safeParse(scenario.evidenceJson);
@@ -96,22 +122,5 @@ export function evaluatePracticeScenario(scenario: PracticeScoringScenario, rawS
       score: judgmentPoints + rubricPoints + verificationPoints };
   });
   const best = evaluated.reduce((left, right) => right.score > left.score ? right : left);
-  // Closed feedback projection: no key objects, expected selections, alternative arrays,
-  // raw rubric JSON or written text are serialized in the evaluation response.
-  return {
-    scenarioId: scenario.id, scenarioVersion: scenario.version, rubricId: scenario.rubric.id, rubricVersion: scenario.rubric.version,
-    demoLabel: "DEMO - SYNTHETIC" as const, certifying: false as const,
-    deterministicScore: best.score, deterministicMax: 95 as const, writtenScore: null, finalScore: null,
-    writtenReviewStatus: submission.writtenJustification?.length ? "AWAITING_PRACTICE_REVIEW" as const : "NOT_PROVIDED" as const,
-    breakdown: { evaluationJudgment: { earned: best.judgmentPoints, maximum: 40 }, rubricApplication: { earned: best.rubricPoints, maximum: 30 }, factualVerification: { earned: best.verificationPoints, maximum: 25 } },
-    feedback: {
-      judgmentAccepted: matchingJudgments.length > 0,
-      approvedAlternativeUsed: matchingJudgments.length > 0 && best.alternativeExplanation !== null,
-      alternativeExplanation: matchingJudgments.length > 0 ? best.alternativeExplanation : null,
-      expertExplanation: scenario.expertExplanation,
-      rubricCriteria: criterionIds.map((id) => ({ id, aligned: best.matchedCriteria.includes(id) })),
-      verificationAligned: best.verificationPoints === 25,
-      reviewGuidance: "Review the pinned rubric and supplied evidence. Written justifications are accepted for practice review without automatic prose scoring.",
-    },
-  };
+  return { submission, best, matchingJudgments, criterionIds };
 }

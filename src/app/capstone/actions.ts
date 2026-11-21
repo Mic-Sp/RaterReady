@@ -25,9 +25,9 @@ export async function startCapstoneAction(previous: CapstoneStartState, data: Fo
 /** Candidate-only resume rechecks the database deadline; it neither creates an attempt nor accepts a posted attempt ID. */
 export async function resumeCapstoneAction(): Promise<void> {
   const user = await requireCandidate();
-  let notice = "resumed";
-  try { await resumeCapstoneAttempt(prisma, user.id); }
-  catch { notice = "not-active"; }
+  let attemptId: string | undefined;
+  try { attemptId = (await resumeCapstoneAttempt(prisma, user.id)).attempt?.id; }
+  catch { /* A stale resume returns to the server readiness/expiry state without revealing internal errors. */ }
   revalidatePath("/capstone");
-  redirect(`/capstone?notice=${notice}`);
+  redirect(attemptId ? `/capstone/${attemptId}` : "/capstone?notice=not-active");
 }

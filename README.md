@@ -2,7 +2,7 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–7A contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–7B contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
@@ -11,9 +11,9 @@ dashboard, plus a server-only deterministic practice evaluator and expanded scen
 catalog, plus an accessible A/B practice workspace with saved drafts and persisted
 practice participation, an optional Workflow Skills Lab and five non-credentialing
 Technical Preview exercises, plus the isolated Generalist capstone blueprint,
-readiness gate and server timer lifecycle. There is no public registration or
-role-selection flow. Capstone question/submission UI and owner review tools are
-not implemented yet.
+readiness gate, server timer lifecycle and timed six-slot exam with continuous
+autosave and locked deterministic submission. There is no public registration or
+role-selection flow. Dual-AI written grading and owner review tools are not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -415,8 +415,8 @@ coverage across all six internal G1–G6 areas. A practice submission is partici
 no minimum practice score or selected learning level is required. Self-marked
 lessons, diagnostic scores, Workflow Skills Lab checks and Technical Preview do not
 substitute. These activities never change the capstone's finalized 85% passing bar.
-The dashboard links to this screen; there are no exam questions, answer controls,
-final submissions or AI grading jobs in this step.
+The dashboard links to this screen. The owned exam workspace and final submission
+flow are described under Step 7B below; readiness itself discloses no questions or keys.
 
 The repeatable seed adds twelve distinct Generalist `CAPSTONE` cases, covering
 rubric scope, completeness, source verification, comparative judgment, safety and
@@ -425,8 +425,8 @@ routes cannot list, load or evaluate them. `CapstoneBlueprint` v1 defines one sl
 per G-area, exactly three written prompts (G1/G3/G6), **60 minutes** base duration,
 **48 hours** retake cooldown and mandatory Generalist practice coverage. Immutable
 `ScoringPolicy` v1 fixes 40 judgment / 30 rubric / 25 verification / 5 written points
-and an 85% threshold after finalization. Future grading will average deterministic
-dimensions and normalize the three written rubrics; it is not implemented here.
+and an 85% threshold after finalization. Step 7B averages deterministic dimensions;
+normalizing the three written rubrics remains reserved for the grading/review steps.
 
 Independent-Work Policy v1 prohibits external generative AI assistants, including
 ChatGPT, Claude and Gemini; traditional search, primary sources and ordinary notes
@@ -502,8 +502,8 @@ Manual browser checks using a synthetic learner:
    revisit. Diagnostic/lab/Technical activity must not waive missing areas.
 2. When eligible, try Start without checking the policy box; confirm the associated
    error and no attempt. Read and explicitly acknowledge the policy, then start.
-   The screen warns that this demonstration begins a real synthetic timer and
-   reserves fresh families even though question/submission UI is not available yet.
+   Starting begins the synthetic timer and reserves fresh families. Use Resume to
+   enter the timed workspace described below.
 3. Confirm start, acknowledgment, fixed deadline and pinned versions. At multiplier
    1 the grant is 60 minutes; at 1.5 it is 90 minutes. Reload, use Resume and change
    the device clock: the same attempt reference and deadline must remain.
@@ -512,5 +512,108 @@ Manual browser checks using a synthetic learner:
    The browser suite exercises this quickly with a near-deadline historical fixture
    in its disposable database; it never shortens an existing immutable deadline.
 5. Use keyboard navigation and a narrow/zoomed view, check the policy error/status
-   announcements and return to the dashboard. No capstone questions, coaching,
-   written grading or credentials should appear.
+   announcements and return to the dashboard. Questions appear only in the owned
+   active workspace; coaching, written grading and credentials remain unavailable here.
+
+## Step 7B: Timed capstone workspace, autosave and locked scoring
+
+The readiness screen's **Resume active attempt** action opens candidate-only
+`/capstone/[attemptId]`. Ownership is checked before any exam text is selected;
+unknown, other-owned and unsupported attempts share the same unavailable page.
+The six assigned scenarios retain immutable slot/scenario/rubric order and versions.
+A shared A/B comparison component provides side-by-side desktop responses and
+equivalent sequential mobile content with explicit `DEMO - SYNTHETIC` output labels.
+Native judgment/rating/source controls and the three designated written fields
+are keyboard operable. Slot navigation reports required-field completion.
+
+The persistent **Capstone Mode — Coaching Disabled** timer banner uses a display
+estimate based on the latest PostgreSQL time and monotonic `performance.now()`
+elapsed time, never `Date.now()`. The server is polled every 10 seconds, on return
+to the tab and when the display reaches zero. Server-side deadline checks remain
+authoritative even if the browser clock/display is stale. The exam omits practice
+guidance, the Seven-Step coaching panel, correctness feedback, expert explanations
+and all answer-key/alternative records. Only explicit public rubric fields and
+supplied source material are allowed through the deep DTO projection.
+
+Changes debounce for 750ms and manual **Save now** uses the same server path.
+Each autosave is a coherent six-slot snapshot with an attempt-wide revision CAS.
+The client permits one in-flight save and queues later edits using the acknowledged
+revision; older acknowledgments cannot replace newer local prose. Saves update
+the response revisions and server timestamps atomically. Stale-tab conflicts pause
+autosave and require an explicit reload instead of silently merging/overwriting.
+Only server-confirmed timestamps are displayed. Leaving with unconfirmed changes
+produces a browser warning; reloading before a save is confirmed can lose those
+local edits. The research scratchpad is separate page memory, excluded from
+autosave/submission and browser storage; reload clears it.
+
+Save, status and final-submit services share candidate/attempt row locks and
+PostgreSQL `clock_timestamp()` deadline checks. The response trigger also locks its
+parent row before checking editability. A save that crosses the deadline rolls back
+all six writes, then records expiry separately. Expiry preserves earlier saved data
+and never fabricates a zero/failing score. Locked status screens return no questions.
+
+**Review final submission** first flushes pending saves and validates that all six
+structured judgments/criterion groups and the three written fields are present.
+An explicit unchecked confirmation is then required; inputs are paused while the
+candidate confirms. The server independently verifies confirmation, ownership,
+deadline, completeness and the saved revision. It scores only database-saved
+responses against the pinned private keys, reusing coherent approved-alternative
+matching. Each slot contributes equally to judgment/rubric/verification dimensions;
+the aggregate is normalized to **95 points** and rounded once to two decimal places.
+Written prose is retained verbatim and never regex/exact-string scored.
+
+One atomic update records the deterministic subtotal, `submittedAt`, a stable
+server-generated `submissionKey`, and `PENDING_REVIEW`, while written score, final
+score and pass/fail remain null. Duplicate final requests return the same locked
+receipt (with a current server clock), without rescoring or changing the responses.
+The SQL-only submission-lock migration prevents reopening submitted attempts or
+rewriting their submission key, timestamp, deterministic subtotal or autosave revision.
+Candidate save endpoints and database response-update guards deny later edits.
+No dual-AI job, review case, final result or credential is created in this step.
+
+No Prisma model change or new dependency is needed; apply the new SQL migration
+before restarting the updated app. Existing seeds remain repeatable and unchanged:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npm run typecheck
+npm run lint
+npm test
+npm run dev
+```
+
+Run the database and browser suites sequentially using a disposable local database:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+```
+
+Checks cover queued in-flight edits, debounced server-confirmed timestamps,
+multi-slot reloads, stale revisions, save/submit races, ownership, approved alternatives,
+95-point normalization, immutable submissions, late-save rollback, expired response
+preservation, scratchpad exclusion, deep key isolation, pending review, mobile reflow
+and WCAG/keyboard semantics. Browser expiry cases use historical near-deadline
+fixtures in the test database; application deadlines are never shortened.
+
+Manual browser checks:
+
+1. Satisfy Generalist practice coverage, acknowledge the policy, start and Resume.
+   Confirm the countdown, fixed deadline, pinned versions, six-slot navigation and
+   Coaching Disabled indicator. Practice hints/reference guides must be absent.
+2. Enter partial selections and prose in two written slots. Wait for a server save
+   timestamp, reload, and revisit both slots. Confirm persistence and scratchpad
+   clearing; ordinary scratchpad notes must not become saved answers.
+3. Tab through controls and slot buttons; compare desktop and narrow/zoomed layouts.
+   Open the attempt in another tab, save in one, and confirm the other pauses on
+   a stale revision instead of overwriting it. Explicitly reload the server draft.
+4. Complete all six structured evaluations and three designated justifications.
+   Review final submission: verify pending edits save first, the confirmation box
+   starts unchecked, and Return to editing preserves the draft.
+5. Confirm submission. Verify locked responses, the deterministic subtotal out of
+   95 and pending written/owner review. Reload; no answer editing, answer keys,
+   explanations, pass/fail decision or credential should appear.
+6. Let another attempt reach its server deadline (or run the automated expiry case).
+   Confirm the locked expiry screen and that only previously confirmed saves remain.

@@ -1,40 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
-import { testPasswords } from "../../prisma/test-helpers";
 import { capstoneBlueprint } from "../../prisma/capstone-fixtures";
-import { expandedPracticeScenarios } from "../../prisma/practice-fixtures";
-
-/** Test config permits only disposable local databases; remove this learner's synthetic capstone fixtures between cases. */
-async function clearCapstones(db: PrismaClient, candidateId: string) {
-  await db.submissionResponse.deleteMany({ where: { attempt: { candidateId, mode: "CAPSTONE" } } });
-  await db.assessmentAttempt.deleteMany({ where: { candidateId, mode: "CAPSTONE" } });
-  await db.scenarioExposure.deleteMany({ where: { candidateId, family: { code: { startsWith: "demo-capstone-" } } } });
-}
-
-/** Actual Generalist submissions qualify; zero-point practice is not an invented mastery prerequisite. */
-async function setCoverage(db: PrismaClient, candidateId: string, ready: boolean) {
-  await db.submissionResponse.deleteMany({ where: { attempt: { candidateId, mode: "PRACTICE", track: "GENERALIST" } } });
-  await db.assessmentAttempt.deleteMany({ where: { candidateId, mode: "PRACTICE", track: "GENERALIST" } });
-  await db.practiceProgress.deleteMany({ where: { candidateId } });
-  if (!ready) return;
-  for (const fixture of expandedPracticeScenarios) {
-    const scenario = await db.scenario.findFirstOrThrow({ where: { family: { code: fixture.familyCode }, bank: "PRACTICE", version: 1 } });
-    const now = new Date();
-    await db.assessmentAttempt.create({ data: { candidateId, mode: "PRACTICE", track: "GENERALIST", level: scenario.difficulty, status: "SUBMITTED", startedAt: now, submittedAt: now, deterministicScore: 0,
-      responses: { create: { scenarioId: scenario.id, position: 1, selectionsJson: { judgment: "BOTH_UNACCEPTABLE", rubricSelections: { accuracy: "NEITHER_MEETS", instructionFollowing: "NEITHER_MEETS", safety: "NEITHER_MEETS" }, verifiedSourceIds: [] } } } } });
-    await db.practiceProgress.create({ data: { candidateId, competency: scenario.competencies[0], level: scenario.difficulty } });
-  }
-}
-
-/** Public sign-in exercises the real candidate session; no test route bypasses RBAC. */
-async function signIn(page: Page, account: "demo-marcus" | "demo-elena") {
-  await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(account);
-  await page.getByLabel("Password", { exact: true }).fill(testPasswords[account]);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL("/dashboard");
-}
+import { clearCapstones, setCoverage, signInCapstone as signIn } from "./capstone-fixture";
 
 /** Include contrast and landmarks alongside explicit keyboard and form-state assertions. */
 async function accessible(page: Page) {
@@ -93,13 +61,14 @@ test("explicit acknowledgment starts one accommodated timer, survives reload/clo
     await page.clock.setFixedTime(new Date("2099-01-01T00:00:00.000Z"));
     await page.reload(); await expect(reference).toHaveText(attempt.id);
     await page.getByRole("button", { name: "Resume active attempt", exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("same deadline");
+    await expect(page).toHaveURL(`/capstone/${attempt.id}`);
+    await expect(page.getByRole("heading", { name: "Your capstone exam", exact: true })).toBeVisible();
     const resumed = await db.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt.id } });
     expect(resumed.startedAt).toEqual(attempt.startedAt); expect(resumed.expiresAt).toEqual(attempt.expiresAt);
     expect(resumed.independentWorkAcknowledgedAt).toEqual(attempt.startedAt);
     expect(await db.assessmentAttempt.count({ where: { candidateId: id, mode: "CAPSTONE" } })).toBe(1);
     const html = await page.content();
-    for (const name of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "responseA", "responseB"]) expect(html).not.toContain(name);
+    for (const name of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation"]) expect(html).not.toContain(name);
     await expect(page.getByRole("button", { name: "Submit capstone", exact: true })).toHaveCount(0);
     await accessible(page); await page.screenshot({ path: test.info().outputPath("capstone-timer.png"), fullPage: true });
   } finally {

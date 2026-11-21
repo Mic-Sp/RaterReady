@@ -38,7 +38,8 @@ describe("capstone Server Action boundaries", () => {
     expect(failed.error).toContain("could not be started"); expect(JSON.stringify(failed)).not.toContain("SECRET_");
   });
   it("resumes only the guarded candidate and refuses all mutations before data access for other roles", async () => {
-    await expect(resumeCapstoneAction()).rejects.toThrow("REDIRECT:/capstone?notice=resumed");
+    mocks.resume.mockResolvedValue({ attempt: { id: "owned-attempt" } });
+    await expect(resumeCapstoneAction()).rejects.toThrow("REDIRECT:/capstone/owned-attempt");
     expect(mocks.resume).toHaveBeenCalledWith("TEST_DB", "guarded-candidate");
     mocks.start.mockClear(); mocks.resume.mockClear(); mocks.guard.mockRejectedValue(new Error("Forbidden"));
     await expect(startCapstoneAction(initial, form())).rejects.toThrow("Forbidden");

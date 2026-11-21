@@ -7,6 +7,7 @@ import { practiceJudgments } from "../../lib/practice-controls";
 import { EvaluationReference } from "../components/evaluation-reference";
 import { updatePractice, updateTechnicalPreview } from "./actions";
 import { TechnicalPreviewNotice } from "../components/technical-preview-notice";
+import { ResponseComparison } from "../components/response-comparison";
 import type { PracticeFormState } from "./form-state";
 
 type WorkspaceData = Awaited<ReturnType<typeof loadPracticeWorkspace>>;
@@ -53,10 +54,7 @@ export function PracticeWorkspace({ scenario, draft }: WorkspaceData) {
     <p className="page-intro">{scenario.competencyDisclosure}</p>
     <p>Scenario version {scenario.version} · pinned rubric {scenario.rubric.code}, version {scenario.rubric.version}</p>
     <section className="learning-section" aria-labelledby="task-heading"><h2 id="task-heading">Task prompt</h2><p>{scenario.prompt}</p></section>
-    <div className="practice-columns" role="group" aria-label="Response comparison">
-      <section className="response-panel" aria-labelledby="response-a-heading"><h2 id="response-a-heading">Response A</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p>{technical ? <pre className="response-copy code-response"><code>{scenario.responseA}</code></pre> : <p className="response-copy">{scenario.responseA}</p>}</section>
-      <section className="response-panel" aria-labelledby="response-b-heading"><h2 id="response-b-heading">Response B</h2><p className="simulation-label">DEMO - SYNTHETIC · Simulated AI output</p>{technical ? <pre className="response-copy code-response"><code>{scenario.responseB}</code></pre> : <p className="response-copy">{scenario.responseB}</p>}</section>
-    </div>
+    <ResponseComparison responseA={scenario.responseA} responseB={scenario.responseB} technical={technical} />
     <section className="learning-section" aria-labelledby="rubric-heading"><h2 id="rubric-heading">Pinned evaluation rubric</h2>
       <p>{controls.description}</p><p>Evaluation judgment: 40 points · rubric application: 30 points · factual verification: 25 points.</p>
       <p>Written justifications are retained for practice review. The written five-point component and final score remain unassigned; practice never issues credentials.</p>

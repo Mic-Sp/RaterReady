@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma, type PrismaClient, type Competency } from "@prisma/client";
 import { z } from "zod";
 import { calculateCapstoneDeadline, capstoneCooldownUntil, decideCapstoneReadiness, isCapstoneExpired, type CapstoneReadinessKind } from "../domain/capstone-timer";
+import { capstoneDatabaseNow as databaseNow, lockCapstoneCandidate } from "./clock";
 
 const competencies: Competency[] = ["G1", "G2", "G3", "G4", "G5", "G6"];
 const blueprintCode = "demo-generalist-capstone";
@@ -41,12 +42,6 @@ export class CapstonePolicyError extends Error {
   }
 }
 
-/** PostgreSQL clock is sampled after acquiring the candidate lock; browser timestamps are never accepted. */
-async function databaseNow(tx: Prisma.TransactionClient): Promise<Date> {
-  const [row] = await tx.$queryRaw<{ now: Date }[]>`SELECT date_trunc('milliseconds', clock_timestamp()) AS now`;
-  return row.now;
-}
-
 /** Validate published pins before allocation, so malformed configuration fails closed rather than creating a broken exam. */
 function validBlueprint(blueprint: Blueprint): boolean {
   const p = blueprint.scoringPolicy;
@@ -78,13 +73,9 @@ function publicAttempt(a: Attempt, b: Blueprint, now: Date): NonNullable<Capston
 
 /** Lock order is shared by start/read/resume. Expiry writes commit even when a later start is denied by cooldown. */
 async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string) {
-  const locked = await tx.$queryRaw<{ userId: string }[]>`SELECT "userId" FROM "CandidateProfile" WHERE "userId" = ${candidateId} FOR UPDATE`;
-  if (!locked.length) throw new CapstonePolicyError("UNAVAILABLE");
+  const profile = await lockCapstoneCandidate(tx, candidateId);
   const now = await databaseNow(tx);
   await tx.assessmentAttempt.updateMany({ where: { candidateId, mode: "CAPSTONE", status: "IN_PROGRESS", expiresAt: { lte: now } }, data: { status: "EXPIRED", expiredAt: now } });
-  const profile = await tx.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, select: { selectedLevel: true, timeMultiplier: true,
-    user: { select: { role: true, accountStatus: true, isSyntheticFixture: true } } } });
-  if (profile.user.role !== "CANDIDATE" || profile.user.accountStatus !== "ACTIVE" || !profile.user.isSyntheticFixture) throw new CapstonePolicyError("UNAVAILABLE");
   const attempts = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST" }, orderBy: { startedAt: "desc" }, select: attemptSelect });
   const active = attempts.find((a) => a.status === "IN_PROGRESS" && a.expiresAt && !isCapstoneExpired(a.expiresAt, now));
   const blueprint = active?.capstoneBlueprintId

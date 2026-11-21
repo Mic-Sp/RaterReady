@@ -7,6 +7,8 @@ import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 import { capstoneBlueprint, capstoneScenarios } from "./capstone-fixtures";
 import { getCapstoneReadiness, resumeCapstoneAttempt, startCapstoneAttempt } from "../src/server/capstone/service";
+import { getCapstoneSnapshot, loadCapstoneWorkspace, saveCapstoneDraft, submitCapstoneAttempt } from "../src/server/capstone/workspace";
+import type { CapstoneDraftResponse } from "../src/lib/capstone-responses";
 import { loadPracticeScenario, submitPracticeEvaluation } from "../src/server/practice/service";
 import { listPracticeScenarios, loadPracticeWorkspace, saveOrSubmitPractice } from "../src/server/practice/workspace";
 import { seedSyntheticData } from "./seed-data";
@@ -643,5 +645,115 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
         deterministicScore: passed ? 80 : 79, writtenScore: 5, finalScore: passed ? 85 : 84, passed } });
       expect((await getCapstoneReadiness(prisma, id)).kind).toBe(passed ? "ALREADY_PASSED" : "COOLDOWN");
     }
+  });
+
+  /** Build full-credit structured snapshots from pinned server fixtures; learner APIs never return these keys. */
+  async function completedCapstoneResponses(attempt: string): Promise<CapstoneDraftResponse[]> {
+    const rows = await prisma.submissionResponse.findMany({ where: { attemptId: attempt }, include: { scenario: true }, orderBy: { position: "asc" } });
+    return rows.map((row) => ({ position: row.position, ...(row.scenario.answerKeyJson as unknown as Omit<CapstoneDraftResponse, "position" | "writtenJustification">),
+      writtenJustification: [1, 3, 6].includes(row.position) ? "DEMO - SYNTHETIC: my independent reasoning cites the supplied source and pinned rubric." : "" }));
+  }
+
+  it("saves partial multi-slot drafts atomically, reloads owned prose and rejects stale concurrent snapshots", async () => {
+    const id = await capstoneCandidate();
+    const started = await startCapstoneAttempt(prisma, id, startInput());
+    const attempt = started.attempt!.id;
+    const before = await loadCapstoneWorkspace(prisma, id, attempt);
+    const partial = before.slots.map((s) => s.draft);
+    partial[0] = { ...partial[0], judgment: "TIE", writtenJustification: "DEMO - SYNTHETIC: unfinished thought in slot one." };
+    partial[2] = { ...partial[2], writtenJustification: "DEMO - SYNTHETIC: source details for slot three." };
+    const saved = await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses: partial });
+    expect(saved).toMatchObject({ ok: true, code: "SAVED", snapshot: { revision: 1, savedAt: expect.any(String) } });
+    const reloaded = await loadCapstoneWorkspace(prisma, id, attempt);
+    expect(reloaded.slots.map((s) => s.draft)).toEqual(partial);
+    expect(reloaded.snapshot.savedAt).toBe(saved.snapshot?.savedAt);
+    expect(reloaded.snapshot.deterministicScore).toBeNull();
+    const concurrent = await Promise.all([saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 1, responses: partial }), saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 1, responses: partial })]);
+    expect(concurrent.filter((r) => r.code === "SAVED")).toHaveLength(1);
+    expect(concurrent.filter((r) => r.code === "CONFLICT")).toHaveLength(1);
+    const raw = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt }, include: { responses: true } });
+    expect(raw.scratchpadNotes).toBe(""); expect(raw.status).toBe("IN_PROGRESS");
+    expect(raw.responses.every((r) => r.revision === 2)).toBe(true);
+    const other = await capstoneCandidate(false);
+    await expect(loadCapstoneWorkspace(prisma, other, attempt)).rejects.toHaveProperty("name", "CapstoneWorkspaceError");
+    expect(await saveCapstoneDraft(prisma, other, { attemptId: attempt, revision: 2, responses: partial })).toMatchObject({ ok: false, code: "UNAVAILABLE", snapshot: null });
+    expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 2, confirmed: true })).toMatchObject({ ok: false, code: "INCOMPLETE" });
+  });
+
+  it("locks one idempotent 95-point subtotal while accepting approved capstone alternatives and withholding all keys", async () => {
+    const id = await capstoneCandidate();
+    const alternativePools = await prisma.capstoneScenarioPool.findMany({ where: { blueprintId: capstoneBlueprintId, position: { in: [4, 6] } }, include: { scenario: true } });
+    // Exclude non-alternative cases so this integration test definitely exercises both approved paths.
+    await prisma.scenarioExposure.createMany({ data: alternativePools.filter((p) => (p.scenario.allowedAlternativesJson as unknown[]).length === 0).map((p) => ({ candidateId: id, familyId: p.scenario.familyId })) });
+    const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    const responses = await completedCapstoneResponses(attempt);
+    const raw = await prisma.submissionResponse.findMany({ where: { attemptId: attempt }, include: { scenario: true } });
+    let alternativeCount = 0;
+    for (const row of raw) {
+      const alternatives = row.scenario.allowedAlternativesJson as unknown as { judgment: NonNullable<CapstoneDraftResponse["judgment"]>; rubricSelections: CapstoneDraftResponse["rubricSelections"]; verifiedSourceIds: string[] }[];
+      if (alternatives[0]) { const r = responses[row.position - 1]; responses[row.position - 1] = { ...r, judgment: alternatives[0].judgment, rubricSelections: alternatives[0].rubricSelections, verifiedSourceIds: alternatives[0].verifiedSourceIds }; alternativeCount += 1; }
+    }
+    expect(alternativeCount).toBe(2);
+    const before = await loadCapstoneWorkspace(prisma, id, attempt);
+    for (const key of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "approvedByAccountCode", "reviewGuidance", "verificationInstruction"]) expect(JSON.stringify(before)).not.toContain(key);
+    for (const row of raw) expect(JSON.stringify(before)).not.toContain(row.scenario.expertExplanation);
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses })).toMatchObject({ ok: true });
+    expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 1, confirmed: false })).toMatchObject({ code: "CONFIRMATION", ok: false });
+    const [first, retry] = await Promise.all([submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 1, confirmed: true }), submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 1, confirmed: true })]);
+    expect(first).toMatchObject({ ok: true, code: "SUBMITTED", snapshot: { status: "PENDING_REVIEW", deterministicScore: 95, revision: 2 } });
+    expect(retry).toMatchObject({ ok: true, code: "SUBMITTED", snapshot: { id: first.snapshot!.id, submittedAt: first.snapshot!.submittedAt,
+      deterministicScore: first.snapshot!.deterministicScore, revision: first.snapshot!.revision, expiresAt: first.snapshot!.expiresAt } });
+    const saved = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt }, include: { responses: true, credential: true, reviewCase: true } });
+    expect(saved).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null, credential: null, reviewCase: null, submissionKey: `capstone:${attempt}`, revision: 2 });
+    expect(await prisma.aiGradingJob.count({ where: { response: { attemptId: attempt } } })).toBe(0);
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 2, responses })).toMatchObject({ ok: false, code: "LOCKED" });
+    await expect(prisma.submissionResponse.update({ where: { id: saved.responses[0].id }, data: { writtenJustification: "changed after submission" } })).rejects.toThrow(/locked/);
+    await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "IN_PROGRESS" } })).rejects.toThrow(/reopened/);
+    await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { deterministicScore: 0 } })).rejects.toThrow(/immutable/);
+    const lockedView = await loadCapstoneWorkspace(prisma, id, attempt);
+    expect(lockedView.slots).toEqual([]);
+    for (const key of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "approvedByAccountCode", "rubricSelections"]) expect(JSON.stringify(lockedView)).not.toContain(key);
+  });
+
+  it("rejects injected sources, criteria, scores and extra prose without changing saved content", async () => {
+    const id = await capstoneCandidate(); const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    const responses = await completedCapstoneResponses(attempt);
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses, expiresAt: "2099-01-01" })).toMatchObject({ code: "INVALID" });
+    expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 0, confirmed: true, deterministicScore: 95 })).toMatchObject({ code: "CONFIRMATION" });
+    for (const changed of [ { ...responses[0], verifiedSourceIds: ["not-a-supplied-source"] }, { ...responses[0], rubricSelections: { forged: "BOTH_MEET" } } ]) {
+      expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses: [changed, ...responses.slice(1)] })).toMatchObject({ code: "INVALID" });
+    }
+    responses[1].writtenJustification = "Not a designated written slot";
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses })).toMatchObject({ code: "INVALID" });
+    expect((await getCapstoneSnapshot(prisma, id, attempt)).revision).toBe(0);
+  });
+
+  it("preserves earlier drafts and rejects saves/submissions arriving after server expiry", async () => {
+    const id = await capstoneCandidate();
+    const expiresAt = new Date(Date.now() + 2500);
+    const attempt = await prisma.assessmentAttempt.create({ data: historicalPins(id, expiresAt) });
+    const pool = await prisma.capstoneScenarioPool.findMany({ where: { blueprintId: capstoneBlueprintId }, orderBy: [{ position: "asc" }, { scenarioId: "asc" }] });
+    const assigned = [1, 2, 3, 4, 5, 6].map((position) => pool.find((p) => p.position === position)!);
+    await prisma.submissionResponse.createMany({ data: assigned.map((p) => ({ attemptId: attempt.id, scenarioId: p.scenarioId, position: p.position })) });
+    const responses = (await loadCapstoneWorkspace(prisma, id, attempt.id)).slots.map((s) => s.draft);
+    responses[0].writtenJustification = "DEMO - SYNTHETIC: retained before expiry.";
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt.id, revision: 0, responses })).toMatchObject({ ok: true });
+    const saved = await prisma.submissionResponse.findMany({ where: { attemptId: attempt.id }, orderBy: { position: "asc" } });
+    await new Promise((resolve) => setTimeout(resolve, 2700));
+    responses[0].writtenJustification = "Late replacement must not persist";
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt.id, revision: 1, responses })).toMatchObject({ ok: false, code: "EXPIRED" });
+    expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt.id, revision: 1, confirmed: true })).toMatchObject({ ok: false, code: "EXPIRED" });
+    expect(await prisma.submissionResponse.findMany({ where: { attemptId: attempt.id }, orderBy: { position: "asc" } })).toEqual(saved);
+    expect(await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({ status: "EXPIRED", deterministicScore: null, submittedAt: null });
+  }, 10000);
+
+  it("serializes a save/final-submit race so a locked response snapshot can never be overwritten", async () => {
+    const id = await capstoneCandidate(); const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    const responses = await completedCapstoneResponses(attempt);
+    await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses });
+    const [save, submit] = await Promise.all([saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 1, responses }), submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 1, confirmed: true })]);
+    expect([save.code, submit.code]).toEqual(expect.arrayContaining(save.ok ? ["SAVED", "CONFLICT"] : ["LOCKED", "SUBMITTED"]));
+    if (save.ok) expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 2, confirmed: true })).toMatchObject({ ok: true, code: "SUBMITTED" });
+    expect((await getCapstoneSnapshot(prisma, id, attempt)).status).toBe("PENDING_REVIEW");
   });
 });

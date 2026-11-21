@@ -138,6 +138,19 @@ body:has(.practice-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
 .workflow-checklist { min-width: 0; border: 1px solid var(--border); padding: 1rem; margin: 1rem 0; border-radius: .65rem; }
 .workflow-checklist legend { font-weight: 700; padding: 0 .3rem; }
 .workflow-habit + .workflow-habit { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.exam-timer-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; padding: .8rem 1rem; margin-bottom: 1.5rem; background: #182c38; color: #fff; border-radius: .5rem; }
+.exam-timer-bar [role="timer"] { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.exam-slot-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; padding: 0 !important; list-style: none !important; margin: 1.2rem 0; }
+.exam-slot-nav li { margin: 0 !important; }
+.exam-slot-nav button { width: 100%; min-height: 3rem; padding: .7rem; border: 1px solid var(--border); border-radius: .5rem; text-align: left; background: #fff; color: var(--ink); }
+.exam-slot-nav [aria-current="step"] { border: 3px solid var(--focus); font-weight: 700; background: #eaf6f1; }
+.exam-slot { margin-top: 1.5rem; scroll-margin-top: 9rem; }
+@media (max-width: 760px) {
+  .exam-slot-nav { grid-template-columns: minmax(0, 1fr); }
+  .exam-timer-bar { padding: .5rem; gap: .25rem; }
+  .exam-timer-bar strong { font-size: .875rem; }
+  .exam-timer-bar [role="timer"] { font-size: 1rem; white-space: nowrap; }
+}
 .form-field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23182c38' stroke-width='2'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 1rem; }
 @media (max-width: 760px) {
   .practice-columns, .practice-filters { grid-template-columns: minmax(0, 1fr); }
