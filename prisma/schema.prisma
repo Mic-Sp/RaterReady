@@ -162,6 +162,8 @@ model CandidateProfile {
   attempts              AssessmentAttempt[]
   exposures             ScenarioExposure[]
   diagnostic            DiagnosticSession?
+  practiceDrafts        PracticeDraft[]
+  practiceProgress      PracticeProgress[]
 }
 
 /// Advisory-only selections are isolated from AssessmentAttempt and Credential by design.
@@ -191,6 +193,40 @@ model ModuleProgress {
   completedAt DateTime         @default(now()) @db.Timestamptz(3)
 
   @@unique([candidateId, competency, level])
+}
+
+/// One resumable draft per learner/scenario. Temporary research notes are never stored here.
+model PracticeDraft {
+  candidateId          String
+  candidate            CandidateProfile @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  scenarioId           String
+  scenario             Scenario         @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+  /// Public version pins are rechecked before each write; the scenario ID anchors immutable content.
+  scenarioVersion      Int
+  rubricVersion        Int
+  selectionsJson       Json             @default("{}")
+  writtenJustification String           @default("")
+  /// Compare-and-increment prevents stale tabs overwriting saved or submitted work.
+  revision             Int              @default(1)
+  savedAt              DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Non-null only when the current saved content was submitted; no final score/credential state.
+  submittedAt          DateTime?        @db.Timestamptz(3)
+
+  @@id([candidateId, scenarioId])
+  @@index([scenarioId])
+}
+
+/// Records participation, not mastery or eligibility. Kept separate from self-marked reference lessons.
+model PracticeProgress {
+  candidateId      String
+  candidate        CandidateProfile @relation(fields: [candidateId], references: [userId], onDelete: Restrict)
+  competency       Competency
+  level            LearningLevel
+  submissionCount  Int              @default(1)
+  firstCompletedAt DateTime         @default(now()) @db.Timestamptz(3)
+  lastCompletedAt  DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@id([candidateId, competency, level])
 }
 
 /// All revisions and banks of the same underlying task share this family identity.
@@ -244,6 +280,7 @@ model Scenario {
   publishedAt             DateTime?            @db.Timestamptz(3)
   createdAt               DateTime             @default(now()) @db.Timestamptz(3)
   responses               SubmissionResponse[]
+  practiceDrafts          PracticeDraft[]
 
   @@unique([familyId, version, bank])
   @@index([track, bank, difficulty, status])

@@ -108,3 +108,34 @@ progress { width: 100%; height: 1rem; accent-color: var(--focus); margin: .8rem 
 .radio-choice { display: flex; gap: .7rem; align-items: flex-start; padding: .7rem .4rem; cursor: pointer; min-height: 2.75rem; }
 .radio-choice input { flex: 0 0 auto; margin-top: .4rem; width: 1.15rem; height: 1.15rem; accent-color: var(--focus); }
 .diagnostic-form > button { margin-top: 1rem; }
+
+/* Practice alone uses a wide canvas; all other routes retain the single-column shell. */
+body:has(.practice-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
+.practice-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
+.response-panel { min-width: 0; border: 1px solid var(--border); padding: 1.25rem; border-radius: .65rem; background: #f5f9fa; }
+.simulation-label { color: #654710; font-weight: 700; font-size: .875rem; }
+.response-copy { margin-top: 1rem; white-space: pre-wrap; }
+.practice-catalog { list-style: none !important; padding: 0 !important; display: grid; gap: 1rem; }
+.practice-catalog > li { padding: 1.25rem; border: 1px solid var(--border); border-radius: .65rem; }
+.practice-catalog h2 a, .curriculum-list a { text-decoration: underline; text-underline-offset: .2rem; }
+.practice-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 1rem; align-items: end; margin-top: 1.5rem; }
+.practice-filters .form-field { margin: 0; min-width: 0; }
+.practice-filters .secondary-button { margin-bottom: .6rem; }
+.practice-filters .inline-link { margin-bottom: .6rem; }
+.practice-evaluation-form { max-width: 52rem; }
+.practice-evaluation-form fieldset { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .6rem; margin: 1.5rem 0; }
+.practice-evaluation-form legend { font-weight: 700; padding: 0 .3rem; }
+.learning-page textarea { display: block; width: 100%; resize: vertical; min-height: 7rem; border: 1px solid var(--border); border-radius: .5rem; padding: .8rem; background: #fff; color: var(--ink); font: inherit; }
+.scratchpad textarea { margin-top: .5rem; }
+.scratchpad label { display: block; margin-top: 1rem; font-weight: 700; }
+.practice-buttons { display: flex; gap: 1rem; margin-top: 1rem; }
+.practice-status { margin: 1rem 0; padding: 1rem; background: #eef5f7; border-left: 3px solid var(--focus); }
+.practice-status p { font-size: .9375rem; }
+.score-breakdown { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem 1rem; max-width: 34rem; margin: 1rem 0; }
+.feedback-card { padding: 1.25rem; background: #f2f8f6; border: 1px solid #91bdae; border-radius: .65rem; }
+.form-field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23182c38' stroke-width='2'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 1rem; }
+@media (max-width: 760px) {
+  .practice-columns, .practice-filters { grid-template-columns: minmax(0, 1fr); }
+  .practice-buttons { flex-direction: column; }
+  body:has(.practice-layout) .app-shell { width: calc(100% - 2rem); }
+}

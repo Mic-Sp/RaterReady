@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { seedSyntheticData } from "./seed-data";
 import { readDemoPasswords } from "./demo-passwords";
+import { practiceScenarios } from "./fixtures";
+import { expandedPracticeScenarios } from "./practice-fixtures";
 
 /**
  * Prisma CLI entry point. Validates only database configuration (no auth secret or AI
@@ -13,7 +15,7 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
   try {
     await seedSyntheticData(prisma, passwords);
-    console.info("DEMO - SYNTHETIC: seed complete (3 accounts, 2 practice scenarios, 2 public information listings).");
+    console.info(`DEMO - SYNTHETIC: seed complete (3 accounts, ${practiceScenarios.length + expandedPracticeScenarios.length} practice scenarios, 2 public information listings).`);
   } finally {
     await prisma.$disconnect();
   }

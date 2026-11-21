@@ -8,7 +8,12 @@ export const competencySchema = z.enum(["G1", "G2", "G3", "G4", "G5", "G6"]);
 
 /** Read only the guarded learner's profile, independent completion records and advisory selections. */
 export async function getLearningSnapshot(db: PrismaClient, candidateId: string) {
-  return db.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, include: { moduleProgress: true, diagnostic: true } });
+  return db.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, include: {
+    moduleProgress: true, diagnostic: true, practiceProgress: true,
+    // Resume metadata is allowlisted too: nested raw scenario rows would expose secure JSON.
+    practiceDrafts: { where: { submittedAt: null, scenario: { bank: "PRACTICE", status: "PUBLISHED", track: "GENERALIST", isSyntheticFixture: true } },
+      orderBy: { savedAt: "desc" }, take: 1, select: { scenarioId: true, savedAt: true, scenario: { select: { title: true } } } },
+  } });
 }
 
 /** Persist an explicit choice only; never delete/update ModuleProgress or force diagnostic placement. */

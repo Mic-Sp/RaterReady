@@ -2,13 +2,16 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–5 contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–6B contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
 shells, adaptive Generalist onboarding, an optional diagnostic and a learning
-dashboard. There is no public registration or role-selection flow. Interactive
-practice/capstone workspaces and owner review tools are not implemented yet.
+dashboard, plus a server-only deterministic practice evaluator and expanded scenario
+catalog, plus an accessible A/B practice workspace with saved drafts and persisted
+practice participation. There is no public registration or role-selection flow.
+Workflow Skills Lab, Technical Preview exercises, timed capstone workspaces and
+owner review tools are not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -20,7 +23,7 @@ seed-only inputs for the three `DEMO - SYNTHETIC` accounts; never commit them.
 Prisma 6 loads `.env`, not Next.js's `.env.local`; avoid conflicting values if
 you already created `.env.local` during Step 1. Neither file belongs in Git.
 
-Apply the checked-in migrations (including the Step 5 adaptive learning migration)
+Apply the checked-in migrations (including adaptive learning and practice workspace migrations)
 and run the seed twice:
 
 ```sh
@@ -38,9 +41,11 @@ Prisma 6 seed configuration (its Prisma 7 deprecation warning is expected).
 
 The seed transaction upserts `demo-marcus` (Marcus Vance, Generalist/Foundations),
 `demo-elena` (Elena Rostova, Technical Preview/Advanced), and `admin-michael`
-(Michael Anthony Sprague, sole owner reviewer). It adds two published Generalist
-practice scenarios with synthetic owner-approved alternate judgments, one pinned
-rubric, and two independent public information links. Only salted scrypt hashes
+(Michael Anthony Sprague, sole owner reviewer). It preserves the two original
+published practice fixtures and rubric v1, and adds six published competency-specific
+Generalist practice families pinned to rubric v2 (eight practice scenarios total).
+Approved alternatives include valid ties and alternate preferences. The two
+independent public information links are retained. Only salted scrypt hashes
 are stored, using Node's asynchronous scrypt with N=32768, r=8, p=3 and timing-safe
 verification ([OWASP guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)).
 Missing hashes on migrated accounts are provisioned once. Reseeding never resets
@@ -179,6 +184,53 @@ Calibration immediately, mark a reference lesson complete, switch levels and
 return to verify its completion remains saved. Start the optional check, skip
 with no answers, resume/save a partial check, finish it and override its suggestion.
 
+Step 6A adds server-only practice modules without practice UI pages or new endpoints:
+
+- `src/server/practice/index.ts` exposes candidate-guarded `getPracticeScenario()`
+  and `evaluatePractice()` entries for the future workspace. The session determines
+  ownership; submitted identities/scores cannot grant authority.
+- `getPracticeScenario()` selects a minimal learner DTO and deep-allowlists JSON.
+  It never selects answer keys, approved alternatives, or expert explanations.
+  Published synthetic Generalist **practice** records are the only eligible bank;
+  diagnostic/capstone/draft rows cannot be loaded or evaluated through this module.
+- `practice-scoring.ts` validates pinned scenario/rubric versions, structured keys,
+  and explicit simulated owner approvals. An approved judgment receives all 40
+  judgment points. Rubric application receives up to 30 points proportionally by
+  aligned criterion; factual verification receives 25 for the exact source-ID set
+  (order and duplication do not matter). Each alternative is a coherent interpretation;
+  the evaluator never combines fragments from incompatible keys.
+- Feedback includes rubric alignment and expert explanations after submission, plus
+  the explicit rationale for an accepted alternative. It returns no key JSON or
+  full alternative records. Malformed configuration fails closed rather than giving
+  a candidate an automatic zero.
+- Written justifications are stored verbatim for future practice review, bounded to
+  12,000 characters, and never graded with regex, exact text, length heuristics or AI.
+  The deterministic maximum is **95**, with the written five-point component and
+  final score left unset. No pass/fail decision or credential is produced.
+- Each retry creates another unfinalized `PRACTICE` submission and records family
+  exposure. There is no capstone submission/timing behavior in this step.
+- The new catalog follows the requested internal practice competency definitions:
+  G1 Rubric Interpretation; G2 Response Quality Evaluation; G3 Factual Verification;
+  G4 Comparative Judgment; G5 Safety & Policy Awareness; G6 Evaluation Justification
+  & Calibration. Existing onboarding/diagnostic content and historical fixtures are
+  preserved; the new catalog's public labels come from `generalist-competencies.ts`.
+
+No schema migration or new dependency is required for Step 6A. With the existing
+`.env` and demo passwords configured, run the seed twice to confirm repeatability:
+
+```sh
+npx prisma db seed
+npx prisma db seed
+npm run typecheck
+npm run lint
+npm test
+```
+
+The database integration suite also tests the expanded seed, all six persisted
+primary keys, approved alternatives, independent retries, verbatim review storage,
+pre-submission deep DTO isolation, and refusal of capstone keys before/after submission.
+Use the earlier `TEST_DATABASE_URL=... npm test` command to include these checks.
+
 Automated browser checks run against an isolated **local** test database; they
 refuse a Neon URL and start their own Next.js server on port 3100. Create an empty
 PostgreSQL database named `raterready_test*`; the setup migrates and seeds it with
@@ -206,3 +258,72 @@ can preview using `npm run dev -- --webpack`.
 Prisma 6 remains pinned to support `@prisma/client` without
 adding a driver adapter. Existing npm audit findings in Prisma 6 CLI dependencies
 remain outside this step's scope.
+
+## Step 6B: A/B practice workspace
+
+Candidate-only `/practice` filters the published synthetic Generalist practice
+catalog by internal competency and scenario difficulty. `/practice/[scenarioId]`
+renders a deep allowlisted DTO; capstone banks, answer keys and approved-alternative
+records never enter its pre-submission HTML/RSC payload. Historical rubric-v1
+fixtures receive public control labels without rewriting their pinned content.
+The two responses sit side by side on desktop and follow the same A-then-B reading
+order on mobile. Native fieldsets, radio controls, reference/scratchpad disclosures,
+associated errors and focused feedback support keyboard and screen-reader use.
+
+`updatePractice` rechecks the current candidate session for every save or submit.
+`PracticeDraft` persists that learner's own partial selections and justification,
+with server-confirmed save times and a revision comparison that rejects stale tabs.
+Draft saves create no assessment or progress. Submitting atomically advances the
+revision, evaluates against the pinned private practice key, creates an unfinalized
+practice attempt, and increments `PracticeProgress` by competency/difficulty.
+Retries have no quota. Practice participation and reference-lesson completions
+remain separate; changing learning levels preserves both. The dashboard resumes
+the most recently saved unfinished draft and links to every competency's scenarios.
+Practice never establishes capstone eligibility, issues credentials or grades prose.
+Scratchpad notes stay in page memory only: they are excluded from forms, actions,
+database writes and browser storage. Reload or Clear research notes discards them.
+
+Apply the new migration and regenerate the client before starting/restarting Next:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npm run typecheck
+npm run lint
+npm test
+npm run dev
+```
+
+The integration suite tests partial saves, own-draft isolation, stale revision
+rejection, atomic submissions/retries, approved ties, progress preservation and
+capstone exclusion. Enable it with a disposable local database (never Neon):
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+```
+
+The browser suite also checks real draft reloads, timestamps, scratchpad exclusion,
+field-error focus, side-by-side/mobile layouts, 200% text reflow, axe accessibility,
+alternative explanations, retries and dashboard participation updates.
+
+Manual check using `demo-marcus` and your configured demo password:
+
+1. From the dashboard, browse practice. Try competency/difficulty filters, clear
+   them, and open G6 “Calibrate a judgment with evidence” at Advanced difficulty.
+2. Tab through the response sections, reference disclosure and evaluation controls.
+   Compare desktop and a 320px viewport/200% text view; all content should remain
+   available in A-then-B order with visible keyboard focus.
+3. Choose “A and B are tied,” enter a justification and temporary scratchpad note,
+   then Save draft. Confirm the server timestamp/revision; no feedback or progress
+   should appear. Return to the dashboard and use Resume saved draft. Reload to
+   confirm selections/prose persist and scratchpad notes clear.
+4. Rate all three criteria “Both meet the criterion,” select the supplied
+   `demo-calibration-record` source, and submit. Confirm 95/95 structured points,
+   “Approved alternative accepted,” its explanation and the expert explanation.
+   Written/final scores and credentials remain unassigned.
+5. Use Try again and submit another evaluation. Confirm another submission and
+   the dashboard's G6 submission count, while capstone readiness stays unassessed.
+   Switch learning levels and confirm prior lesson/practice progress remains.
+6. Open one scenario in two tabs. Save in one, then save from the stale tab.
+   Confirm a reload instruction appears and the newer server draft is preserved.

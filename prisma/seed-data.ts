@@ -2,6 +2,7 @@ import { PartnershipStatus, PrismaClient, PublicationStatus, Role, ScenarioBank,
 import { DEMO_LABEL, demoAccounts, fixtureDate, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
 import type { DemoPasswords } from "./demo-passwords";
 import { hashPassword } from "../src/server/auth/passwords";
+import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
@@ -61,6 +62,21 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
       });
     }
 
+    const expandedRubric = await tx.rubric.upsert({
+      where: { code_version: { code: practiceRubric.code, version: practiceRubric.version } },
+      create: { ...practiceRubric, demoLabel: DEMO_LABEL }, update: {},
+    });
+    for (const { familyCode, ...scenario } of expandedPracticeScenarios) {
+      const family = await tx.scenarioFamily.upsert({ where: { code: familyCode }, create: { code: familyCode }, update: {} });
+      await tx.scenario.upsert({
+        where: { familyId_version_bank: { familyId: family.id, version: scenario.version, bank: ScenarioBank.PRACTICE } },
+        create: { ...scenario, familyId: family.id, rubricId: expandedRubric.id, track: Track.GENERALIST, bank: ScenarioBank.PRACTICE,
+          status: PublicationStatus.PUBLISHED, isSyntheticFixture: true, demoLabel: DEMO_LABEL, publishedAt: fixtureDate },
+        // Additive versions only: reseeding cannot rewrite a key/rubric pinned by historical responses.
+        update: {},
+      });
+    }
+
     for (const listing of opportunityListings) {
       await tx.opportunityListing.upsert({
         where: { code: listing.code },
@@ -88,5 +104,9 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
       }],
       skipDuplicates: true,
     });
+    await tx.auditEvent.createMany({ data: [{
+      eventKey: "stage-a-practice-seed-v2", action: "SYNTHETIC_PRACTICE_CATALOG_INSTALLED", targetType: "SEED_VERSION", targetId: "stage-a-practice-v2",
+      metadataJson: { demoLabel: DEMO_LABEL, newPracticeScenarioCount: expandedPracticeScenarios.length, rubricVersion: practiceRubric.version },
+    }], skipDuplicates: true });
   }, { timeout: 30000 });
 }

@@ -3,6 +3,7 @@ import type { AuthIdentity } from "../../server/auth/accounts";
 import type { getLearningSnapshot } from "../../server/learning/service";
 import { nextLesson } from "../../server/learning/service";
 import { competencies, learningLevels } from "../../lib/learning-content";
+import { generalistPracticeCompetencies } from "../../lib/generalist-competencies";
 import { LearnerIdentity } from "../components/learner-identity";
 import { EvaluationReference } from "../components/evaluation-reference";
 import { chooseLevel, beginSkillsCheck } from "../learning/actions";
@@ -12,12 +13,25 @@ export function LearningDashboard({ user, profile, notice }: { user: AuthIdentit
   const completed = profile.moduleProgress.filter((item) => item.level === profile.selectedLevel);
   const resume = nextLesson(profile.moduleProgress, profile.selectedLevel);
   const level = learningLevels.find((item) => item.code === profile.selectedLevel)!;
+  const practiceAreas = new Set(profile.practiceProgress.map((item) => item.competency));
+  const nextPractice = competencies.find((item) => !practiceAreas.has(item.code))?.code ?? "G1";
   const notices: Record<string, string> = { "level-saved": "Learning level saved. All completed lessons remain saved.", "lesson-saved": "Lesson completion saved. This is learning progress, not a certification result.", "diagnostic-skipped": "Skills check skipped. Your learning level and completed lessons are unchanged." };
   return <section className="page-card learning-page" aria-labelledby="landing-heading">
     <LearnerIdentity user={user} /><p className="eyebrow">Generalist learning</p><h1 id="landing-heading">Your candidate dashboard</h1>
     <p className="page-intro">Welcome, {user.name}. Keep building independent evaluation judgment at your own pace.</p>
     <p>G1–G6 below are RaterReady’s internal Generalist competency identifiers.</p>
     {notice && Object.hasOwn(notices, notice) && <p role="status" className="success-note">{notices[notice]}</p>}
+    <section className="learning-section" aria-labelledby="practice-progress-heading"><h2 id="practice-progress-heading">Generalist practice progress</h2>
+      <p>{practiceAreas.size} of 6 competency areas practiced</p><progress max={6} value={practiceAreas.size} aria-label="Competency areas with submitted practice" />
+      <p>Practice completion records submissions, not mastery, passing status or capstone readiness. All scenarios remain open for unlimited retries.</p>
+      {profile.practiceDrafts[0] && <p><Link href={`/practice/${profile.practiceDrafts[0].scenarioId}`} className="inline-link">Resume saved draft: {profile.practiceDrafts[0].scenario.title}</Link></p>}
+      <Link href={`/practice?competency=${nextPractice}`} className="primary-button button-link">Resume practice: {nextPractice}</Link>
+      <Link href="/practice" className="inline-link">Browse all Generalist practice scenarios</Link>
+      <ol className="curriculum-list">{Object.entries(generalistPracticeCompetencies).map(([code, title]) => {
+        const records = profile.practiceProgress.filter((item) => item.competency === code);
+        return <li key={code}><h3><Link href={`/practice?competency=${code}`}>{code} · {title}</Link></h3><p>{records.length ? `${records.reduce((sum, item) => sum + item.submissionCount, 0)} practice submission(s)` : "No practice submitted yet"}</p></li>;
+      })}</ol>
+    </section>
     <section className="learning-section" aria-labelledby="progress-heading"><h2 id="progress-heading">Your learning progress</h2>
       <p><strong>{level.title}</strong> · {completed.length} of 6 lessons marked complete</p>
       <progress max={6} value={completed.length} aria-label="Lessons marked complete at the current level" />

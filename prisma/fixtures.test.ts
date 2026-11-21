@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_LABEL, demoAccounts, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
+import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
+import { generalistPracticeCompetencies } from "../src/lib/generalist-competencies";
 
 describe("Stage A synthetic fixtures", () => {
   it("contains exactly the two approved candidates and sole owner reviewer", () => {
@@ -37,5 +39,17 @@ describe("Stage A synthetic fixtures", () => {
       expect(listing.title).toContain(DEMO_LABEL);
       expect(listing.limitationsNote).toContain("No guaranteed work");
     }
+  });
+
+  it("adds one synthetic practice family for every requested internal Generalist competency", () => {
+    expect(expandedPracticeScenarios).toHaveLength(6);
+    expect(new Set(expandedPracticeScenarios.flatMap((item) => item.competencies))).toEqual(new Set(["G1", "G2", "G3", "G4", "G5", "G6"]));
+    expect(practiceRubric.version).toBe(2);
+    for (const scenario of expandedPracticeScenarios) {
+      expect(scenario.title).toContain(generalistPracticeCompetencies[scenario.competencies[0]]);
+      for (const text of [scenario.prompt, scenario.responseA, scenario.responseB, scenario.expertExplanation]) expect(text).toContain(DEMO_LABEL);
+    }
+    expect(expandedPracticeScenarios.some((item) => item.answerKeyJson.judgment === "TIE")).toBe(true);
+    expect(expandedPracticeScenarios.some((item) => item.allowedAlternativesJson.some((key) => key.judgment === "TIE"))).toBe(true);
   });
 });
