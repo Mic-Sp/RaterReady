@@ -135,6 +135,7 @@ describe("Credentials and database-authoritative RBAC", () => {
     state.cookie = result.cookie;
     await expect(requireCandidate()).rejects.toMatchObject({ status: 403 });
     expect((await protectedRequest("/dashboard", result.cookie))?.status).toBe(403);
+    expect((await protectedRequest("/capstone", result.cookie))?.status).toBe(403);
   });
 
   it("redirects anonymous browser navigation to sign-in while denying unauthorized mutations", async () => {

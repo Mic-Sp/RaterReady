@@ -253,34 +253,35 @@ model Rubric {
 }
 
 model Scenario {
-  id                      String               @id @default(cuid())
+  id                      String                 @id @default(cuid())
   familyId                String
-  family                  ScenarioFamily       @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  family                  ScenarioFamily         @relation(fields: [familyId], references: [id], onDelete: Restrict)
   version                 Int
   track                   Track
   competencies            Competency[]
   difficulty              LearningLevel
   bank                    ScenarioBank
-  status                  PublicationStatus    @default(DRAFT)
+  status                  PublicationStatus      @default(DRAFT)
   title                   String
-  demoLabel               String               @default("DEMO - SYNTHETIC")
-  isSyntheticFixture      Boolean              @default(true)
+  demoLabel               String                 @default("DEMO - SYNTHETIC")
+  isSyntheticFixture      Boolean                @default(true)
   prompt                  String
   responseA               String
   responseB               String
   evidenceJson            Json
   rubricId                String
-  rubric                  Rubric               @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  rubric                  Rubric                 @relation(fields: [rubricId], references: [id], onDelete: Restrict)
   /// Server-only deterministic key. Always select learner-facing fields explicitly in future APIs/RSCs.
   answerKeyJson           Json
   /// Server-only, human-approved alternatives receive full credit; do not exact-match nuanced prose.
-  allowedAlternativesJson Json                 @default("[]")
+  allowedAlternativesJson Json                   @default("[]")
   /// Immediate feedback in practice only; capstone coaching and explanations stay locked.
   expertExplanation       String
-  publishedAt             DateTime?            @db.Timestamptz(3)
-  createdAt               DateTime             @default(now()) @db.Timestamptz(3)
+  publishedAt             DateTime?              @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @db.Timestamptz(3)
   responses               SubmissionResponse[]
   practiceDrafts          PracticeDraft[]
+  capstonePools           CapstoneScenarioPool[]
 
   @@unique([familyId, version, bank])
   @@index([track, bank, difficulty, status])
@@ -311,10 +312,17 @@ model AssessmentAttempt {
   demoLabel                     String               @default("DEMO - SYNTHETIC")
   independentWorkPolicyVersion  String?
   independentWorkAcknowledgedAt DateTime?            @db.Timestamptz(3)
+  /// Nullable for pre-blueprint history only; new capstones must pin both immutable versions.
+  capstoneBlueprintId           String?
+  capstoneBlueprint             CapstoneBlueprint?   @relation(fields: [capstoneBlueprintId], references: [id], onDelete: Restrict)
+  scoringPolicyId               String?
+  scoringPolicy                 ScoringPolicy?       @relation(fields: [scoringPolicyId], references: [id], onDelete: Restrict)
   /// All lifecycle timestamps are written/enforced by the server, never client clocks.
   startedAt                     DateTime             @default(now()) @db.Timestamptz(3)
   /// Required for capstone; diagnostic is untimed. No client-side timer authority.
   expiresAt                     DateTime?            @db.Timestamptz(3)
+  /// Time the server observed expiry; cooldown starts at expiresAt, not a delayed page visit.
+  expiredAt                     DateTime?            @db.Timestamptz(3)
   submittedAt                   DateTime?            @db.Timestamptz(3)
   finalizedAt                   DateTime?            @db.Timestamptz(3)
   /// Snapshot of the profile multiplier used when the server computes expiresAt.
@@ -337,6 +345,80 @@ model AssessmentAttempt {
 
   @@index([candidateId, mode, startedAt])
   @@index([status])
+  @@index([capstoneBlueprintId])
+  @@index([scoringPolicyId])
+}
+
+/// Append-only versioned scoring contract. SQL guards preserve the 40/30/25/5 weights and finalized 85% standard.
+model ScoringPolicy {
+  id                         String              @id @default(cuid())
+  code                       String
+  version                    Int
+  evaluationJudgmentPoints   Int                 @default(40)
+  rubricApplicationPoints    Int                 @default(30)
+  factualVerificationPoints  Int                 @default(25)
+  writtenJustificationPoints Int                 @default(5)
+  passingThreshold           Decimal             @default(85) @db.Decimal(5, 2)
+  isSyntheticFixture         Boolean             @default(true)
+  demoLabel                  String              @default("DEMO - SYNTHETIC")
+  createdAt                  DateTime            @default(now()) @db.Timestamptz(3)
+  blueprints                 CapstoneBlueprint[]
+  attempts                   AssessmentAttempt[]
+
+  @@unique([code, version])
+}
+
+/// Publish only after all six slots and their isolated pools exist; published definitions and policy text are immutable.
+model CapstoneBlueprint {
+  id                           String                  @id @default(cuid())
+  code                         String
+  version                      Int
+  title                        String
+  track                        Track                   @default(GENERALIST)
+  status                       PublicationStatus       @default(DRAFT)
+  scoringPolicyId              String
+  scoringPolicy                ScoringPolicy           @relation(fields: [scoringPolicyId], references: [id], onDelete: Restrict)
+  baseDurationSeconds          Int                     @default(3600)
+  retakeCooldownHours          Int                     @default(48)
+  /// Participation in each G-area is required, regardless of score/learning level; optional activities never substitute.
+  requireGeneralistPractice    Boolean                 @default(true)
+  independentWorkPolicyVersion String
+  independentWorkRulesJson     Json
+  isSyntheticFixture           Boolean                 @default(true)
+  demoLabel                    String                  @default("DEMO - SYNTHETIC")
+  publishedAt                  DateTime?               @db.Timestamptz(3)
+  createdAt                    DateTime                @default(now()) @db.Timestamptz(3)
+  slots                        CapstoneBlueprintSlot[]
+  attempts                     AssessmentAttempt[]
+
+  @@unique([code, version])
+  @@index([scoringPolicyId])
+}
+
+/// One fixed G1–G6 slot per form; exactly three slots designate written prompts for later review.
+model CapstoneBlueprintSlot {
+  blueprintId   String
+  blueprint     CapstoneBlueprint      @relation(fields: [blueprintId], references: [id], onDelete: Restrict)
+  position      Int
+  competency    Competency
+  writtenPrompt String?
+  pool          CapstoneScenarioPool[]
+
+  @@id([blueprintId, position])
+  @@unique([blueprintId, competency])
+}
+
+/// Immutable membership pins scenario and rubric versions; selection excludes the learner's entire family-exposure ledger.
+model CapstoneScenarioPool {
+  blueprintId String
+  position    Int
+  slot        CapstoneBlueprintSlot @relation(fields: [blueprintId, position], references: [blueprintId, position], onDelete: Restrict)
+  scenarioId  String
+  scenario    Scenario              @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+
+  @@id([blueprintId, position, scenarioId])
+  @@unique([blueprintId, scenarioId])
+  @@index([scenarioId])
 }
 
 model SubmissionResponse {

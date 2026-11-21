@@ -2,7 +2,7 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–6C contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–7A contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
@@ -10,8 +10,10 @@ shells, adaptive Generalist onboarding, an optional diagnostic and a learning
 dashboard, plus a server-only deterministic practice evaluator and expanded scenario
 catalog, plus an accessible A/B practice workspace with saved drafts and persisted
 practice participation, an optional Workflow Skills Lab and five non-credentialing
-Technical Preview exercises. There is no public registration or role-selection flow.
-Timed capstone workspaces and owner review tools are not implemented yet.
+Technical Preview exercises, plus the isolated Generalist capstone blueprint,
+readiness gate and server timer lifecycle. There is no public registration or
+role-selection flow. Capstone question/submission UI and owner review tools are
+not implemented yet.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -23,7 +25,7 @@ seed-only inputs for the three `DEMO - SYNTHETIC` accounts; never commit them.
 Prisma 6 loads `.env`, not Next.js's `.env.local`; avoid conflicting values if
 you already created `.env.local` during Step 1. Neither file belongs in Git.
 
-Apply the checked-in migrations (including adaptive learning and practice workspace migrations)
+Apply the checked-in migrations (including adaptive learning, practice workspace and capstone blueprint migrations)
 and run the seed twice:
 
 ```sh
@@ -45,14 +47,16 @@ The seed transaction upserts `demo-marcus` (Marcus Vance, Generalist/Foundations
 published practice fixtures and rubric v1, and adds six published competency-specific
 Generalist practice families pinned to rubric v2 (eight Generalist practice scenarios),
 plus five Technical Preview practice families pinned to a separate technical rubric v1.
+Twelve distinct isolated capstone families provide two fresh six-scenario forms,
+pinned to capstone blueprint v1, capstone rubric v1 and immutable scoring policy v1.
 Approved alternatives include valid ties and alternate preferences. The two
 independent public information links are retained. Only salted scrypt hashes
 are stored, using Node's asynchronous scrypt with N=32768, r=8, p=3 and timing-safe
 verification ([OWASP guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)).
 Missing hashes on migrated accounts are provisioned once. Reseeding never resets
 existing passwords, roles, disabled/revoked status, or session versions; changing
-seed environment values is not password rotation. No attempts, judges,
-credentials, or capstone scenarios are seeded. Profile choices, timing
+seed environment values is not password rotation. No attempts, judges or
+credentials are seeded. Profile choices, timing
 settings, diagnostics, completed modules, existing versioned scenario content,
 and audit history survive reruns. Changed rubric/scenario content needs a new
 version. Stable unique keys prevent duplicate rows; seed history uses an
@@ -403,3 +407,110 @@ Manual check after signing in with either synthetic learner account:
 5. Retry, browse back to the preview catalog, and return to the dashboard. Generalist
    lesson/practice counts and capstone readiness should remain unchanged; no
    Technical credential should appear.
+
+## Step 7A: Capstone readiness, blueprint and timer lifecycle
+
+The candidate-only `/capstone` screen checks actual submitted Generalist practice
+coverage across all six internal G1–G6 areas. A practice submission is participation:
+no minimum practice score or selected learning level is required. Self-marked
+lessons, diagnostic scores, Workflow Skills Lab checks and Technical Preview do not
+substitute. These activities never change the capstone's finalized 85% passing bar.
+The dashboard links to this screen; there are no exam questions, answer controls,
+final submissions or AI grading jobs in this step.
+
+The repeatable seed adds twelve distinct Generalist `CAPSTONE` cases, covering
+rubric scope, completeness, source verification, comparative judgment, safety and
+calibration. They use separate families and a dedicated pinned rubric; practice
+routes cannot list, load or evaluate them. `CapstoneBlueprint` v1 defines one slot
+per G-area, exactly three written prompts (G1/G3/G6), **60 minutes** base duration,
+**48 hours** retake cooldown and mandatory Generalist practice coverage. Immutable
+`ScoringPolicy` v1 fixes 40 judgment / 30 rubric / 25 verification / 5 written points
+and an 85% threshold after finalization. Future grading will average deterministic
+dimensions and normalize the three written rubrics; it is not implemented here.
+
+Independent-Work Policy v1 prohibits external generative AI assistants, including
+ChatGPT, Claude and Gemini; traditional search, primary sources and ordinary notes
+are allowed. Its exact rules are pinned in the published blueprint and explicit
+unchecked acknowledgment is required. The server stores acknowledgment and start
+at the same database instant. Changed policy/version pins require reloading.
+
+`src/server/capstone/service.ts` serializes start/read/resume requests with a
+`CandidateProfile FOR UPDATE` lock, sampling PostgreSQL `clock_timestamp()` after
+the lock. New starts atomically create the attempt, six pinned blank responses and
+family-exposure records. Selection excludes every previously exposed family across
+versions/banks. Duplicate starts return the existing active attempt; an additional
+partial unique index prevents multiple open capstones even from another caller.
+The finite demo bank initially supports two fresh forms per learner; after exhaustion
+the gate requests more owner-provided capacity rather than recycling questions.
+
+Deadline math is `startedAt + ceil(baseDurationSeconds * timeMultiplier)` seconds.
+Only the numeric profile multiplier is used and snapshotted; no diagnosis/reason is
+requested or stored. Resuming or changing profile/learning settings cannot change
+an existing deadline. Published blueprints, their memberships, referenced capstone
+content/rubrics and scoring policies are protected by SQL immutability triggers.
+Attempt timing/version pins cannot be rewritten or closed attempts reopened.
+New capstones must reference matching published pins; old unpinned history is kept
+but cannot be resumed through this service.
+
+Every capstone status/start/resume request records `EXPIRED` once database time is
+at or past `expiresAt`; a denied start still commits that expiry observation.
+Response writes are also blocked by a database trigger at the deadline even before
+a page read persists the status. The visible active page refreshes server status
+every 15 seconds and on returning to the tab; its displayed remaining seconds are
+a server snapshot, never a client-clock authorization. Closed pages are reconciled
+on the next server request (there is no background scheduler). Cooldown runs from
+logical expiry, not a late visit; a finalized failure uses its finalized timestamp.
+Abandoned attempts conservatively use their reserved deadline. Submitted/grading/
+pending-review attempts remain held for owner review and are not expired while queued.
+
+No lifecycle operation assigns scores, finalizes results or issues a credential.
+The DAL selects only allocation metadata and returns a closed readiness DTO; no
+scenario prompts, simulated outputs, keys, alternatives or expert explanations
+are serialized by this screen. The start action ignores posted identities, clocks,
+timing multipliers, pass flags and scores; all actions recheck candidate RBAC.
+
+Apply the new migration before running the updated app and seed twice:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npx prisma db seed
+npm run typecheck
+npm run lint
+npm test
+npm run dev
+```
+
+The migration preserves existing data. It requires no duplicate open capstones for
+a candidate when creating its unique index; it does not silently delete or reset
+such history. Neon is not modified automatically by development/tests.
+
+Use a disposable local test database to include migration, immutable seed, race,
+timing, cooldown, bank-capacity and key-isolation integration checks:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+```
+
+Manual browser checks using a synthetic learner:
+
+1. Follow **Check capstone readiness** from the dashboard. Confirm missing-area
+   links, numeric timing multiplier, fresh capacity, 85% standard and policy rules.
+   Submit Generalist practice covering every G-area, regardless of score, then
+   revisit. Diagnostic/lab/Technical activity must not waive missing areas.
+2. When eligible, try Start without checking the policy box; confirm the associated
+   error and no attempt. Read and explicitly acknowledge the policy, then start.
+   The screen warns that this demonstration begins a real synthetic timer and
+   reserves fresh families even though question/submission UI is not available yet.
+3. Confirm start, acknowledgment, fixed deadline and pinned versions. At multiplier
+   1 the grant is 60 minutes; at 1.5 it is 90 minutes. Reload, use Resume and change
+   the device clock: the same attempt reference and deadline must remain.
+4. Leave the page open until its server deadline, or return afterward. Confirm the
+   expired/locked state, removal of Resume/Start and the 48-hour cooldown timestamp.
+   The browser suite exercises this quickly with a near-deadline historical fixture
+   in its disposable database; it never shortens an existing immutable deadline.
+5. Use keyboard navigation and a narrow/zoomed view, check the policy error/status
+   announcements and return to the dashboard. No capstone questions, coaching,
+   written grading or credentials should appear.

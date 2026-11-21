@@ -58,8 +58,9 @@ export function LearningDashboard({ user, profile, notice }: { user: AuthIdentit
       <form action={beginSkillsCheck}><button className="secondary-button" type="submit">{profile.diagnosticStatus === "COMPLETED" ? "View advisory feedback" : profile.diagnosticStatus === "IN_PROGRESS" ? "Resume optional skills check" : "Take the optional skills check"}</button></form>
     </section>
     <section className="learning-section readiness-card" aria-labelledby="readiness-heading"><h2 id="readiness-heading">Capstone readiness</h2>
-      <p><strong>Not yet assessed</strong></p><p>Lesson completion and diagnostic feedback do not establish capstone readiness. A separate readiness check is required; timed capstone access is not available here.</p>
+      <p><strong>Not yet assessed</strong></p><p>Lesson completion and diagnostic feedback do not establish capstone readiness. The readiness screen checks Generalist practice coverage, cooldown, fresh scenario capacity and server timer status.</p>
       <p>The capstone passing standard stays at 85% or higher after owner review and finalization. This dashboard and the skills check do not issue credentials.</p>
+      <Link href="/capstone" className="primary-button button-link">Check capstone readiness</Link>
     </section>
     <section className="learning-section" aria-labelledby="optional-heading"><h2 id="optional-heading">Optional explorations</h2>
       <ul><li><Link href="/workflow-lab">Workflow Skills Lab</Link> · optional, unscored, never required for the Generalist credential</li>

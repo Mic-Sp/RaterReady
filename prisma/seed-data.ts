@@ -4,6 +4,7 @@ import type { DemoPasswords } from "./demo-passwords";
 import { hashPassword } from "../src/server/auth/passwords";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
+import { seedCapstone } from "./seed-capstone";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
@@ -92,6 +93,8 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
         update: {},
       });
     }
+
+    await seedCapstone(tx);
 
     for (const listing of opportunityListings) {
       await tx.opportunityListing.upsert({
