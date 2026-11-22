@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoAccounts, practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 import { capstoneBlueprint, capstoneScenarios } from "./capstone-fixtures";
 import { getCapstoneReadiness, resumeCapstoneAttempt, startCapstoneAttempt } from "../src/server/capstone/service";
 import { getCapstoneSnapshot, loadCapstoneWorkspace, saveCapstoneDraft, submitCapstoneAttempt } from "../src/server/capstone/workspace";
+import { processWrittenGrading } from "../src/server/ai/written-grading";
+import type { GradingRuntime } from "../src/server/ai/judges";
+import type { WrittenInput } from "../src/server/ai/written-contract";
 import type { CapstoneDraftResponse } from "../src/lib/capstone-responses";
 import { loadPracticeScenario, submitPracticeEvaluation } from "../src/server/practice/service";
 import { listPracticeScenarios, loadPracticeWorkspace, saveOrSubmitPractice } from "../src/server/practice/workspace";
@@ -25,6 +28,7 @@ const testUrl = process.env.TEST_DATABASE_URL;
 const databaseTests = testUrl ? describe : describe.skip;
 
 databaseTests("PostgreSQL schema and repeatable seed", () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
   let prisma: PrismaClient;
   let candidateId: string;
   let attemptId: string;
@@ -72,6 +76,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
   afterAll(async () => {
     if (!prisma) return;
     for (const id of capstoneCandidateIds) {
+      await prisma.aiGradingJob.deleteMany({ where: { response: { attempt: { candidateId: id } } } });
+      await prisma.reviewCase.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.submissionResponse.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.assessmentAttempt.deleteMany({ where: { candidateId: id } });
       await prisma.scenarioExposure.deleteMany({ where: { candidateId: id } });
@@ -704,8 +710,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(retry).toMatchObject({ ok: true, code: "SUBMITTED", snapshot: { id: first.snapshot!.id, submittedAt: first.snapshot!.submittedAt,
       deterministicScore: first.snapshot!.deterministicScore, revision: first.snapshot!.revision, expiresAt: first.snapshot!.expiresAt } });
     const saved = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt }, include: { responses: true, credential: true, reviewCase: true } });
-    expect(saved).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null, credential: null, reviewCase: null, submissionKey: `capstone:${attempt}`, revision: 2 });
-    expect(await prisma.aiGradingJob.count({ where: { response: { attemptId: attempt } } })).toBe(0);
+    expect(saved).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null, credential: null, reviewCase: { status: "PENDING", triggerReason: "ALPHA_SIGN_OFF" }, submissionKey: `capstone:${attempt}`, revision: 2 });
+    expect(await prisma.aiGradingJob.count({ where: { response: { attemptId: attempt } } })).toBe(6);
     expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 2, responses })).toMatchObject({ ok: false, code: "LOCKED" });
     await expect(prisma.submissionResponse.update({ where: { id: saved.responses[0].id }, data: { writtenJustification: "changed after submission" } })).rejects.toThrow(/locked/);
     await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "IN_PROGRESS" } })).rejects.toThrow(/reopened/);
@@ -755,5 +761,116 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect([save.code, submit.code]).toEqual(expect.arrayContaining(save.ok ? ["SAVED", "CONFLICT"] : ["LOCKED", "SUBMITTED"]));
     if (save.ok) expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 2, confirmed: true })).toMatchObject({ ok: true, code: "SUBMITTED" });
     expect((await getCapstoneSnapshot(prisma, id, attempt)).status).toBe("PENDING_REVIEW");
+  });
+
+  /** Valid frozen submissions use the production path; injected transports/approvals below are local test doubles only. */
+  async function submittedForGrading(runtime: GradingRuntime = { liveEnabled: false }) {
+    const id = await capstoneCandidate();
+    const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    const responses = await completedCapstoneResponses(attempt);
+    expect(await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses })).toMatchObject({ ok: true });
+    expect(await submitCapstoneAttempt(prisma, id, { attemptId: attempt, revision: 1, confirmed: true }, runtime)).toMatchObject({ ok: true, snapshot: { writtenGrading: "QUEUED" } });
+    return { id, attempt };
+  }
+
+  /** Approval is private trusted configuration, not a browser parameter or a deployed live provider. */
+  function testGradingRuntime(behavior: "agree" | "disagree" | "api" | "schema" | "timeout"): GradingRuntime {
+    vi.stubEnv("ENABLE_LIVE_ZDR_GRADING", "true");
+    const invoke = vi.fn(async (_payload: string, options: { signal: AbortSignal; idempotencyKey: string }) => {
+      if (behavior === "api") throw new Error("PRIVATE_PROVIDER_BODY_MUST_NOT_LEAK");
+      if (behavior === "schema") return '{"alignment":99}';
+      if (behavior === "timeout") return new Promise<never>(() => {});
+      return { alignment: behavior === "disagree" && options.idempotencyKey.endsWith(":2:v1") ? 1 : 2,
+        evidence: behavior === "disagree" && options.idempotencyKey.endsWith(":2:v1") ? 2 : 1,
+        clarity: 1, rationale: "DEMO - SYNTHETIC: test-only independent criterion vote.", demoLabel: "DEMO - SYNTHETIC" };
+    });
+    return { liveEnabled: true, timeoutMs: 5, liveAdapter: { provider: "local-test-double", modelVersion: "DEMO - SYNTHETIC test-model-v1", invoke,
+      approval: { provider: "local-test-double", modelVersion: "DEMO - SYNTHETIC test-model-v1", approvedBy: "admin-michael", evidenceReference: "local-test-only-no-network",
+        expiresAt: new Date(Date.now() + 600000), zeroRetention: true, trainingDisabled: true, supportsIdempotency: true } } };
+  }
+
+  it("enqueues exactly two isolated frozen inputs per written slot and preserves immutable synthetic raw votes", async () => {
+    const { id, attempt } = await submittedForGrading();
+    const queued = await prisma.aiGradingJob.findMany({ where: { response: { attemptId: attempt } }, include: { response: true } });
+    expect(queued).toHaveLength(6); expect(queued.every((j) => j.status === "QUEUED" && j.isSyntheticFixture && j.retryCount === 0)).toBe(true);
+    expect(queued.map((j) => j.response.position).sort()).toEqual([1, 1, 3, 3, 6, 6]);
+    for (const j of queued) {
+      expect(Object.keys(j.inputSnapshotJson as object).sort()).toEqual(["candidateText", "rubric"]);
+      expect(Object.keys((j.inputSnapshotJson as unknown as WrittenInput).rubric).sort()).toEqual(["alignment", "clarity", "evidence"]);
+      expect(j.inputHash).toMatch(/^[a-f0-9]{64}$/);
+      await expect(prisma.aiGradingJob.update({ where: { id: j.id }, data: { modelVersion: "replacement" } })).rejects.toThrow(/immutable/);
+    }
+    await Promise.all([processWrittenGrading(prisma, attempt), processWrittenGrading(prisma, attempt)]);
+    await processWrittenGrading(prisma, attempt);
+    const jobs = await prisma.aiGradingJob.findMany({ where: { response: { attemptId: attempt } } });
+    expect(jobs).toHaveLength(6); expect(jobs.every((j) => j.status === "SUCCEEDED" && j.retryCount === 0 && j.latencyMs! >= 0)).toBe(true);
+    const receipts = await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt } });
+    expect(receipts).toHaveLength(6);
+    for (const r of receipts) expect(r.rawVoteJson).toMatchObject({ demoLabel: "DEMO - SYNTHETIC", alignment: 2, clarity: 1 });
+    await expect(prisma.aiGradingReceipt.update({ where: { id: receipts[0].id }, data: { latencyMs: 999 } })).rejects.toThrow(/immutable/);
+    await expect(prisma.aiGradingReceipt.delete({ where: { id: receipts[0].id } })).rejects.toThrow(/immutable/);
+    await expect(prisma.aiGradingJob.update({ where: { id: jobs[0].id }, data: { rationale: "replacement" } })).rejects.toThrow(/immutable/);
+    expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ status: "PENDING", triggerReason: "ALPHA_SIGN_OFF", gradingReasons: ["ALPHA_SIGN_OFF"], ownerPreliminaryJson: null });
+    const view = await loadCapstoneWorkspace(prisma, id, attempt);
+    expect(view).toMatchObject({ slots: [], snapshot: { writtenGrading: "AWAITING_OWNER_REVIEW", deterministicScore: 95 } });
+    for (const key of ["rawVoteJson", "rationale", "gradingReasons", "alignment", "inputHash", "answerKeyJson", "allowedAlternativesJson"]) expect(JSON.stringify(view)).not.toContain(key);
+    expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt } })).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null });
+    await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { writtenScore: 5 } })).rejects.toThrow(/resolved owner review/);
+    await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "FINALIZED", finalizedAt: new Date(), writtenScore: 5, finalScore: 100, passed: true } })).rejects.toThrow(/resolved owner review/);
+    await expect(prisma.credential.create({ data: { attemptId: attempt, track: "GENERALIST", competencies: ["G1"] } })).rejects.toThrow(/resolved owner review/);
+  });
+
+  it("deduplicates concurrent live-test dispatches and routes equal totals with unequal criteria to owner review", async () => {
+    const runtime = testGradingRuntime("disagree"); const { attempt } = await submittedForGrading(runtime);
+    await Promise.all([processWrittenGrading(prisma, attempt, runtime), processWrittenGrading(prisma, attempt, runtime)]);
+    await processWrittenGrading(prisma, attempt, runtime);
+    expect(runtime.liveAdapter!.invoke).toHaveBeenCalledTimes(6);
+    expect(new Set(vi.mocked(runtime.liveAdapter!.invoke).mock.calls.map((c) => c[1].idempotencyKey)).size).toBe(6);
+    expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ status: "PENDING", triggerReason: "JUDGE_DISAGREEMENT", gradingReasons: expect.arrayContaining(["ALPHA_SIGN_OFF", "JUDGE_DISAGREEMENT"]) });
+    expect(await prisma.aiGradingReceipt.count({ where: { attemptId: attempt } })).toBe(6);
+    expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt } })).toMatchObject({ writtenScore: null, finalScore: null, passed: null });
+  });
+
+  it("degrades schema, timeout, API and disabled-ZDR failures to pending human review without scoring penalties or redispatch", async () => {
+    for (const behavior of ["schema", "timeout", "api", "disabled"] as const) {
+      const runtime = testGradingRuntime(behavior === "disabled" ? "agree" : behavior);
+      const { id, attempt } = await submittedForGrading(runtime);
+      const workerRuntime = behavior === "disabled" ? { ...runtime, liveEnabled: false } : runtime;
+      await processWrittenGrading(prisma, attempt, workerRuntime); await processWrittenGrading(prisma, attempt, workerRuntime);
+      expect(runtime.liveAdapter!.invoke).toHaveBeenCalledTimes(behavior === "disabled" ? 0 : 6);
+      const expected = behavior === "schema" ? "MALFORMED_JSON" : behavior === "timeout" ? "TIMEOUT" : "API_FAILURE";
+      expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ status: "PENDING", triggerReason: expected, gradingReasons: expect.arrayContaining([expected, "ALPHA_SIGN_OFF"]) });
+      const jobs = await prisma.aiGradingJob.findMany({ where: { response: { attemptId: attempt } } });
+      expect(jobs.every((j) => j.alignment === null && j.evidence === null && j.clarity === null && j.retryCount === 0)).toBe(true);
+      const frozen = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt } });
+      expect(frozen).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null });
+      expect(frozen.deterministicScore?.toNumber()).toBe(95);
+      expect(await prisma.credential.count({ where: { attemptId: attempt } })).toBe(0);
+      const publicView = JSON.stringify(await loadCapstoneWorkspace(prisma, id, attempt));
+      for (const hidden of ["PRIVATE_PROVIDER_BODY", expected, "rawVoteJson", "errorCode", "rationale"]) expect(publicView).not.toContain(hidden);
+    }
+  });
+
+  it("recovers an interrupted claim to human review without a second potentially billed call", async () => {
+    const { attempt } = await submittedForGrading();
+    const job = await prisma.aiGradingJob.findFirstOrThrow({ where: { response: { attemptId: attempt } } });
+    await prisma.aiGradingJob.update({ where: { id: job.id }, data: { status: "RUNNING", startedAt: new Date(Date.now() - 60000), claimToken: "interrupted-local-test-claim" } });
+    await processWrittenGrading(prisma, attempt);
+    expect(await prisma.aiGradingJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "TIMED_OUT", retryCount: 0, errorCode: "WORKER_INTERRUPTED", alignment: null });
+    expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ status: "PENDING", triggerReason: "TIMEOUT" });
+    expect(await prisma.aiGradingReceipt.count({ where: { attemptId: attempt } })).toBe(6);
+  });
+
+  it("runs the documented operator command twice without duplicating or revealing judge results", async () => {
+    const { attempt } = await submittedForGrading();
+    const args = ["--conditions=react-server", "--env-file=.env", "--import", "tsx", "scripts/grade-written.ts", attempt];
+    const env = { ...process.env, DATABASE_URL: testUrl!, DIRECT_URL: testUrl!, ENABLE_LIVE_ZDR_GRADING: "false" };
+    const first = execFileSync(process.execPath, args, { env, encoding: "utf8" });
+    const before = await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } });
+    const second = execFileSync(process.execPath, args, { env, encoding: "utf8" });
+    expect(first).toBe(second); expect(first).toContain("Owner sign-off remains required");
+    expect(first).not.toContain("rationale"); expect(before).toHaveLength(6);
+    expect(await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } })).toEqual(before);
+    expect(await prisma.aiGradingJob.count({ where: { response: { attemptId: attempt } } })).toBe(6);
   });
 });

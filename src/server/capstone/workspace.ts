@@ -4,6 +4,8 @@ import { z } from "zod";
 import { capstoneDraftResponseSchema, capstoneResponseComplete, type CapstoneDraftResponse } from "../../lib/capstone-responses";
 import { capstoneDatabaseNow, lockCapstoneCandidate } from "./clock";
 import { scoreCapstoneResponses } from "../domain/capstone-scoring";
+import { enqueueWrittenGrading } from "../ai/written-grading";
+import { gradingRuntime, type GradingRuntime } from "../ai/judges";
 
 const idSchema = z.string().min(1).max(100);
 const metaSelect = {
@@ -11,7 +13,8 @@ const metaSelect = {
   deterministicScore: true, capstoneBlueprintId: true, scoringPolicyId: true,
   capstoneBlueprint: { select: { code: true, version: true, scoringPolicyId: true, slots: { orderBy: { position: "asc" }, select: { position: true, competency: true, writtenPrompt: true } } } },
   scoringPolicy: { select: { id: true, version: true, evaluationJudgmentPoints: true, rubricApplicationPoints: true, factualVerificationPoints: true, writtenJustificationPoints: true, passingThreshold: true } },
-  responses: { select: { position: true, savedAt: true } },
+  responses: { select: { position: true, savedAt: true, gradingJobs: { select: { status: true } } } },
+  reviewCase: { select: { status: true } },
 } as const satisfies Prisma.AssessmentAttemptSelect;
 type Meta = Prisma.AssessmentAttemptGetPayload<{ select: typeof metaSelect }>;
 
@@ -25,7 +28,8 @@ const publicRubricSchema = z.object({
 const evidenceSchema = z.object({ sources: z.array(z.object({ id: z.string(), text: z.string() })) });
 
 export type CapstoneSnapshot = { id: string; status: string; revision: number; serverNow: string; startedAt: string; expiresAt: string;
-  savedAt: string | null; submittedAt: string | null; deterministicScore: number | null; blueprintVersion: number; scoringPolicyVersion: number };
+  savedAt: string | null; submittedAt: string | null; deterministicScore: number | null; blueprintVersion: number; scoringPolicyVersion: number;
+  writtenGrading?: "QUEUED" | "EVALUATING" | "AWAITING_OWNER_REVIEW" | "NOT_STARTED" };
 export type CapstoneWorkspace = { snapshot: CapstoneSnapshot; slots: Awaited<ReturnType<typeof loadPublicSlots>> };
 export type CapstoneMutationCode = "SAVED" | "SUBMITTED" | "CONFLICT" | "EXPIRED" | "LOCKED" | "INCOMPLETE" | "INVALID" | "CONFIRMATION" | "UNAVAILABLE";
 export type CapstoneMutationResult = { ok: boolean; code: CapstoneMutationCode; snapshot: CapstoneSnapshot | null; incompletePositions?: number[] };
@@ -35,10 +39,14 @@ export class CapstoneWorkspaceError extends Error { constructor() { super("This 
 
 /** Freeze-state metadata only; no answer details or criterion-level correctness leave the scoring boundary. */
 function snapshot(a: Meta, now: Date): CapstoneSnapshot {
+  // Candidate projection deliberately selects statuses only, never votes, rationales, routing reasons or raw receipts.
+  const jobs = a.responses.flatMap((r) => r.gradingJobs);
+  const writtenGrading = jobs.some((j) => j.status === "RUNNING") ? "EVALUATING" : jobs.some((j) => j.status === "QUEUED") ? "QUEUED"
+    : jobs.length === 6 || a.reviewCase ? "AWAITING_OWNER_REVIEW" : "NOT_STARTED";
   return { id: a.id, status: a.status, revision: a.revision, serverNow: now.toISOString(), startedAt: a.startedAt.toISOString(), expiresAt: a.expiresAt!.toISOString(),
     savedAt: a.revision > 0 && a.responses.length ? new Date(Math.max(...a.responses.map((r) => r.savedAt.getTime()))).toISOString() : null,
     submittedAt: a.submittedAt?.toISOString() ?? null, deterministicScore: a.deterministicScore?.toNumber() ?? null,
-    blueprintVersion: a.capstoneBlueprint!.version, scoringPolicyVersion: a.scoringPolicy!.version };
+    blueprintVersion: a.capstoneBlueprint!.version, scoringPolicyVersion: a.scoringPolicy!.version, writtenGrading };
 }
 
 /** Candidate then attempt row locks serialize read/save/submit; expiry observations commit as ordinary outcomes. */
@@ -49,7 +57,11 @@ async function lockedAttempt(tx: Prisma.TransactionClient, candidateId: string, 
   let a = await tx.assessmentAttempt.findFirst({ where: { id: attemptId, candidateId, mode: "CAPSTONE", track: "GENERALIST", isSyntheticFixture: true }, select: metaSelect });
   if (!a?.expiresAt || !a.capstoneBlueprint || !a.scoringPolicy || a.capstoneBlueprint.scoringPolicyId !== a.scoringPolicyId) throw new CapstoneWorkspaceError();
   const now = await capstoneDatabaseNow(tx);
-  if (a.status === "IN_PROGRESS" && now >= a.expiresAt) a = await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: now }, select: metaSelect });
+  if (a.status === "IN_PROGRESS" && now >= a.expiresAt) {
+    await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: now } });
+    await enqueueWrittenGrading(tx, a.id);
+    a = await tx.assessmentAttempt.findUniqueOrThrow({ where: { id: a.id }, select: metaSelect });
+  }
   return { a, now };
 }
 
@@ -83,7 +95,8 @@ export async function loadCapstoneWorkspace(db: PrismaClient, candidateId: strin
     const checkedAt = await capstoneDatabaseNow(tx);
     if (checkedAt >= a.expiresAt!) {
       const expired = await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: checkedAt }, select: metaSelect });
-      return { snapshot: snapshot(expired, checkedAt), slots: [] };
+      await enqueueWrittenGrading(tx, a.id);
+      return { snapshot: { ...snapshot(expired, checkedAt), writtenGrading: "QUEUED" }, slots: [] };
     }
     return { snapshot: snapshot(a, checkedAt), slots };
   }, { timeout: 15000 });
@@ -131,7 +144,7 @@ export async function saveCapstoneDraft(db: PrismaClient, candidateId: string, i
     const drafts = [...data.responses].sort((l, r) => l.position - r.position);
     if (!validDrafts(drafts, slots)) return { ok: false, code: "INVALID", snapshot: current };
     const savedAt = await capstoneDatabaseNow(tx);
-    if (savedAt >= a.expiresAt!) { await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: savedAt } }); return { ok: false, code: "EXPIRED", snapshot: { ...current, status: "EXPIRED", serverNow: savedAt.toISOString() } }; }
+    if (savedAt >= a.expiresAt!) { await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: savedAt } }); await enqueueWrittenGrading(tx, a.id); return { ok: false, code: "EXPIRED", snapshot: { ...current, status: "EXPIRED", serverNow: savedAt.toISOString(), writtenGrading: "QUEUED" } }; }
     const changed = await tx.assessmentAttempt.updateMany({ where: { id: a.id, candidateId, revision: data.revision, status: "IN_PROGRESS", expiresAt: { gt: savedAt } }, data: { revision: { increment: 1 } } });
     if (changed.count !== 1) return { ok: false, code: "CONFLICT", snapshot: current };
     for (const response of drafts) {
@@ -150,14 +163,17 @@ export async function saveCapstoneDraft(db: PrismaClient, candidateId: string, i
  * exist only inside this transaction. A stable server idempotency key makes retries return
  * the original receipt without rescoring, even after the original exam deadline.
  */
-export async function submitCapstoneAttempt(db: PrismaClient, candidateId: string, input: unknown): Promise<CapstoneMutationResult> {
+export async function submitCapstoneAttempt(db: PrismaClient, candidateId: string, input: unknown, runtime: GradingRuntime = gradingRuntime()): Promise<CapstoneMutationResult> {
   const parsed = submitSchema.safeParse(input);
   if (!parsed.success) return { ok: false, code: "CONFIRMATION", snapshot: null };
   const data = parsed.data;
   return mutate(db, candidateId, data.attemptId, async (tx) => {
     const { a, now } = await lockedAttempt(tx, candidateId, data.attemptId);
     const current = snapshot(a, now);
-    if (a.submissionKey && a.submittedAt && a.status !== "IN_PROGRESS" && a.status !== "EXPIRED") return { ok: true, code: "SUBMITTED", snapshot: current };
+    if (a.submissionKey && a.submittedAt && a.status !== "IN_PROGRESS" && a.status !== "EXPIRED") {
+      if (a.status !== "FINALIZED") await enqueueWrittenGrading(tx, a.id, runtime);
+      return { ok: true, code: "SUBMITTED", snapshot: snapshot(await tx.assessmentAttempt.findUniqueOrThrow({ where: { id: a.id }, select: metaSelect }), now) };
+    }
     if (a.status !== "IN_PROGRESS") return { ok: false, code: a.status === "EXPIRED" ? "EXPIRED" : "LOCKED", snapshot: current };
     if (a.revision !== data.revision) return { ok: false, code: "CONFLICT", snapshot: current };
     const slots = await loadPublicSlots(tx, a);
@@ -172,9 +188,10 @@ export async function submitCapstoneAttempt(db: PrismaClient, candidateId: strin
       return { position: r.position, scenario: r.scenario, submission: { scenarioId: r.scenario.id, scenarioVersion: r.scenario.version, rubricVersion: r.scenario.rubric.version, ...answer } }; }),
       { ...p, passingThreshold: p.passingThreshold.toNumber() });
     const submittedAt = await capstoneDatabaseNow(tx);
-    if (submittedAt >= a.expiresAt!) { await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: submittedAt } }); return { ok: false, code: "EXPIRED", snapshot: { ...current, status: "EXPIRED", serverNow: submittedAt.toISOString() } }; }
+    if (submittedAt >= a.expiresAt!) { await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "EXPIRED", expiredAt: submittedAt } }); await enqueueWrittenGrading(tx, a.id); return { ok: false, code: "EXPIRED", snapshot: { ...current, status: "EXPIRED", serverNow: submittedAt.toISOString(), writtenGrading: "QUEUED" } }; }
     await tx.assessmentAttempt.update({ where: { id: a.id }, data: { status: "PENDING_REVIEW", submittedAt, submissionKey: `capstone:${a.id}`, deterministicScore,
       writtenScore: null, finalScore: null, passed: null, revision: { increment: 1 } } });
-    return { ok: true, code: "SUBMITTED", snapshot: { ...current, status: "PENDING_REVIEW", revision: a.revision + 1, serverNow: submittedAt.toISOString(), submittedAt: submittedAt.toISOString(), deterministicScore } };
+    await enqueueWrittenGrading(tx, a.id, runtime);
+    return { ok: true, code: "SUBMITTED", snapshot: { ...current, status: "PENDING_REVIEW", revision: a.revision + 1, serverNow: submittedAt.toISOString(), submittedAt: submittedAt.toISOString(), deterministicScore, writtenGrading: "QUEUED" } };
   });
 }

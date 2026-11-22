@@ -1,4 +1,5 @@
 import "server-only";
+import { enqueueWrittenGrading } from "../ai/written-grading";
 import { Prisma, type PrismaClient, type Competency } from "@prisma/client";
 import { z } from "zod";
 import { calculateCapstoneDeadline, capstoneCooldownUntil, decideCapstoneReadiness, isCapstoneExpired, type CapstoneReadinessKind } from "../domain/capstone-timer";
@@ -75,7 +76,9 @@ function publicAttempt(a: Attempt, b: Blueprint, now: Date): NonNullable<Capston
 async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string) {
   const profile = await lockCapstoneCandidate(tx, candidateId);
   const now = await databaseNow(tx);
+  const expiring = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST", capstoneBlueprintId: { not: null }, status: "IN_PROGRESS", expiresAt: { lte: now } }, select: { id: true } });
   await tx.assessmentAttempt.updateMany({ where: { candidateId, mode: "CAPSTONE", status: "IN_PROGRESS", expiresAt: { lte: now } }, data: { status: "EXPIRED", expiredAt: now } });
+  for (const attempt of expiring) await enqueueWrittenGrading(tx, attempt.id);
   const attempts = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST" }, orderBy: { startedAt: "desc" }, select: attemptSelect });
   const active = attempts.find((a) => a.status === "IN_PROGRESS" && a.expiresAt && !isCapstoneExpired(a.expiresAt, now));
   const blueprint = active?.capstoneBlueprintId

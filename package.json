@@ -12,7 +12,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "grade:written": "node --conditions=react-server --env-file=.env --import tsx scripts/grade-written.ts"
   },
   "engines": {
     "node": ">=22.12.0"

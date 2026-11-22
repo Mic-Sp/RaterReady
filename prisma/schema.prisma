@@ -465,30 +465,66 @@ model AiGradingJob {
   errorCode          String?
   createdAt          DateTime           @default(now()) @db.Timestamptz(3)
   completedAt        DateTime?          @db.Timestamptz(3)
+  /// Deep-allowlisted frozen written rubric + untrusted text only; never scenario keys or other votes.
+  inputSnapshotJson  Json?
+  inputHash          String?
+  /// Stable provider idempotency key. One dispatch per job; ambiguous failures go to a human, not a paid retry.
+  dispatchKey        String?            @unique
+  claimToken         String?
+  startedAt          DateTime?          @db.Timestamptz(3)
 
   @@unique([responseId, judgeSlot])
   @@index([status, createdAt])
   @@index([rubricId])
 }
 
+/// Append-only terminal receipts retain raw votes and pinned metadata even after operational job maintenance.
+/// Identifiers deliberately have no foreign keys: deleting an operational row cannot erase grading history.
+model AiGradingReceipt {
+  id                 String         @id @default(cuid())
+  jobId              String         @unique
+  attemptId          String
+  responseId         String
+  judgeSlot          Int
+  rubricId           String
+  modelVersion       String
+  promptVersion      String
+  inputHash          String
+  dispatchKey        String         @unique
+  isSyntheticFixture Boolean
+  demoLabel          String         @default("DEMO - SYNTHETIC")
+  status             JudgeJobStatus
+  /// A bounded adapter vote, including invalid JSON, not HTTP headers/error bodies or secrets.
+  rawVoteJson        Json?
+  errorCode          String?
+  retryCount         Int            @default(0)
+  latencyMs          Int
+  startedAt          DateTime       @db.Timestamptz(3)
+  completedAt        DateTime       @db.Timestamptz(3)
+
+  @@index([attemptId])
+}
+
 model ReviewCase {
-  id                      String              @id @default(cuid())
-  attemptId               String              @unique
-  attempt                 AssessmentAttempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  id                      String                @id @default(cuid())
+  attemptId               String                @unique
+  attempt                 AssessmentAttempt     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   triggerReason           ReviewTriggerReason
-  status                  ReviewStatus        @default(PENDING)
+  /// All routing causes are retained; ALPHA_SIGN_OFF is mandatory even when both judges agree.
+  gradingReasons          ReviewTriggerReason[] @default([])
+  status                  ReviewStatus          @default(PENDING)
   ownerId                 String?
-  owner                   User?               @relation("ReviewOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner                   User?                 @relation("ReviewOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   /// Future server/UI must withhold AI scores/rationales until Michael saves this rubric-first assessment.
   ownerPreliminaryJson    Json?
-  ownerPreliminarySavedAt DateTime?           @db.Timestamptz(3)
+  ownerPreliminarySavedAt DateTime?             @db.Timestamptz(3)
   finalScoresJson         Json?
   /// Required and nonblank when finalized, even if both judges agree (alpha sign-off gate).
   rationale               String?
   appealReason            String?
-  appealedAt              DateTime?           @db.Timestamptz(3)
-  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
-  finalizedAt             DateTime?           @db.Timestamptz(3)
+  appealedAt              DateTime?             @db.Timestamptz(3)
+  createdAt               DateTime              @default(now()) @db.Timestamptz(3)
+  finalizedAt             DateTime?             @db.Timestamptz(3)
 
   @@index([status, createdAt])
   @@index([ownerId])

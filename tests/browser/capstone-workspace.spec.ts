@@ -99,9 +99,18 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await expect(page.getByRole("status")).toContainText("owner review are pending");
     await expect(page.getByRole("radio")).toHaveCount(0); await expect(page.getByRole("textbox")).toHaveCount(0);
     expect(await db.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null, scratchpadNotes: "" });
-    expect(await db.aiGradingJob.count({ where: { response: { attemptId: attempt.id } } })).toBe(0);
+    await expect.poll(() => db.aiGradingJob.count({ where: { response: { attemptId: attempt.id }, status: "SUCCEEDED" } })).toBe(6);
+    expect(await db.aiGradingReceipt.count({ where: { attemptId: attempt.id } })).toBe(6);
+    expect(await db.reviewCase.findUnique({ where: { attemptId: attempt.id } })).toMatchObject({ status: "PENDING", triggerReason: "ALPHA_SIGN_OFF", ownerPreliminaryJson: null });
     expect(await db.credential.count({ where: { attemptId: attempt.id } })).toBe(0);
-    await page.reload(); await expect(page.getByText("Deterministic subtotal: 95 / 95", { exact: true })).toBeVisible(); await accessible(page);
+    await page.getByRole("button", { name: "Refresh grading status", exact: true }).click();
+    await expect(page.getByText("Written grading checks completed. Awaiting owner review.", { exact: true })).toBeVisible();
+    const jobs = await db.aiGradingJob.findMany({ where: { response: { attemptId: attempt.id } } });
+    const statusHtml = await page.content();
+    for (const key of ["rawVoteJson", "inputSnapshotJson", "JUDGE_DISAGREEMENT", "gradingReasons", "ownerPreliminaryJson", "answerKeyJson", "allowedAlternativesJson"]) expect(statusHtml).not.toContain(key);
+    for (const job of jobs) expect(statusHtml).not.toContain(job.rationale!);
+    await page.reload(); await expect(page.getByText("Deterministic subtotal: 95 / 95", { exact: true })).toBeVisible();
+    await expect(page.getByText("Written grading checks completed. Awaiting owner review.", { exact: true })).toBeVisible(); await accessible(page);
   } finally { if (id) await clearCapstones(db, id); await db.$disconnect(); }
 });
 

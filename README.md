@@ -2,7 +2,7 @@
 
 Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
 
-Steps 1–7B contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
+Steps 1–7C contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
 schema/migrations, repeatable synthetic fixtures, and Auth.js v5 Credentials
 authentication with server-side RBAC, accessible sign-in, and protected role landing
@@ -12,8 +12,9 @@ catalog, plus an accessible A/B practice workspace with saved drafts and persist
 practice participation, an optional Workflow Skills Lab and five non-credentialing
 Technical Preview exercises, plus the isolated Generalist capstone blueprint,
 readiness gate, server timer lifecycle and timed six-slot exam with continuous
-autosave and locked deterministic submission. There is no public registration or
-role-selection flow. Dual-AI written grading and owner review tools are not implemented yet.
+autosave and locked deterministic submission, plus durable dual-judge written jobs,
+synthetic grading and mandatory owner-review routing. There is no public registration
+or role-selection flow. The owner adjudication console is reserved for Step 8.
 
 Use Node.js 22.12+ and run `npm ci`. Configure a root `.env` using `.env.example`:
 set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the
@@ -617,3 +618,105 @@ Manual browser checks:
    explanations, pass/fail decision or credential should appear.
 6. Let another attempt reach its server deadline (or run the automated expiry case).
    Confirm the locked expiry screen and that only previously confirmed saves remain.
+
+## Step 7C: Independent written judges and mandatory owner review
+
+Final submission atomically creates six uniquely keyed `AiGradingJob` rows: two
+independent judge slots for each designated G1/G3/G6 written response. Jobs pin the
+model/prompt version, rubric ID, immutable allowlisted rubric/text snapshot, SHA-256
+input hash and stable dispatch key. No scenario keys, other judge outputs, candidate
+identity, system secrets or research notes enter a judge input. Untrusted text is
+JSON-escaped inside `<candidate_submission>` delimiters; instructions inside it
+are data, not privileged instructions.
+
+With `ENABLE_LIVE_ZDR_GRADING="false"`, deterministic `DEMO - SYNTHETIC` fixture
+votes illustrate criterion scores and rationales without inspecting prose for
+keywords or making external calls. They are demonstrations, not semantic grading.
+The three written rubrics remain alignment 0–2, evidence/reasoning 0–2, clarity 0–1.
+Exact criterion equality is required: `[2,1,1]` versus `[1,2,1]` is disagreement
+despite equal totals. All raw votes remain private, including from the owner until
+a future rubric-first review implementation saves the preliminary assessment.
+
+The `next/server` after-response worker claims each job once. Concurrent/repeated
+workers skip claimed or terminal jobs. There are no automatic paid retries;
+`retryCount` stays zero. A call that times out, fails validation or fails at the
+provider becomes a terminal failure category with **no criterion scores**. An
+interrupted claim is marked timed out on a later worker invocation after its
+30-second lease, without dispatching it again. The stable dispatch key is also
+passed to any future approved live adapter for provider deduplication.
+
+No live provider transport or approval is configured or seeded. Setting the flag
+to `true` alone therefore makes no external calls: jobs fall back to human review.
+A future server-owned adapter must have a current, matching provider/model ZDR
+approval from `admin-michael`, evidence of verification, disabled retention and
+training, and support for idempotency before its transport may execute. Browser
+inputs cannot configure adapters, approvals, models or fixture modes.
+
+`ReviewCase` is created **before** any judge runs. Stage A mandatory audit cannot
+be disabled: even six successful agreeing votes remain `PENDING_REVIEW`. All
+causes are retained in `gradingReasons`; disagreements, invalid output, timeout,
+API failure and blocked live grading require human review, never an automatic
+candidate failure or pass. The five-point written result, final score and pass/fail
+stay null. SQL guards prevent premature finalization and credential issuance; the
+sole active owner must resolve the review after all six jobs settle. No adjudication
+UI, score finalizer or credential issuer is introduced here.
+
+Each terminal job writes an append-only `AiGradingReceipt` with its raw vote,
+versions, input hash, dispatch key, latency and retry metadata. Updates, deletes
+and truncation are rejected by PostgreSQL. Receipts deliberately have no
+operational foreign keys, so authorized fixture/job maintenance cannot erase the
+grading history. Completed jobs and their pinned inputs cannot be rewritten.
+
+Expiry still freezes only previously saved responses and never manufactures a
+deterministic or final score. It queues the designated frozen written snapshots
+for review, including blank text, without reopening the expired attempt. Missing
+legacy assignments safely create a review case rather than rolling expiry back.
+
+The existing `/capstone/[attemptId]` status screen shows queued, evaluating or
+awaiting-owner-review states through a deep allowlist of job statuses only. It
+polls while work is pending and offers **Refresh grading status**. No rationale,
+criterion vote, disagreement reason, raw receipt or answer key enters the candidate
+RSC/action payload. The final score and credential remain pending.
+
+Apply the new migration before restarting the app; seed data is unchanged:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npm run typecheck
+npm run lint
+npm test
+```
+
+For a submitted Step 7B attempt or interrupted worker, the trusted local operator
+can run the following with the existing root `.env`. This requires the active
+synthetic owner in the database, exposes no judge votes, and does not finalize:
+
+```sh
+npm run grade:written -- ATTEMPT_ID
+```
+
+There is also a fresh-owner-guarded recovery Server Action, without a new console
+UI. Both paths deduplicate existing jobs. Retrying can recover abandoned work,
+but intentionally does not rerun a terminal failed/ambiguous provider call.
+
+The local PostgreSQL integration suite verifies six-job deduplication under
+concurrent workers, immutable raw history, exact agreement, all failure fallbacks,
+interrupted claims, hidden candidate data and database finalization/credential
+guards. It remains opt-in and refuses remote databases:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev
+```
+
+For browser verification, sign in as `demo-marcus`, meet the existing G1–G6
+practice participation prerequisites, acknowledge the policy and submit a complete
+six-slot attempt. Confirm locked responses and the deterministic subtotal out of
+95. Refresh grading status (or reload); expect **Written grading checks completed.
+Awaiting owner review.** Verify there is no final score, pass/fail, credential,
+judge rationale or answer feedback. Re-run `grade:written` with that attempt ID;
+there should still be six jobs, six receipts and one pending review case in Prisma
+Studio. Return to the dashboard; owner adjudication remains Step 8.

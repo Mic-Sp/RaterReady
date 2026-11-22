@@ -70,6 +70,17 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
     </> : <p>This closed attempt cannot be edited or submitted.</p>}
     {session.current.savedAt && <p>Last server-confirmed save: <time dateTime={session.current.savedAt}>{timestamp(session.current.savedAt)}</time></p>}
     <p>Question content, expected answers and expert explanations remain unavailable on this status screen.</p>
+    {session.current.status !== "FINALIZED" && (session.current.submittedAt || session.current.writtenGrading !== "NOT_STARTED") && <section aria-labelledby="written-grading-heading">
+      <h2 id="written-grading-heading">Written grading status</h2>
+      {/* This polite status exposes workflow phase only; raw votes and review causes stay behind the owner rubric-first boundary. */}
+      <p aria-live="polite" aria-atomic="true">{session.current.writtenGrading === "QUEUED" ? "Written grading jobs are queued. Owner review is required before any final result."
+        : session.current.writtenGrading === "EVALUATING" ? "Written grading checks are being evaluated. Owner review is required before any final result."
+        : session.current.writtenGrading === "AWAITING_OWNER_REVIEW" ? "Written grading checks completed. Awaiting owner review."
+        : "Written grading and owner review are pending."}</p>
+      <p>DEMO - SYNTHETIC: simulated judge outputs do not determine a final result or issue a credential.</p>
+      {session.clockError && <p>Server status could not be refreshed. Please try again.</p>}
+      <button type="button" className="secondary-button" onClick={() => { void session.sync(); }}>Refresh grading status</button>
+    </section>}
     <Link href="/capstone" className="inline-link">Return to capstone readiness</Link><Link href="/dashboard" className="inline-link">Return to dashboard</Link>
   </article>;
 

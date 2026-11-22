@@ -98,13 +98,13 @@ export function useCapstoneSession(initial: CapstoneWorkspace) {
   }, [drafts, dirty, blocked, current.status, flush]);
 
   useEffect(() => {
-    if (current.status !== "IN_PROGRESS") return;
+    if (current.status !== "IN_PROGRESS" && current.writtenGrading !== "QUEUED" && current.writtenGrading !== "EVALUATING") return;
     const check = () => { if (document.visibilityState === "visible") void sync(); };
     const firstCheck = window.setTimeout(check, 0);
     const timer = window.setInterval(check, 10000);
     window.addEventListener("focus", check); document.addEventListener("visibilitychange", check);
     return () => { window.clearTimeout(firstCheck); window.clearInterval(timer); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); };
-  }, [current.status, sync]);
+  }, [current.status, current.writtenGrading, sync]);
 
   useEffect(() => {
     if (!dirty && !saving) return;
