@@ -4,6 +4,7 @@ import { Prisma, type PrismaClient, type Competency } from "@prisma/client";
 import { z } from "zod";
 import { calculateCapstoneDeadline, capstoneCooldownUntil, decideCapstoneReadiness, isCapstoneExpired, type CapstoneReadinessKind } from "../domain/capstone-timer";
 import { capstoneDatabaseNow as databaseNow, lockCapstoneCandidate } from "./clock";
+import type { FinalizedCapstoneResult } from "../../lib/capstone-results";
 
 const competencies: Competency[] = ["G1", "G2", "G3", "G4", "G5", "G6"];
 const blueprintCode = "demo-generalist-capstone";
@@ -19,6 +20,7 @@ const blueprintSelect = {
 type Blueprint = Prisma.CapstoneBlueprintGetPayload<{ select: typeof blueprintSelect }>;
 const attemptSelect = { id: true, status: true, startedAt: true, expiresAt: true, expiredAt: true, appliedTimeMultiplier: true,
   independentWorkAcknowledgedAt: true, independentWorkPolicyVersion: true, capstoneBlueprintId: true, scoringPolicyId: true, finalizedAt: true, passed: true,
+  deterministicScore: true, writtenScore: true, finalScore: true,
   capstoneBlueprint: { select: { retakeCooldownHours: true } } } as const satisfies Prisma.AssessmentAttemptSelect;
 type Attempt = Prisma.AssessmentAttemptGetPayload<{ select: typeof attemptSelect }>;
 
@@ -31,6 +33,7 @@ export type CapstoneReadiness = {
   attempt: { id: string; status: string; startedAt: string; expiresAt: string; acknowledgedAt: string; appliedTimeMultiplier: number;
     remainingSeconds: number; blueprintVersion: number; scoringPolicyVersion: number } | null;
   lastExpiredAt: string | null;
+  latestFinalized?: FinalizedCapstoneResult | null;
 };
 
 /** Safe action failure categories; no database or private scenario content is reflected to a learner. */
@@ -93,9 +96,13 @@ async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string
   const available = blueprint?.slots.map((slot) => ({ position: slot.position, scenarios: slot.pool.map((item) => item.scenario).filter((s) => !used.has(s.familyId)) })) ?? [];
   const remainingForms = available.length === 6 ? Math.min(...available.map((slot) => new Set(slot.scenarios.map((s) => s.familyId)).size)) : 0;
   const cooldown = capstoneCooldownUntil(attempts.map((a) => ({ ...a, cooldownHours: a.capstoneBlueprint?.retakeCooldownHours ?? blueprint?.retakeCooldownHours ?? 48 })), now);
+  const finalized = attempts.find((a) => a.status === "FINALIZED" && a.finalizedAt && a.deterministicScore !== null && a.writtenScore !== null && a.finalScore !== null && a.passed !== null);
   const view: CapstoneReadiness = { kind: "UNAVAILABLE", serverNow: now.toISOString(), timeMultiplier: profile.timeMultiplier, grantedSeconds: null,
     practiced, missingPractice: competencies.filter((code) => !practiced.includes(code)), remainingForms, cooldownUntil: cooldown?.toISOString() ?? null,
-    blueprint: null, attempt: null, lastExpiredAt: attempts.find((a) => a.status === "EXPIRED")?.expiresAt?.toISOString() ?? null };
+    blueprint: null, attempt: null, lastExpiredAt: attempts.find((a) => a.status === "EXPIRED")?.expiresAt?.toISOString() ?? null,
+    latestFinalized: finalized ? { attemptId: finalized.id, deterministicScore: finalized.deterministicScore!.toNumber(), writtenScore: finalized.writtenScore!.toNumber(),
+      finalScore: finalized.finalScore!.toNumber(), passed: finalized.passed!, finalizedAt: finalized.finalizedAt!.toISOString(),
+      retakeAvailableAfter: finalized.passed ? null : new Date(finalized.finalizedAt!.getTime() + (finalized.capstoneBlueprint?.retakeCooldownHours ?? 48) * 3600000).toISOString() } : null };
   if (blueprint && validBlueprint(blueprint) && (!active || (active.capstoneBlueprintId === blueprint.id && active.scoringPolicyId === blueprint.scoringPolicyId))) {
     try {
       view.blueprint = publicBlueprint(blueprint);

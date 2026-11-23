@@ -8,6 +8,7 @@ import { practiceJudgments } from "../../../lib/practice-controls";
 import { ResponseComparison } from "../../components/response-comparison";
 import { submitCapstoneExamAction } from "../workspace-actions";
 import { capstoneSaveMessages, useCapstoneCountdown, useCapstoneSession } from "./use-capstone-session";
+import { FinalizedResult } from "../finalized-result";
 
 /** Explicit server UTC timestamps are read-only evidence of saves/deadlines, never computed client save claims. */
 function timestamp(value: string) { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "long", timeZone: "UTC" }).format(new Date(value)); }
@@ -60,7 +61,7 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
 
   if (locked) return <article className="page-card learning-page" aria-labelledby="locked-heading">
     <p className="eyebrow">DEMO - SYNTHETIC · Capstone Mode — Coaching Disabled</p>
-    <h1 id="locked-heading">{session.current.status === "EXPIRED" ? "Capstone expired — responses locked" : session.current.submittedAt ? "Capstone submitted — responses locked" : "Capstone closed — responses locked"}</h1>
+    <h1 id="locked-heading">{session.current.status === "FINALIZED" ? "Your finalized capstone result" : session.current.status === "EXPIRED" ? "Capstone expired — responses locked" : session.current.submittedAt ? "Capstone submitted — responses locked" : "Capstone closed — responses locked"}</h1>
     <p>Attempt reference: <span data-testid="capstone-attempt-id">{session.current.id}</span></p>
     {session.current.status === "EXPIRED" ? <p>The server deadline passed. Responses saved before expiry are preserved; late saves and submissions are rejected.</p> : session.current.submittedAt ? <>
       <p role="status">{session.current.status === "FINALIZED" ? "Final submission is locked. Owner review has been finalized." : "Final submission is locked. Written grading and owner review are pending."}</p>
@@ -69,6 +70,7 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
       {session.current.submittedAt && <p>Server submission time: <time dateTime={session.current.submittedAt}>{timestamp(session.current.submittedAt)}</time></p>}
     </> : <p>This closed attempt cannot be edited or submitted.</p>}
     {session.current.savedAt && <p>Last server-confirmed save: <time dateTime={session.current.savedAt}>{timestamp(session.current.savedAt)}</time></p>}
+    {session.current.status === "FINALIZED" && session.current.result && <FinalizedResult result={session.current.result} />}
     <p>Question content, expected answers and expert explanations remain unavailable on this status screen.</p>
     {session.current.status !== "FINALIZED" && (session.current.submittedAt || session.current.writtenGrading !== "NOT_STARTED") && <section aria-labelledby="written-grading-heading">
       <h2 id="written-grading-heading">Written grading status</h2>

@@ -6,6 +6,7 @@ import { expandedPracticeScenarios } from "../../prisma/practice-fixtures";
 /** Disposable-local-database fixtures only; there are no application delete/reset endpoints. */
 export async function clearCapstones(db: PrismaClient, candidateId: string) {
   // Operational fixtures may be removed; append-only raw grading receipts remain in this disposable database.
+  await db.credential.deleteMany({ where: { attempt: { candidateId, mode: "CAPSTONE" } } });
   await db.aiGradingJob.deleteMany({ where: { response: { attempt: { candidateId, mode: "CAPSTONE" } } } });
   await db.reviewCase.deleteMany({ where: { attempt: { candidateId, mode: "CAPSTONE" } } });
   await db.submissionResponse.deleteMany({ where: { attempt: { candidateId, mode: "CAPSTONE" } } });

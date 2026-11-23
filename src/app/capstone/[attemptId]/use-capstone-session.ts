@@ -38,6 +38,7 @@ export function useCapstoneSession(initial: CapstoneWorkspace) {
 
   const applySnapshot = useCallback((next: CapstoneSnapshot) => {
     const previous = snapshot.current;
+    if (previous.status === "FINALIZED" && next.status !== "FINALIZED") return;
     // Late ACTIVE polls/acknowledgments can never reopen a locally confirmed lock.
     if (previous.status !== "IN_PROGRESS" && next.status === "IN_PROGRESS") return;
     const merged = { ...next, revision: Math.max(previous.revision, next.revision), serverNow: previous.serverNow > next.serverNow ? previous.serverNow : next.serverNow,
@@ -98,7 +99,8 @@ export function useCapstoneSession(initial: CapstoneWorkspace) {
   }, [drafts, dirty, blocked, current.status, flush]);
 
   useEffect(() => {
-    if (current.status !== "IN_PROGRESS" && current.writtenGrading !== "QUEUED" && current.writtenGrading !== "EVALUATING") return;
+    if (current.status !== "IN_PROGRESS" && !["SUBMITTED", "GRADING", "PENDING_REVIEW"].includes(current.status)
+      && current.writtenGrading !== "QUEUED" && current.writtenGrading !== "EVALUATING") return;
     const check = () => { if (document.visibilityState === "visible") void sync(); };
     const firstCheck = window.setTimeout(check, 0);
     const timer = window.setInterval(check, 10000);

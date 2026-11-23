@@ -7,6 +7,7 @@ import { generalistPracticeCompetencies } from "../../lib/generalist-competencie
 import { CapstoneStartForm } from "./start-form";
 import { ServerStatusRefresh } from "./server-status-refresh";
 import { resumeCapstoneAction } from "./actions";
+import { FinalizedResult } from "./finalized-result";
 
 export const metadata: Metadata = { title: "Capstone readiness | RaterReady" };
 const messages = {
@@ -32,6 +33,7 @@ export default async function CapstoneReadinessPage({ searchParams }: { searchPa
     <aside className="demo-notice" aria-labelledby="lifecycle-demo-heading"><h2 id="lifecycle-demo-heading">Timed synthetic capstone</h2>
       <p>Starting reserves a fresh six-slot form and begins its deadline. Use Resume active attempt to enter the exam. Coaching and expert explanations are disabled; responses lock at final submission or expiry.</p></aside>
     {notice && Object.hasOwn(notices, notice) && <p role="status" className="success-note">{notices[notice]}</p>}
+    {view.latestFinalized && <FinalizedResult result={view.latestFinalized} compact />}
     <section className="learning-section" aria-labelledby="eligibility-heading">
       {/* Announce a changed lock/eligibility state without reading a fresh timestamp every 15 seconds. */}
       <div aria-live="polite" aria-atomic="true"><h2 id="eligibility-heading">{messages[view.kind]}</h2></div>

@@ -33,7 +33,12 @@ const protect = auth(checkAccess);
  * Independent guards remain mandatory inside future protected handlers and Server Actions.
  */
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
-  if (routeAccess(request.nextUrl.pathname) === "public") return NextResponse.next();
+  if (routeAccess(request.nextUrl.pathname) === "public") {
+    const response = NextResponse.next();
+    // Anonymous verification must never retain a cached positive result after consent withdrawal or lifecycle restriction.
+    if (request.nextUrl.pathname.startsWith("/verify/")) response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    return response;
+  }
   return protect(request, event);
 }
 

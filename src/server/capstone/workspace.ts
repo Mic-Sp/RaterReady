@@ -6,15 +6,18 @@ import { capstoneDatabaseNow, lockCapstoneCandidate } from "./clock";
 import { scoreCapstoneResponses } from "../domain/capstone-scoring";
 import { enqueueWrittenGrading } from "../ai/written-grading";
 import { gradingRuntime, type GradingRuntime } from "../ai/judges";
+import type { FinalizedCapstoneResult } from "../../lib/capstone-results";
+import { credentialPrivateSelect, credentialPrivateView } from "../credentials/projection";
 
 const idSchema = z.string().min(1).max(100);
 const metaSelect = {
   id: true, status: true, revision: true, startedAt: true, expiresAt: true, submittedAt: true, expiredAt: true, submissionKey: true,
-  deterministicScore: true, capstoneBlueprintId: true, scoringPolicyId: true,
-  capstoneBlueprint: { select: { code: true, version: true, scoringPolicyId: true, slots: { orderBy: { position: "asc" }, select: { position: true, competency: true, writtenPrompt: true } } } },
+  deterministicScore: true, writtenScore: true, finalScore: true, passed: true, finalizedAt: true, capstoneBlueprintId: true, scoringPolicyId: true,
+  capstoneBlueprint: { select: { code: true, version: true, scoringPolicyId: true, retakeCooldownHours: true, slots: { orderBy: { position: "asc" }, select: { position: true, competency: true, writtenPrompt: true } } } },
   scoringPolicy: { select: { id: true, version: true, evaluationJudgmentPoints: true, rubricApplicationPoints: true, factualVerificationPoints: true, writtenJustificationPoints: true, passingThreshold: true } },
   responses: { select: { position: true, savedAt: true, gradingJobs: { select: { status: true } } } },
   reviewCase: { select: { status: true } },
+  credential: { select: credentialPrivateSelect },
 } as const satisfies Prisma.AssessmentAttemptSelect;
 type Meta = Prisma.AssessmentAttemptGetPayload<{ select: typeof metaSelect }>;
 
@@ -29,6 +32,7 @@ const evidenceSchema = z.object({ sources: z.array(z.object({ id: z.string(), te
 
 export type CapstoneSnapshot = { id: string; status: string; revision: number; serverNow: string; startedAt: string; expiresAt: string;
   savedAt: string | null; submittedAt: string | null; deterministicScore: number | null; blueprintVersion: number; scoringPolicyVersion: number;
+  result?: FinalizedCapstoneResult | null;
   writtenGrading?: "QUEUED" | "EVALUATING" | "AWAITING_OWNER_REVIEW" | "NOT_STARTED" };
 export type CapstoneWorkspace = { snapshot: CapstoneSnapshot; slots: Awaited<ReturnType<typeof loadPublicSlots>> };
 export type CapstoneMutationCode = "SAVED" | "SUBMITTED" | "CONFLICT" | "EXPIRED" | "LOCKED" | "INCOMPLETE" | "INVALID" | "CONFIRMATION" | "UNAVAILABLE";
@@ -46,6 +50,11 @@ function snapshot(a: Meta, now: Date): CapstoneSnapshot {
   return { id: a.id, status: a.status, revision: a.revision, serverNow: now.toISOString(), startedAt: a.startedAt.toISOString(), expiresAt: a.expiresAt!.toISOString(),
     savedAt: a.revision > 0 && a.responses.length ? new Date(Math.max(...a.responses.map((r) => r.savedAt.getTime()))).toISOString() : null,
     submittedAt: a.submittedAt?.toISOString() ?? null, deterministicScore: a.deterministicScore?.toNumber() ?? null,
+    // Only a finalized summary leaves the server: no question/key, judge vote or review rationale is selected for results.
+    result: a.status === "FINALIZED" && a.finalizedAt && a.deterministicScore !== null && a.writtenScore !== null && a.finalScore !== null && a.passed !== null
+      ? { attemptId: a.id, deterministicScore: a.deterministicScore.toNumber(), writtenScore: a.writtenScore.toNumber(), finalScore: a.finalScore.toNumber(),
+        passed: a.passed, finalizedAt: a.finalizedAt.toISOString(), credential: a.credential ? credentialPrivateView(a.credential) : null,
+        retakeAvailableAfter: a.passed ? null : new Date(a.finalizedAt.getTime() + a.capstoneBlueprint!.retakeCooldownHours * 3600000).toISOString() } : null,
     blueprintVersion: a.capstoneBlueprint!.version, scoringPolicyVersion: a.scoringPolicy!.version, writtenGrading };
 }
 

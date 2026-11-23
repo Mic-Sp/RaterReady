@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <p className="brand-description">Independent AI evaluation training</p>
             <aside className="demo-notice" aria-label="Synthetic demonstration access">
               <p className="notice-label">DEMO - SYNTHETIC</p>
-              <p>Access is restricted to synthetic demonstration accounts.</p>
+              <p>Training and reviewer access use synthetic demonstration accounts. Shared pilot credentials may be verified publicly.</p>
             </aside>
           </header>
           <main id="main-content" tabIndex={-1}>{children}</main>

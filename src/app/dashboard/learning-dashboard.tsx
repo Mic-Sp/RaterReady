@@ -7,9 +7,13 @@ import { generalistPracticeCompetencies } from "../../lib/generalist-competencie
 import { LearnerIdentity } from "../components/learner-identity";
 import { EvaluationReference } from "../components/evaluation-reference";
 import { chooseLevel, beginSkillsCheck } from "../learning/actions";
+import type { CapstoneReadiness } from "../../server/capstone/service";
+import { FinalizedResult } from "../capstone/finalized-result";
+import type { CandidateCredential } from "../../lib/credential-content";
+import { CandidateCredentials } from "../components/candidate-credentials";
 
 /** Server-rendered learning progress uses independent persisted lesson rows, never diagnostic scores. */
-export function LearningDashboard({ user, profile, notice }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string }) {
+export function LearningDashboard({ user, profile, notice, readiness, credentials = [] }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string; readiness?: CapstoneReadiness; credentials?: CandidateCredential[] }) {
   const completed = profile.moduleProgress.filter((item) => item.level === profile.selectedLevel);
   const resume = nextLesson(profile.moduleProgress, profile.selectedLevel);
   const level = learningLevels.find((item) => item.code === profile.selectedLevel)!;
@@ -58,10 +62,13 @@ export function LearningDashboard({ user, profile, notice }: { user: AuthIdentit
       <form action={beginSkillsCheck}><button className="secondary-button" type="submit">{profile.diagnosticStatus === "COMPLETED" ? "View advisory feedback" : profile.diagnosticStatus === "IN_PROGRESS" ? "Resume optional skills check" : "Take the optional skills check"}</button></form>
     </section>
     <section className="learning-section readiness-card" aria-labelledby="readiness-heading"><h2 id="readiness-heading">Capstone readiness</h2>
-      <p><strong>Not yet assessed</strong></p><p>Lesson completion and diagnostic feedback do not establish capstone readiness. The readiness screen checks Generalist practice coverage, cooldown, fresh scenario capacity and server timer status.</p>
+      {readiness?.latestFinalized ? <FinalizedResult result={readiness.latestFinalized} compact /> : <p><strong>{readiness?.kind === "AWAITING_REVIEW" ? "Awaiting owner review" : readiness?.kind === "ACTIVE" ? "Active capstone attempt" : "Not yet assessed"}</strong></p>}
+      {readiness?.cooldownUntil && <p>Retake cooldown active until {new Date(readiness.cooldownUntil).toUTCString()}. Eligibility is checked on the server.</p>}
+      <p>Lesson completion and diagnostic feedback do not establish capstone readiness. The readiness screen checks Generalist practice coverage, cooldown, fresh scenario capacity and server timer status.</p>
       <p>The capstone passing standard stays at 85% or higher after owner review and finalization. This dashboard and the skills check do not issue credentials.</p>
       <Link href="/capstone" className="primary-button button-link">Check capstone readiness</Link>
     </section>
+    <CandidateCredentials records={credentials} />
     <section className="learning-section" aria-labelledby="optional-heading"><h2 id="optional-heading">Optional explorations</h2>
       <ul><li><Link href="/workflow-lab">Workflow Skills Lab</Link> · optional, unscored, never required for the Generalist credential</li>
         <li><Link href="/technical-preview">Technical Preview</Link> · non-credentialing</li></ul>

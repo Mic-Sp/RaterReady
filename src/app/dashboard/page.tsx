@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "../../lib/prisma";
 import { getLearningSnapshot } from "../../server/learning/service";
 import { LearningDashboard } from "./learning-dashboard";
+import { getCapstoneReadiness } from "../../server/capstone/service";
+import { listCandidateCredentials } from "../../server/credentials/service";
 
 export const metadata: Metadata = { title: "Candidate dashboard | RaterReady" };
 
@@ -13,5 +15,7 @@ export default async function CandidateDashboardPage({ searchParams }: { searchP
   const profile = await getLearningSnapshot(prisma, user.id);
   if (!profile.onboardingCompletedAt) redirect("/onboarding");
   const { notice } = await searchParams;
-  return <LearningDashboard user={user} profile={profile} notice={notice} />;
+  const readiness = await getCapstoneReadiness(prisma, user.id);
+  const credentials = await listCandidateCredentials(prisma);
+  return <LearningDashboard user={user} profile={profile} notice={notice} readiness={readiness} credentials={credentials} />;
 }

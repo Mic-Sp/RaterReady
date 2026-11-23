@@ -9,7 +9,9 @@ import { capstoneBlueprint, capstoneScenarios } from "./capstone-fixtures";
 import { getCapstoneReadiness, resumeCapstoneAttempt, startCapstoneAttempt } from "../src/server/capstone/service";
 import { getCapstoneSnapshot, loadCapstoneWorkspace, saveCapstoneDraft, submitCapstoneAttempt } from "../src/server/capstone/workspace";
 import { processWrittenGrading } from "../src/server/ai/written-grading";
-import { finalizeOwnerReview, inspectIndependentReview, inspectUnlockedReview, savePreliminaryReview } from "../src/server/review/service";
+import { finalizeOwnerReview, getReviewConsole, inspectIndependentReview, inspectReviewCase, inspectUnlockedReview, resolveReviewAttempt, savePreliminaryReview } from "../src/server/review/service";
+import { issueCredentialForFinalizedPass } from "../src/server/credentials/issuance";
+import { changeCredentialStatus, getPublicCredential, listAdminCredentials, listCandidateCredentials, setCredentialSharing } from "../src/server/credentials/service";
 import type { GradingRuntime } from "../src/server/ai/judges";
 import type { WrittenInput } from "../src/server/ai/written-contract";
 import type { CapstoneDraftResponse } from "../src/lib/capstone-responses";
@@ -23,8 +25,8 @@ import { authorizeSession } from "../src/server/auth/guards";
 import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
 
 vi.mock("server-only", () => ({}));
-const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn() }));
-vi.mock("../src/lib/auth", () => ({ requireAdmin: reviewAuth.requireAdmin }));
+const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
+vi.mock("../src/lib/auth", () => ({ requireAdmin: reviewAuth.requireAdmin, requireCandidate: reviewAuth.requireCandidate }));
 
 // Database tests are opt-in and refuse non-local or non-test database URLs.
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -83,6 +85,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
   afterAll(async () => {
     if (!prisma) return;
     for (const id of capstoneCandidateIds) {
+      await prisma.credential.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.aiGradingJob.deleteMany({ where: { response: { attempt: { candidateId: id } } } });
       await prisma.reviewCase.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.submissionResponse.deleteMany({ where: { attempt: { candidateId: id } } });
@@ -91,6 +94,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       await prisma.practiceProgress.deleteMany({ where: { candidateId: id } });
       await prisma.moduleProgress.deleteMany({ where: { candidateId: id } });
       await prisma.diagnosticSession.deleteMany({ where: { candidateId: id } });
+      // Consent audit actors must remain referentially intact in this disposable database.
+      if (await prisma.auditEvent.count({ where: { actorUserId: id } })) continue;
       await prisma.candidateProfile.delete({ where: { userId: id } });
       await prisma.user.delete({ where: { id } });
     }
@@ -891,6 +896,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
   it("withholds all AI outputs until all independent owner criteria are durably saved, then unlocks frozen votes", async () => {
     const { attempt } = await submittedForGrading();
     await processWrittenGrading(prisma, attempt);
+    const reviewCase = await prisma.reviewCase.findUniqueOrThrow({ where: { attemptId: attempt } });
+    expect((await inspectReviewCase(prisma, reviewCase.id)).stage).toBe("PRELIMINARY");
     const initial = await inspectIndependentReview(prisma, attempt);
     expect(initial).toMatchObject({ stage: "PRELIMINARY", preliminarySavedAt: null, preliminaryScores: null });
     expect(initial.prompts).toHaveLength(3);
@@ -905,6 +912,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     const [saved, retry] = await Promise.all([savePreliminaryReview(prisma, attempt, scores), savePreliminaryReview(prisma, attempt, scores)]);
     expect(retry).toEqual(saved);
     const unlocked = await inspectUnlockedReview(prisma, attempt);
+    expect((await inspectReviewCase(prisma, reviewCase.id)).stage).toBe("ADJUDICATION");
     expect(unlocked.stage).toBe("ADJUDICATION");
     expect(unlocked.gradingReasons).toContain("ALPHA_SIGN_OFF");
     expect(unlocked.votes).toHaveLength(3);
@@ -974,6 +982,16 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: golden scoring boundary owner review." }))
       .toEqual({ deterministicScore: subtotal, writtenScore: 5, finalScore: total, passed });
     const finalized = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt } });
+    expect(await prisma.credential.count({ where: { attemptId: attempt } })).toBe(passed ? 1 : 0);
+    const candidateView = await loadCapstoneWorkspace(prisma, id, attempt);
+    expect(candidateView.slots).toEqual([]);
+    expect(candidateView.snapshot.result).toMatchObject({ attemptId: attempt, deterministicScore: subtotal, writtenScore: 5, finalScore: total, passed });
+    for (const secret of ["answerKeyJson", "allowedAlternativesJson", "rationale", "alignment", "rawVoteJson", "ownerPreliminaryJson"]) expect(JSON.stringify(candidateView)).not.toContain(secret);
+    await expect(loadCapstoneWorkspace(prisma, candidateId, attempt)).rejects.toThrow(/unavailable/);
+    const readiness = await getCapstoneReadiness(prisma, id);
+    expect(readiness.latestFinalized?.finalScore).toBe(total);
+    expect(readiness.kind).toBe(passed ? "ALREADY_PASSED" : "COOLDOWN");
+    expect(readiness.latestFinalized?.retakeAvailableAfter).toBe(passed ? null : new Date(finalized.finalizedAt!.getTime() + 48 * 3600000).toISOString());
     expect(finalized).toMatchObject({ status: "FINALIZED", passed }); expect(finalized.finalScore?.toNumber()).toBe(total);
     await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { passed: !passed } })).rejects.toThrow(/attempt_finalized_result/);
     if (!passed) await expect(prisma.credential.create({ data: { attemptId: attempt, track: "GENERALIST", competencies: ["G1"] } })).rejects.toThrow(/passing capstone/);
@@ -1000,11 +1018,101 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       user: { id: candidate.id, sessionVersion: candidate.sessionVersion }, expires: new Date(Date.now() + 60000).toISOString(),
     }, "ADMIN_REVIEWER"));
     try {
+      const reviewCase = await prisma.reviewCase.findUniqueOrThrow({ where: { attemptId: attempt } });
+      await expect(getReviewConsole(prisma)).rejects.toMatchObject({ status: 403 });
+      await expect(inspectReviewCase(prisma, reviewCase.id)).rejects.toMatchObject({ status: 403 });
+      await expect(resolveReviewAttempt(prisma, reviewCase.id)).rejects.toMatchObject({ status: 403 });
       await expect(inspectIndependentReview(prisma, attempt)).rejects.toMatchObject({ status: 403 });
       await expect(inspectUnlockedReview(prisma, attempt)).rejects.toMatchObject({ status: 403 });
       await expect(savePreliminaryReview(prisma, attempt, scores)).rejects.toMatchObject({ status: 403 });
       await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: forbidden." })).rejects.toMatchObject({ status: 403 });
     } finally { reviewAuth.requireAdmin.mockImplementation(guard); }
     expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ ownerId: null, ownerPreliminaryJson: null, status: "PENDING" });
+  });
+
+  it("projects the reviewer queue and history without anchoring on a disagreement before independent scoring", async () => {
+    const runtime = testGradingRuntime("disagree");
+    const { attempt } = await submittedForGrading(runtime);
+    await processWrittenGrading(prisma, attempt, runtime);
+    const before = await getReviewConsole(prisma);
+    const row = before.queue.find((r) => r.attemptId === attempt)!;
+    expect(row).toMatchObject({ reason: "ALPHA_SIGN_OFF", independentScoresSaved: false, submittedAt: expect.any(String), candidateName: expect.any(String) });
+    for (const secret of ["rawVoteJson", "rationale", "alignment", "answerKeyJson", "modelVersion"]) expect(JSON.stringify(before)).not.toContain(secret);
+    expect(before.metrics.syntheticJobs + before.metrics.liveJobs).toBe(await prisma.aiGradingJob.count());
+    expect(before.metrics).toMatchObject({ syntheticEstimatedSpendUsd: 0, liveEstimatedSpendUsd: null, quotaStatus: "Not configured" });
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    expect((await getReviewConsole(prisma)).queue.find((r) => r.attemptId === attempt)?.reason).toBe("JUDGE_DISAGREEMENT");
+    const unlocked = await inspectReviewCase(prisma, row.reviewCaseId);
+    expect(unlocked.stage).toBe("ADJUDICATION");
+    if (unlocked.stage === "ADJUDICATION") expect(unlocked.votes.every((v) => v.agreement === false)).toBe(true);
+    await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: evidence-grounded final review." });
+    const after = await getReviewConsole(prisma);
+    expect(after.queue.some((r) => r.attemptId === attempt)).toBe(false);
+    expect(after.history.find((r) => r.attemptId === attempt)).toMatchObject({ status: "FINALIZED", finalizedAt: expect.any(String) });
+  });
+
+  it("issues exactly one private UUID credential atomically with finalization and preserves its state on retries", async () => {
+    const { id, attempt } = await submittedForGrading();
+    const owner = await reviewAuth.requireAdmin();
+    expect(await prisma.$transaction((tx) => issueCredentialForFinalizedPass(tx, attempt, owner.id))).toBeNull();
+    await processWrittenGrading(prisma, attempt);
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    const input = { scores, rationale: "DEMO - SYNTHETIC: reviewed criteria support the finalized credential." };
+    await Promise.all([finalizeOwnerReview(prisma, attempt, input), finalizeOwnerReview(prisma, attempt, input)]);
+    const credential = await prisma.credential.findUniqueOrThrow({ where: { attemptId: attempt } });
+    expect(credential).toMatchObject({ publicShareEnabled: false, status: "ACTIVE", isDemo: true, competencies: ["G1", "G2", "G3", "G4", "G5", "G6"] });
+    const finalized = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt } });
+    expect(credential.issuedAt.getTime()).toBeGreaterThanOrEqual(finalized.finalizedAt!.getTime());
+    expect(credential.publicSlug).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(await getPublicCredential(prisma, credential.publicSlug)).toBeNull();
+    await changeCredentialStatus(prisma, credential.publicSlug, { status: "REVOKED", reason: "DEMO - SYNTHETIC: lifecycle test restriction." });
+    await finalizeOwnerReview(prisma, attempt, input);
+    expect(await prisma.credential.findUnique({ where: { attemptId: attempt } })).toMatchObject({ id: credential.id, publicSlug: credential.publicSlug, status: "REVOKED", publicShareEnabled: false });
+    const audit = await prisma.auditEvent.findMany({ where: { targetId: credential.id, action: "CREDENTIAL_ISSUED" } });
+    expect(audit).toHaveLength(1);
+    expect(audit[0].metadataJson).toMatchObject({ blueprintVersion: 1, scoringPolicyVersion: 1, attemptId: attempt, publicShareEnabled: false });
+    expect((await loadCapstoneWorkspace(prisma, id, attempt)).snapshot.result?.credential?.credentialCode).toBe(credential.publicSlug);
+  });
+
+  it("audits owned opt-in/out and admin lifecycle transitions while keeping every unavailable verification generic", async () => {
+    const { id, attempt } = await submittedForGrading();
+    await processWrittenGrading(prisma, attempt);
+    const scores = await ownerScores(attempt); await savePreliminaryReview(prisma, attempt, scores);
+    await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: consent and lifecycle fixture reviewed." });
+    const credential = await prisma.credential.findUniqueOrThrow({ where: { attemptId: attempt } });
+    // Auth.js itself is covered separately and in browser tests; this is the trusted guard identity for this owned DB fixture.
+    reviewAuth.requireCandidate.mockResolvedValue({ id, role: "CANDIDATE" });
+    const code = credential.publicSlug;
+    expect((await listCandidateCredentials(prisma))[0].credentialCode).toBe(code);
+    expect((await listAdminCredentials(prisma)).some((c) => c.credentialCode === code)).toBe(true);
+    expect(await getPublicCredential(prisma, code)).toBeNull(); expect(await getPublicCredential(prisma, randomUUID())).toBeNull();
+    await Promise.all([setCredentialSharing(prisma, code, true), setCredentialSharing(prisma, code, true)]);
+    expect(await getPublicCredential(prisma, code)).toEqual({ credentialCode: code, status: "ACTIVE", issuedAt: credential.issuedAt.toISOString(),
+      track: "GENERALIST", competencies: ["G1", "G2", "G3", "G4", "G5", "G6"], blueprintVersion: 1, scoringPolicyVersion: 1 });
+    await setCredentialSharing(prisma, code, false); expect(await getPublicCredential(prisma, code)).toBeNull();
+    await setCredentialSharing(prisma, code, true);
+    await expect(changeCredentialStatus(prisma, code, { status: "SUSPENDED", reason: " \n " })).rejects.toThrow();
+    for (const status of ["SUSPENDED", "ACTIVE", "REVOKED", "ACTIVE"] as const) {
+      await changeCredentialStatus(prisma, code, { status, reason: `DEMO - SYNTHETIC: written reason for ${status}.` });
+      const consent = (await prisma.credential.findUniqueOrThrow({ where: { id: credential.id } })).publicShareEnabled;
+      expect((await getPublicCredential(prisma, code)) !== null).toBe(status === "ACTIVE" && consent);
+      if (status === "REVOKED") await setCredentialSharing(prisma, code, false);
+      if (status === "ACTIVE") {
+        const row = await prisma.credential.findUniqueOrThrow({ where: { id: credential.id } });
+        if (!row.publicShareEnabled) { expect(await getPublicCredential(prisma, code)).toBeNull(); await setCredentialSharing(prisma, code, true); }
+      }
+    }
+    const consentAudit = await prisma.auditEvent.findMany({ where: { targetId: credential.id, action: "CREDENTIAL_SHARING_CHANGED" } });
+    expect(consentAudit).toHaveLength(5);
+    const lifecycleAudit = await prisma.auditEvent.findMany({ where: { targetId: credential.id, action: "CREDENTIAL_STATUS_CHANGED" } });
+    expect(lifecycleAudit).toHaveLength(4);
+    expect(lifecycleAudit.every((a) => (a.metadataJson as { reason: string }).reason.startsWith("DEMO - SYNTHETIC:"))).toBe(true);
+    await expect(prisma.auditEvent.update({ where: { id: consentAudit[0].id }, data: { metadataJson: {} } })).rejects.toThrow(/append-only/);
+    await expect(prisma.auditEvent.delete({ where: { id: lifecycleAudit[0].id } })).rejects.toThrow(/append-only/);
+    reviewAuth.requireCandidate.mockResolvedValue({ id: candidateId, role: "CANDIDATE" });
+    expect((await listCandidateCredentials(prisma)).some((c) => c.credentialCode === code)).toBe(false);
+    await expect(setCredentialSharing(prisma, code, false)).rejects.toMatchObject({ status: 403 });
   });
 });

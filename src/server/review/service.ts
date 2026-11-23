@@ -7,6 +7,7 @@ import type { AuthIdentity } from "../auth/accounts";
 import { capstoneDatabaseNow } from "../capstone/clock";
 import { computeFinalizedScore, validateOwnerScores } from "../domain/adjudication";
 import { writtenVoteSchema, writtenVotesAgree } from "../ai/written-contract";
+import { issueCredentialForFinalizedPass } from "../credentials/issuance";
 
 const idSchema = z.string().min(1).max(100);
 const finalInputSchema = z.object({ scores: z.unknown(), rationale: z.string().trim().min(1).max(12000) }).strict();
@@ -135,7 +136,8 @@ export async function savePreliminaryReview(db: PrismaClient, attemptId: string,
  * Sole-owner final sign-off is atomic with the immutable final audit snapshot and 100-point result.
  * The schema permits one aggregate ReviewCase per attempt: resolving it requires all three owner
  * scores and all six settled receipts. Missing/pending judges never imply zero written points.
- * No model/job/receipt is updated, no credential is issued, and no client-supplied total is accepted.
+ * No model/job/receipt is updated and no client-supplied total is accepted. A finalized
+ * pass issues exactly one private credential in this same transaction.
  */
 export async function finalizeOwnerReview(db: PrismaClient, attemptId: string, input: unknown) {
   const owner = await requireOwner();
@@ -153,6 +155,7 @@ export async function finalizeOwnerReview(db: PrismaClient, attemptId: string, i
     if (state.review.status === "FINALIZED") {
       if (state.attempt.status !== "FINALIZED" || JSON.stringify(validateOwnerScores(state.review.finalScoresJson, state.responses.map((r) => r.id))) !== JSON.stringify(scores)
         || state.review.rationale !== parsed.rationale) throw new Error("Final adjudication is immutable.");
+      await issueCredentialForFinalizedPass(tx, id, owner.id);
       return result;
     }
     if (!["PENDING", "IN_REVIEW"].includes(state.review.status) || state.attempt.status === "FINALIZED") throw new Error("Review is closed.");
@@ -174,6 +177,50 @@ export async function finalizeOwnerReview(db: PrismaClient, attemptId: string, i
       action: "OWNER_REVIEW_FINALIZED", targetType: "ReviewCase", targetId: state.review.id,
       metadataJson: { demoLabel: "DEMO - SYNTHETIC", attemptId: id, preliminaryScores: state.review.ownerPreliminaryJson!,
         finalScores: scores, rationale: parsed.rationale, receiptIds: receipts.map((r) => r.id).sort(), ...result, finalizedAt: now.toISOString() } } });
+    await issueCredentialForFinalizedPass(tx, id, owner.id);
     return result;
-  });
+  }, { timeout: 15000 });
+}
+
+/** Resolve a review URL on the server after fresh sole-owner authorization; no posted attempt identity is trusted. */
+export async function resolveReviewAttempt(db: PrismaClient, reviewCaseId: string): Promise<string> {
+  await requireOwner();
+  const review = await db.reviewCase.findUniqueOrThrow({ where: { id: idSchema.parse(reviewCaseId) }, select: { attemptId: true } });
+  return review.attemptId;
+}
+
+/** Persisted preliminary scores choose the stage. URL parameters and browser state can never unlock AI data. */
+export async function inspectReviewCase(db: PrismaClient, reviewCaseId: string) {
+  const attemptId = await resolveReviewAttempt(db, reviewCaseId);
+  const independent = await inspectIndependentReview(db, attemptId);
+  return independent.preliminarySavedAt ? inspectUnlockedReview(db, attemptId) : independent;
+}
+
+/**
+ * Owner-only operational allowlist. Before independent scoring every case reports its
+ * mandatory pilot audit reason; disagreement/fallback details unlock with preliminary scores.
+ * Job counts are aggregate metadata, never raw votes. No provider spend or quota is invented.
+ */
+export async function getReviewConsole(db: PrismaClient) {
+  await requireOwner();
+  const eligible = { attempt: { mode: "CAPSTONE" as const, track: "GENERALIST" as const,
+    isSyntheticFixture: true, submissionKey: { not: null }, submittedAt: { not: null } } };
+  const pending = { ...eligible, status: { in: ["PENDING" as const, "IN_REVIEW" as const] } };
+  const completed = { ...eligible, status: "FINALIZED" as const };
+  const select = { id: true, status: true, triggerReason: true, ownerPreliminarySavedAt: true, finalizedAt: true,
+    attempt: { select: { id: true, submittedAt: true, candidate: { select: { user: { select: { name: true } } } } } } } as const;
+  const [queue, history, pendingDepth, finalizedCount, syntheticJobs, liveJobs] = await Promise.all([
+    db.reviewCase.findMany({ where: pending, select, orderBy: { createdAt: "asc" }, take: 50 }),
+    db.reviewCase.findMany({ where: completed, select, orderBy: { finalizedAt: "desc" }, take: 25 }),
+    db.reviewCase.count({ where: pending }), db.reviewCase.count({ where: completed }),
+    db.aiGradingJob.count({ where: { isSyntheticFixture: true } }), db.aiGradingJob.count({ where: { isSyntheticFixture: false } }),
+  ]);
+  const project = (row: typeof queue[number]) => ({ reviewCaseId: row.id, attemptId: row.attempt.id,
+    candidateName: row.attempt.candidate.user.name, submittedAt: row.attempt.submittedAt!.toISOString(),
+    finalizedAt: row.finalizedAt?.toISOString() ?? null, status: row.status,
+    reason: row.ownerPreliminarySavedAt ? row.triggerReason : "ALPHA_SIGN_OFF" as const,
+    independentScoresSaved: row.ownerPreliminarySavedAt !== null });
+  return { queue: queue.map(project), history: history.map(project),
+    metrics: { pendingDepth, finalizedCount, syntheticJobs, liveJobs, syntheticEstimatedSpendUsd: 0,
+      liveEstimatedSpendUsd: null, quotaStatus: "Not configured", liveEnabled: process.env.ENABLE_LIVE_ZDR_GRADING === "true" } };
 }

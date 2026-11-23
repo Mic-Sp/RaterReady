@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "grade:written": "node --conditions=react-server --env-file=.env --import tsx scripts/grade-written.ts"
+    "grade:written": "node --conditions=react-server --env-file=.env --import tsx scripts/grade-written.ts",
+    "credentials:reconcile": "node --conditions=react-server --env-file=.env --import tsx scripts/reconcile-credentials.ts"
   },
   "engines": {
     "node": ">=22.12.0"

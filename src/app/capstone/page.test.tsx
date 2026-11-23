@@ -11,6 +11,7 @@ vi.mock("../../server/capstone/service", () => ({ getCapstoneReadiness: mocks.re
 vi.mock("./actions", () => ({ resumeCapstoneAction: vi.fn() }));
 vi.mock("./start-form", () => ({ CapstoneStartForm: () => <p>START_FORM_SENTINEL</p> }));
 vi.mock("./server-status-refresh", () => ({ ServerStatusRefresh: () => null }));
+vi.mock("../credentials/actions", () => ({ updateCredentialSharingAction: vi.fn() }));
 const base: CapstoneReadiness = { kind: "MISSING_PRACTICE", serverNow: "2026-11-20T12:00:00.000Z", timeMultiplier: 1.5,
   grantedSeconds: 5400, practiced: [], missingPractice: ["G1", "G2", "G3", "G4", "G5", "G6"], remainingForms: 2, cooldownUntil: null, attempt: null, lastExpiredAt: null,
   blueprint: { id: "blueprint", code: "demo-generalist-capstone", version: 1, title: "DEMO - SYNTHETIC blueprint", baseDurationSeconds: 3600, retakeCooldownHours: 48,

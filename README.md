@@ -720,3 +720,129 @@ Awaiting owner review.** Verify there is no final score, pass/fail, credential,
 judge rationale or answer feedback. Re-run `grade:written` with that attempt ID;
 there should still be six jobs, six receipts and one pending review case in Prisma
 Studio. Return to the dashboard; owner adjudication remains Step 8.
+
+## Step 8B: owner console and finalized results
+
+`/admin` requires a fresh `ADMIN_REVIEWER` session for `admin-michael`. It lists
+up to 50 pending submitted reviews and the latest 25 finalized reviews, with total
+counts, candidate synthetic names, attempt references, timestamps and review links.
+Before independent scoring, the queue displays **Pilot mandatory audit**; detailed
+disagreement/provider fallback reasons unlock only after preliminary scores are saved.
+Operations show aggregate synthetic/live job counts. Synthetic API spend is $0;
+live spend and quota are explicitly unavailable without usage/pricing configuration.
+
+`/admin/reviews/[reviewCaseId]` resolves its attempt on the server. Stage 1 renders
+the three pinned task/response/rubric/evidence/justification sets and requires nine
+independent criterion scores. AI votes are absent from its HTML and RSC payload.
+Saving the independent baseline unlocks Stage 2, with owner/Judge 1/Judge 2 comparisons,
+versions and exact criterion agreement flags. Final owner scores start from the
+independent scores. A nonblank written rationale is mandatory. Finalization uses
+Step 8A's immutable audit and 100-point scoring transaction; completed reviews are
+read-only. Every Server Action repeats authorization and server-side validation.
+
+Finalized candidate attempts show their deterministic subtotal, written score,
+total and outcome on `/capstone/[attemptId]`, `/dashboard` and `/capstone`.
+G1–G6 practice guidance describes transferable skills, with filtered practice links;
+it does not reveal item answers or judge/owner rationales. Non-passing attempts show
+the pinned cooldown end, and `/capstone` enforces the full retake policy. This step
+does not issue credentials or add verification, appeals or opportunities features.
+No schema migration or seed changes are required.
+
+Verification (replace the URL with your disposable local `raterready_test*` database):
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev
+```
+
+Playwright uses an isolated development server at port 3100. Its setup applies the
+existing migrations and synthetic test seed only to the validated local test database.
+The adjudication browser tests cover both passing and non-passing finalizations,
+server-chosen stages, rationale errors, payload isolation, role denial, keyboard
+submission, WCAG 2.2 AA checks and 320px/200% reflow. To run only those tests, append
+`-- tests/browser/reviews.spec.ts` to `npm run test:browser`.
+
+For manual preview at `http://localhost:3000`, use the configured synthetic account
+passwords from your own environment:
+
+1. Sign in as `admin-michael`; open Marcus's submitted capstone from the pending queue.
+   If no submitted attempt exists, sign in as `demo-marcus`, complete the existing
+   practice/readiness flow and submit a capstone first.
+2. Confirm Stage 1 has three written prompts, labeled simulated A/B outputs and
+   frozen rubrics, with no judge vote cards. Changing `?stage=ADJUDICATION` must not unlock them.
+3. Score alignment (0–2), evidence/reasoning (0–2) and clarity (0–1) for each prompt.
+   Save independent scores; reload and confirm Stage 2 remains unlocked.
+4. Compare the independent baseline with both judge votes and their versions. Adjust
+   final scores if warranted. Try a blank rationale, then whitespace; neither may finalize.
+5. Write a rubric-grounded rationale and finalize. Confirm the read-only review and
+   its entry in finalized history; there should be no duplicate pending entry.
+6. Sign out, sign in as `demo-marcus`, and check the dashboard result link, finalized
+   score breakdown, outcome and all six practice links. For a non-pass, inspect the
+   cooldown on `/capstone`. Visiting the saved admin review URL must return 403.
+
+## Step 9A: credential issuance, consent and lifecycle
+
+A reviewed, finalized synthetic Generalist capstone pass (85.00 or higher) now
+issues one private credential in the same transaction as finalization. `attemptId`
+is the unique issuance idempotency key; retries preserve the original UUIDv4 code,
+issue date, sharing preference and lifecycle status. The credential's immutable
+attempt links bind blueprint and scoring-policy versions; issuance audit metadata
+also snapshots those versions and G1–G6 coverage. Other assessment modes, pending
+reviews and scores below 85 cannot issue a credential.
+
+Dashboard and finalized-result credential cards display the evidence disclosures
+and a preview of the metadata before sharing. The candidate explicitly enables or
+disables public verification, with ownership checks and an immutable audit event
+for every actual transition. Private records remain visible after withdrawal,
+suspension or revocation. Public verification never publishes candidate names,
+internal IDs, answers, scores, model votes or private review/lifecycle reasons.
+
+`/verify/[credentialCode]` is unauthenticated, dynamically evaluated and marked
+`no-store`. An active, consented credential displays its public code, issue date,
+covered internal competencies, and blueprint/scoring-policy versions. Unknown,
+private, suspended and revoked codes all render the identical generic unavailable
+state with HTTP 200. Both public verification and private credential cards show
+**DEMO - SYNTHETIC / PRELIMINARY PILOT CREDENTIAL**, the internal G1–G6 disclosure,
+and the limits of RaterReady's own unproctored browser-based assessment.
+
+The `/admin` issued-credential inventory supports suspension, revocation and
+reinstatement with a mandatory nonblank written reason. Each transition and reason
+are appended atomically to `AuditEvent`. Reinstatement respects the candidate's
+current sharing consent and preserves historical lifecycle timestamps. No appeals
+or curated opportunity UI is included.
+
+No schema migration or seed-data change is required. Existing reviewed passes
+from before Step 9A can be reconciled using the trusted operator command below;
+it requires the active synthetic owner and never changes an existing credential:
+
+```sh
+npm run credentials:reconcile
+```
+
+Verify using the existing local database/browser instructions above. Credential
+coverage is included in Vitest and the `reviews.spec.ts` browser scenarios,
+including opt-in/out, anonymous verification, privacy disclosures, equivalent
+unavailable states, lifecycle reasons/audits, keyboard submission and WCAG checks.
+
+Manual browser verification at `http://127.0.0.1:3000`:
+
+1. Finalize Marcus's pending capstone as `admin-michael` using the two-stage review
+   flow. A result of at least 85 earns one private credential. For an earlier reviewed
+   pass, run `npm run credentials:reconcile` once instead of rescoring.
+2. Sign in as `demo-marcus`. Check **Your earned credentials** on the dashboard and
+   finalized result; confirm the pilot disclosures, UUID code, versions and disabled sharing.
+3. Open `/verify/CREDENTIAL_CODE` in a logged-out window. It must show the same
+   unavailable page as an unknown code and contain no candidate details.
+4. Enable public verification as Marcus and reload the logged-out window. Check
+   active status, metadata and disclosures. Disable sharing and reload again;
+   the generic unavailable page must return while the private record remains.
+5. Enable sharing, then sign in as `admin-michael` in another browser context. Under
+   **Issued credentials**, choose **Suspend**, supply a written reason and save.
+   Public verification must become unavailable. Choose **Active / Reinstate** with
+   a reason; it becomes available again only while Marcus's consent remains enabled.
+6. Repeat with **Revoke**. Confirm blank/whitespace reasons are rejected. Withdraw
+   sharing as Marcus while restricted, then reinstate; public verification must
+   remain unavailable until Marcus explicitly opts in again.
