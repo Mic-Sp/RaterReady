@@ -9,6 +9,7 @@ import { capstoneBlueprint, capstoneScenarios } from "./capstone-fixtures";
 import { getCapstoneReadiness, resumeCapstoneAttempt, startCapstoneAttempt } from "../src/server/capstone/service";
 import { getCapstoneSnapshot, loadCapstoneWorkspace, saveCapstoneDraft, submitCapstoneAttempt } from "../src/server/capstone/workspace";
 import { processWrittenGrading } from "../src/server/ai/written-grading";
+import { finalizeOwnerReview, inspectIndependentReview, inspectUnlockedReview, savePreliminaryReview } from "../src/server/review/service";
 import type { GradingRuntime } from "../src/server/ai/judges";
 import type { WrittenInput } from "../src/server/ai/written-contract";
 import type { CapstoneDraftResponse } from "../src/lib/capstone-responses";
@@ -22,6 +23,8 @@ import { authorizeSession } from "../src/server/auth/guards";
 import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
 
 vi.mock("server-only", () => ({}));
+const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn() }));
+vi.mock("../src/lib/auth", () => ({ requireAdmin: reviewAuth.requireAdmin }));
 
 // Database tests are opt-in and refuse non-local or non-test database URLs.
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -55,6 +58,10 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     });
     prisma = new PrismaClient({ datasourceUrl: testUrl });
     await seedSyntheticData(prisma, testPasswords);
+    reviewAuth.requireAdmin.mockImplementation(async () => {
+      const owner = await prisma.user.findUniqueOrThrow({ where: { accountCode: "admin-michael" } });
+      return authorizeSession(prisma, { user: { id: owner.id, sessionVersion: owner.sessionVersion }, expires: new Date(Date.now() + 60000).toISOString() }, "ADMIN_REVIEWER");
+    });
     const blueprint = await prisma.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 1 } } });
     capstoneBlueprintId = blueprint.id;
     scoringPolicyId = blueprint.scoringPolicyId;
@@ -872,5 +879,132 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(first).not.toContain("rationale"); expect(before).toHaveLength(6);
     expect(await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } })).toEqual(before);
     expect(await prisma.aiGradingJob.count({ where: { response: { attemptId: attempt } } })).toBe(6);
+  });
+
+  /** Test-only criterion fixture; final totals are always computed by the production adjudication service. */
+  async function ownerScores(attempt: string, maximum = true) {
+    const independent = await inspectIndependentReview(prisma, attempt);
+    return { responses: independent.prompts.map((prompt) => ({ responseId: prompt.responseId,
+      alignment: maximum ? 2 : 0, evidence: maximum ? 2 : 0, clarity: maximum ? 1 : 0 })) };
+  }
+
+  it("withholds all AI outputs until all independent owner criteria are durably saved, then unlocks frozen votes", async () => {
+    const { attempt } = await submittedForGrading();
+    await processWrittenGrading(prisma, attempt);
+    const initial = await inspectIndependentReview(prisma, attempt);
+    expect(initial).toMatchObject({ stage: "PRELIMINARY", preliminarySavedAt: null, preliminaryScores: null });
+    expect(initial.prompts).toHaveLength(3);
+    expect(initial.prompts.every((p) => p.scenario.prompt && p.scenario.responseA && p.scenario.responseB
+      && p.scenario.rubric.criteriaJson && p.writtenJustification && p.writtenPrompt)).toBe(true);
+    for (const hidden of ["triggerReason", "gradingReasons", "agreement", "modelVersion", "rationale", "rawVoteJson", "answerKeyJson", "allowedAlternativesJson"])
+      expect(JSON.stringify(initial)).not.toContain(hidden);
+    const scores = await ownerScores(attempt);
+    await expect(inspectUnlockedReview(prisma, attempt)).rejects.toThrow(/preliminary/);
+    await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: independent final evaluation." })).rejects.toThrow(/preliminary/);
+    await expect(savePreliminaryReview(prisma, attempt, { responses: scores.responses.slice(0, 2) })).rejects.toThrow();
+    const [saved, retry] = await Promise.all([savePreliminaryReview(prisma, attempt, scores), savePreliminaryReview(prisma, attempt, scores)]);
+    expect(retry).toEqual(saved);
+    const unlocked = await inspectUnlockedReview(prisma, attempt);
+    expect(unlocked.stage).toBe("ADJUDICATION");
+    expect(unlocked.gradingReasons).toContain("ALPHA_SIGN_OFF");
+    expect(unlocked.votes).toHaveLength(3);
+    expect(unlocked.votes.every((v) => v.agreement === true && v.judges.length === 2
+      && v.judges.every((j) => j.status === "SUCCEEDED" && j.vote?.rationale && "modelVersion" in j && "promptVersion" in j))).toBe(true);
+    expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt } })).toMatchObject({ status: "PENDING_REVIEW", finalScore: null, passed: null });
+    expect(JSON.stringify(await inspectIndependentReview(prisma, attempt))).not.toContain("agreement");
+    await expect(savePreliminaryReview(prisma, attempt, await ownerScores(attempt, false))).rejects.toThrow(/immutable/);
+  });
+
+  it("rejects premature/invalid finalization and keeps unresolved attempts ineligible for credentials", async () => {
+    const { attempt } = await submittedForGrading();
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    for (const rationale of ["", "  ", "\n\t"]) await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale })).rejects.toThrow();
+    await expect(finalizeOwnerReview(prisma, attempt, { scores })).rejects.toThrow();
+    await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: pending jobs." })).rejects.toThrow(/settle/);
+    await processWrittenGrading(prisma, attempt);
+    const foreign = structuredClone(scores); foreign.responses[0].responseId = "a-different-attempt-response";
+    await expect(finalizeOwnerReview(prisma, attempt, { scores: foreign, rationale: "DEMO - SYNTHETIC: invalid assignment." })).rejects.toThrow(/designated/);
+    await expect(prisma.credential.create({ data: { attemptId: attempt, track: "GENERALIST", competencies: ["G1"] } })).rejects.toThrow(/resolved owner review/);
+    expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt } })).toMatchObject({ status: "PENDING_REVIEW", writtenScore: null, finalScore: null, passed: null, finalizedAt: null });
+    const review = await prisma.reviewCase.findUniqueOrThrow({ where: { attemptId: attempt } });
+    expect(await prisma.auditEvent.count({ where: { targetId: review.id, action: "OWNER_REVIEW_FINALIZED" } })).toBe(0);
+  });
+
+  it("atomically finalizes 100 points with immutable preliminary/final snapshots and unchanged original AI votes", async () => {
+    const { attempt } = await submittedForGrading();
+    await processWrittenGrading(prisma, attempt);
+    const preliminary = await ownerScores(attempt, false);
+    const scores = await ownerScores(attempt);
+    const rationale = "DEMO - SYNTHETIC: The owner independently reviewed all three frozen rubrics and response evidence; the final criteria reflect the adjudicated reasoning.";
+    await savePreliminaryReview(prisma, attempt, preliminary);
+    const receipts = await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } });
+    const jobs = await prisma.aiGradingJob.findMany({ where: { response: { attemptId: attempt } }, orderBy: { id: "asc" } });
+    const [final, duplicate] = await Promise.all([finalizeOwnerReview(prisma, attempt, { scores, rationale }), finalizeOwnerReview(prisma, attempt, { scores, rationale })]);
+    expect(final).toEqual({ deterministicScore: 95, writtenScore: 5, finalScore: 100, passed: true });
+    expect(duplicate).toEqual(final);
+    const persisted = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt }, include: { reviewCase: true } });
+    expect(persisted.status).toBe("FINALIZED"); expect(persisted.finalScore?.toNumber()).toBe(100); expect(persisted.passed).toBe(true);
+    expect(persisted.finalizedAt).not.toBeNull(); expect(persisted.reviewCase?.status).toBe("FINALIZED");
+    const audit = await prisma.auditEvent.findMany({ where: { targetId: persisted.reviewCase!.id }, orderBy: { createdAt: "asc" } });
+    expect(audit.map((e) => e.action)).toEqual(["OWNER_PRELIMINARY_SAVED", "OWNER_REVIEW_FINALIZED"]);
+    expect(audit[0].metadataJson).toMatchObject({ scores: { responses: expect.arrayContaining(preliminary.responses) } });
+    expect(audit[1].metadataJson).toMatchObject({ preliminaryScores: { responses: expect.arrayContaining(preliminary.responses) },
+      finalScores: { responses: expect.arrayContaining(scores.responses) }, rationale, finalScore: 100, passed: true, receiptIds: receipts.map((r) => r.id).sort() });
+    await expect(prisma.auditEvent.update({ where: { id: audit[0].id }, data: { metadataJson: {} } })).rejects.toThrow(/append-only/);
+    await expect(prisma.auditEvent.delete({ where: { id: audit[1].id } })).rejects.toThrow(/append-only/);
+    await expect(finalizeOwnerReview(prisma, attempt, { scores: preliminary, rationale })).rejects.toThrow(/immutable/);
+    await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale: "Replacement" })).rejects.toThrow(/immutable/);
+    await expect(savePreliminaryReview(prisma, attempt, scores)).rejects.toThrow(/immutable/);
+    expect(await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } })).toEqual(receipts);
+    expect(await prisma.aiGradingJob.findMany({ where: { response: { attemptId: attempt } }, orderBy: { id: "asc" } })).toEqual(jobs);
+  });
+
+  it.each([[79, 84, false], [80, 85, true]])("enforces finalized 85%% policy for the trusted %s-point subtotal fixture", async (subtotal, total, passed) => {
+    const id = await capstoneCandidate();
+    const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    const responses = await completedCapstoneResponses(attempt);
+    await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses });
+    // Test-only DB fixture pins golden boundary subtotals at submission. No service accepts a client-supplied score.
+    await prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "PENDING_REVIEW", submittedAt: new Date(),
+      submissionKey: `test-adjudication:${attempt}`, deterministicScore: subtotal } });
+    await processWrittenGrading(prisma, attempt);
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    expect(await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: golden scoring boundary owner review." }))
+      .toEqual({ deterministicScore: subtotal, writtenScore: 5, finalScore: total, passed });
+    const finalized = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt } });
+    expect(finalized).toMatchObject({ status: "FINALIZED", passed }); expect(finalized.finalScore?.toNumber()).toBe(total);
+    await expect(prisma.assessmentAttempt.update({ where: { id: attempt }, data: { passed: !passed } })).rejects.toThrow(/attempt_finalized_result/);
+    if (!passed) await expect(prisma.credential.create({ data: { attemptId: attempt, track: "GENERALIST", competencies: ["G1"] } })).rejects.toThrow(/passing capstone/);
+  });
+
+  it("permits explicit human resolution of failed judge calls without assigning automatic failure points", async () => {
+    const runtime = testGradingRuntime("schema");
+    const { attempt } = await submittedForGrading(runtime);
+    await processWrittenGrading(prisma, attempt, runtime);
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    const view = await inspectUnlockedReview(prisma, attempt);
+    expect(view.votes.every((v) => v.agreement === null && v.judges.every((j) => j.vote === null && j.status === "INVALID_OUTPUT"))).toBe(true);
+    expect(await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: owner resolved failed automated grading directly against the frozen criteria." }))
+      .toMatchObject({ writtenScore: 5, finalScore: 100, passed: true });
+  });
+
+  it("denies real candidate sessions from every admin review helper before exposing or mutating review records", async () => {
+    const { attempt } = await submittedForGrading();
+    const scores = await ownerScores(attempt);
+    const guard = reviewAuth.requireAdmin.getMockImplementation()!;
+    const candidate = await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } });
+    reviewAuth.requireAdmin.mockImplementation(() => authorizeSession(prisma, {
+      user: { id: candidate.id, sessionVersion: candidate.sessionVersion }, expires: new Date(Date.now() + 60000).toISOString(),
+    }, "ADMIN_REVIEWER"));
+    try {
+      await expect(inspectIndependentReview(prisma, attempt)).rejects.toMatchObject({ status: 403 });
+      await expect(inspectUnlockedReview(prisma, attempt)).rejects.toMatchObject({ status: 403 });
+      await expect(savePreliminaryReview(prisma, attempt, scores)).rejects.toMatchObject({ status: 403 });
+      await expect(finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: forbidden." })).rejects.toMatchObject({ status: 403 });
+    } finally { reviewAuth.requireAdmin.mockImplementation(guard); }
+    expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ ownerId: null, ownerPreliminaryJson: null, status: "PENDING" });
   });
 });
