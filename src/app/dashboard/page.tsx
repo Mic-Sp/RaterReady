@@ -6,6 +6,7 @@ import { getLearningSnapshot } from "../../server/learning/service";
 import { LearningDashboard } from "./learning-dashboard";
 import { getCapstoneReadiness } from "../../server/capstone/service";
 import { listCandidateCredentials } from "../../server/credentials/service";
+import { getCandidateOpportunities } from "../../server/opportunities/service";
 
 export const metadata: Metadata = { title: "Candidate dashboard | RaterReady" };
 
@@ -17,5 +18,6 @@ export default async function CandidateDashboardPage({ searchParams }: { searchP
   const { notice } = await searchParams;
   const readiness = await getCapstoneReadiness(prisma, user.id);
   const credentials = await listCandidateCredentials(prisma);
-  return <LearningDashboard user={user} profile={profile} notice={notice} readiness={readiness} credentials={credentials} />;
+  const opportunities = await getCandidateOpportunities(prisma, false);
+  return <LearningDashboard user={user} profile={profile} notice={notice} readiness={readiness} credentials={credentials} opportunities={opportunities} />;
 }

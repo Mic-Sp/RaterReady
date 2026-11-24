@@ -18,6 +18,9 @@ import type { CapstoneDraftResponse } from "../src/lib/capstone-responses";
 import { loadPracticeScenario, submitPracticeEvaluation } from "../src/server/practice/service";
 import { listPracticeScenarios, loadPracticeWorkspace, saveOrSubmitPractice } from "../src/server/practice/workspace";
 import { seedSyntheticData } from "./seed-data";
+import { curatedOpportunityFixtures } from "./opportunity-fixtures";
+import { submitGradingAppeal, resolveGradingAppeal, inspectAdminAppeal, listAdminAppeals } from "../src/server/appeals/service";
+import { getCandidateOpportunities, listAdminOpportunities, updateOpportunityListing } from "../src/server/opportunities/service";
 import { testPasswords } from "./test-helpers";
 import { verifyPassword } from "../src/server/auth/passwords";
 import { authenticateCredentials, findActiveSessionUser } from "../src/server/auth/accounts";
@@ -85,6 +88,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
   afterAll(async () => {
     if (!prisma) return;
     for (const id of capstoneCandidateIds) {
+      await prisma.assessmentAppeal.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.credential.deleteMany({ where: { attempt: { candidateId: id } } });
       await prisma.aiGradingJob.deleteMany({ where: { response: { attempt: { candidateId: id } } } });
       await prisma.reviewCase.deleteMany({ where: { attempt: { candidateId: id } } });
@@ -128,7 +132,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await prisma.scenario.findMany({ orderBy: { id: "asc" } })).toEqual(scenariosBefore);
     expect(await prisma.rubric.count()).toBe(4);
     expect(await prisma.scenarioFamily.count()).toBe(practiceScenarios.length + expandedPracticeScenarios.length + technicalPreviewScenarios.length + capstoneScenarios.length);
-    expect(await prisma.opportunityListing.count()).toBe(2);
+    expect(await prisma.opportunityListing.count()).toBe(2 + curatedOpportunityFixtures.length);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-synthetic-seed-v1" } })).toBe(1);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-practice-seed-v2" } })).toBe(1);
     expect(await prisma.opportunityListing.findMany()).toEqual(expect.arrayContaining([
@@ -1114,5 +1118,94 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     reviewAuth.requireCandidate.mockResolvedValue({ id: candidateId, role: "CANDIDATE" });
     expect((await listCandidateCredentials(prisma)).some((c) => c.credentialCode === code)).toBe(false);
     await expect(setCredentialSharing(prisma, code, false)).rejects.toMatchObject({ status: 403 });
+  });
+
+  /** Trusted local golden fixture pins an original 84-point result; production appeal actions never accept a total. */
+  async function finalizedAppealFixture() {
+    const id = await capstoneCandidate();
+    const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
+    await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses: await completedCapstoneResponses(attempt) });
+    await prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "PENDING_REVIEW", submittedAt: new Date(),
+      submissionKey: `appeal-fixture:${attempt}`, deterministicScore: 79 } });
+    await processWrittenGrading(prisma, attempt);
+    const written = await ownerScores(attempt); await savePreliminaryReview(prisma, attempt, written);
+    await finalizeOwnerReview(prisma, attempt, { scores: written, rationale: "DEMO - SYNTHETIC: original finalized appeal fixture." });
+    reviewAuth.requireCandidate.mockResolvedValue({ id, role: "CANDIDATE" });
+    return { id, attempt, written };
+  }
+
+  it("prevents duplicate open appeals, upholds a grade, then audits an 85-point revision without replacing original grading", async () => {
+    const { id, attempt, written } = await finalizedAppealFixture();
+    const base = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt }, include: { reviewCase: true } });
+    const votes = await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } });
+    expect((await getCandidateOpportunities(prisma)).unlocked).toBe(false);
+    const input = { reason: "FACTUAL_VERIFICATION", evidenceNote: "DEMO - SYNTHETIC: Please compare the evidence category to the supplied source." };
+    const [first, duplicate] = await Promise.all([submitGradingAppeal(prisma, attempt, input), submitGradingAppeal(prisma, attempt, input)]);
+    expect(duplicate.reference).toBe(first.reference); expect(first.status).toBe("OPEN");
+    expect(await prisma.assessmentAppeal.count({ where: { attemptId: attempt, status: "OPEN" } })).toBe(1);
+    expect((await listAdminAppeals(prisma)).pending.some((a) => a.reference === first.reference)).toBe(true);
+    expect((await inspectAdminAppeal(prisma, first.reference)).currentResult.finalScore).toBe(84);
+    await expect(resolveGradingAppeal(prisma, first.reference, { disposition: "UPHELD", rationale: "  " })).rejects.toThrow();
+    await resolveGradingAppeal(prisma, first.reference, { disposition: "UPHELD", rationale: "DEMO - SYNTHETIC: source review supports the current grade." });
+    expect((await loadCapstoneWorkspace(prisma, id, attempt)).snapshot.result?.finalScore).toBe(84);
+    expect(await prisma.credential.count({ where: { attemptId: attempt } })).toBe(0);
+    await expect(resolveGradingAppeal(prisma, first.reference, { disposition: "UPHELD", rationale: "Replacement" })).rejects.toThrow(/already resolved/);
+    const next = await submitGradingAppeal(prisma, attempt, input);
+    await resolveGradingAppeal(prisma, next.reference, { disposition: "ADJUSTED", rationale: "DEMO - SYNTHETIC: corrected evidence category earns one additional point.",
+      adjustment: { judgment: 40, rubric: 30, verification: 10, written } });
+    const current = await loadCapstoneWorkspace(prisma, id, attempt);
+    expect(current.snapshot.result).toMatchObject({ finalScore: 85, passed: true, originalFinalScore: 84 });
+    expect(current.snapshot.result?.appeals).toEqual(expect.arrayContaining([expect.objectContaining({ reference: next.reference, status: "RESOLVED", disposition: "ADJUSTED" })]));
+    expect((await getCapstoneReadiness(prisma, id)).kind).toBe("ALREADY_PASSED");
+    expect((await getCandidateOpportunities(prisma)).unlocked).toBe(true);
+    const credential = await prisma.credential.findUniqueOrThrow({ where: { attemptId: attempt } });
+    expect(credential).toMatchObject({ status: "ACTIVE", publicShareEnabled: false });
+    expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt }, include: { reviewCase: true } })).toEqual(base);
+    expect(await prisma.aiGradingReceipt.findMany({ where: { attemptId: attempt }, orderBy: { id: "asc" } })).toEqual(votes);
+    const appealRecord = await prisma.assessmentAppeal.findUniqueOrThrow({ where: { publicReference: next.reference } });
+    await expect(prisma.assessmentAppeal.update({ where: { id: appealRecord.id }, data: { dispositionRationale: "Replacement" } })).rejects.toThrow(/immutable/);
+    const events = await prisma.auditEvent.findMany({ where: { targetId: appealRecord.id } });
+    expect(events.map((e) => e.action).sort()).toEqual(["GRADING_APPEAL_RESOLVED", "GRADING_APPEAL_SUBMITTED"]);
+    await expect(prisma.auditEvent.delete({ where: { id: events[0].id } })).rejects.toThrow(/append-only/);
+    expect((await listAdminAppeals(prisma)).resolved.some((a) => a.reference === next.reference)).toBe(true);
+    await setCredentialSharing(prisma, credential.publicSlug, true);
+    expect(await getPublicCredential(prisma, credential.publicSlug)).not.toBeNull();
+    await changeCredentialStatus(prisma, credential.publicSlug, { status: "SUSPENDED", reason: "DEMO - SYNTHETIC: gate restriction check." });
+    expect((await getCandidateOpportunities(prisma)).unlocked).toBe(false);
+    await changeCredentialStatus(prisma, credential.publicSlug, { status: "ACTIVE", reason: "DEMO - SYNTHETIC: gate reinstatement check." });
+    expect((await getCandidateOpportunities(prisma)).unlocked).toBe(true);
+    const downward = await submitGradingAppeal(prisma, attempt, input);
+    await resolveGradingAppeal(prisma, downward.reference, { disposition: "ADJUSTED", rationale: "DEMO - SYNTHETIC: further evidence revises the points below threshold.",
+      adjustment: { judgment: 40, rubric: 30, verification: 5, written } });
+    expect((await loadCapstoneWorkspace(prisma, id, attempt)).snapshot.result).toMatchObject({ finalScore: 80, passed: false });
+    expect((await getCandidateOpportunities(prisma)).unlocked).toBe(false);
+    expect(await getPublicCredential(prisma, credential.publicSlug)).toBeNull();
+    await setCredentialSharing(prisma, credential.publicSlug, false);
+    expect(await prisma.credential.findUnique({ where: { id: credential.id } })).toMatchObject({ status: "SUSPENDED", publicShareEnabled: false });
+    reviewAuth.requireCandidate.mockResolvedValue({ id: candidateId, role: "CANDIDATE" });
+    await expect(submitGradingAppeal(prisma, attempt, input)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("keeps opportunity source/referral disclosures and owner curation intact across seeds, with immutable audit events", async () => {
+    const listings = await listAdminOpportunities(prisma);
+    expect(listings).toHaveLength(4);
+    for (const listing of listings) {
+      expect(listing.sourceLabel).not.toBe(""); expect(listing.sourceUrl).toMatch(/^https:/); expect(listing.eligibilityNote).not.toBe("");
+      expect(listing.disclosure).toContain("NO_FORMAL_PARTNERSHIP");
+    }
+    const referral = listings.find((l) => l.linkType === "PERSONAL_REFERRAL")!;
+    expect(referral.referralPermissionNote).toContain("simulated"); expect(referral.referralDisclosure).toContain("No real referrer");
+    const current = await prisma.opportunityListing.findUniqueOrThrow({ where: { code: referral.code } });
+    try {
+      await updateOpportunityListing(prisma, referral.code, { active: false, verificationDate: "2026-11-22" });
+      await seedSyntheticData(prisma, testPasswords);
+      expect(await prisma.opportunityListing.findUnique({ where: { code: referral.code } })).toMatchObject({ active: false, lastVerifiedAt: new Date("2026-11-22T00:00:00.000Z") });
+      const audits = await prisma.auditEvent.findMany({ where: { targetId: current.id, action: "OPPORTUNITY_CURATION_CHANGED" } });
+      expect(audits.length).toBeGreaterThan(0);
+      await expect(prisma.auditEvent.update({ where: { id: audits[0].id }, data: { metadataJson: {} } })).rejects.toThrow(/append-only/);
+      await expect(updateOpportunityListing(prisma, referral.code, { active: true, verificationDate: "2099-01-01" })).rejects.toThrow(/future/);
+    } finally {
+      await updateOpportunityListing(prisma, referral.code, { active: current.active, verificationDate: current.lastVerifiedAt.toISOString().slice(0, 10) });
+    }
   });
 });

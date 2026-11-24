@@ -5,6 +5,8 @@ import { z } from "zod";
 import { calculateCapstoneDeadline, capstoneCooldownUntil, decideCapstoneReadiness, isCapstoneExpired, type CapstoneReadinessKind } from "../domain/capstone-timer";
 import { capstoneDatabaseNow as databaseNow, lockCapstoneCandidate } from "./clock";
 import type { FinalizedCapstoneResult } from "../../lib/capstone-results";
+import { appealSelect, appealOrder } from "../appeals/projection";
+import { effectiveResult } from "../domain/effective-result";
 
 const competencies: Competency[] = ["G1", "G2", "G3", "G4", "G5", "G6"];
 const blueprintCode = "demo-generalist-capstone";
@@ -21,6 +23,7 @@ type Blueprint = Prisma.CapstoneBlueprintGetPayload<{ select: typeof blueprintSe
 const attemptSelect = { id: true, status: true, startedAt: true, expiresAt: true, expiredAt: true, appliedTimeMultiplier: true,
   independentWorkAcknowledgedAt: true, independentWorkPolicyVersion: true, capstoneBlueprintId: true, scoringPolicyId: true, finalizedAt: true, passed: true,
   deterministicScore: true, writtenScore: true, finalScore: true,
+  appeals: { select: appealSelect, orderBy: [...appealOrder] },
   capstoneBlueprint: { select: { retakeCooldownHours: true } } } as const satisfies Prisma.AssessmentAttemptSelect;
 type Attempt = Prisma.AssessmentAttemptGetPayload<{ select: typeof attemptSelect }>;
 
@@ -82,7 +85,11 @@ async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string
   const expiring = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST", capstoneBlueprintId: { not: null }, status: "IN_PROGRESS", expiresAt: { lte: now } }, select: { id: true } });
   await tx.assessmentAttempt.updateMany({ where: { candidateId, mode: "CAPSTONE", status: "IN_PROGRESS", expiresAt: { lte: now } }, data: { status: "EXPIRED", expiredAt: now } });
   for (const attempt of expiring) await enqueueWrittenGrading(tx, attempt.id);
-  const attempts = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST" }, orderBy: { startedAt: "desc" }, select: attemptSelect });
+  const records = await tx.assessmentAttempt.findMany({ where: { candidateId, mode: "CAPSTONE", track: "GENERALIST" }, orderBy: { startedAt: "desc" }, select: attemptSelect });
+  // All readiness/pass/cooldown decisions use resolved revisions; the original stored grade remains immutable evidence.
+  const attempts = records.map((a) => { const result = effectiveResult(a); return a.status === "FINALIZED" ? { ...a,
+    deterministicScore: result.deterministicScore === null ? null : new Prisma.Decimal(result.deterministicScore),
+    writtenScore: result.writtenScore === null ? null : new Prisma.Decimal(result.writtenScore), finalScore: result.finalScore === null ? null : new Prisma.Decimal(result.finalScore), passed: result.passed } : a; });
   const active = attempts.find((a) => a.status === "IN_PROGRESS" && a.expiresAt && !isCapstoneExpired(a.expiresAt, now));
   const blueprint = active?.capstoneBlueprintId
     ? await tx.capstoneBlueprint.findUnique({ where: { id: active.capstoneBlueprintId }, select: blueprintSelect })

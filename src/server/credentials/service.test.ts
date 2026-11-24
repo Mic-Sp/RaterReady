@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { changeCredentialStatus, getPublicCredential, listAdminCredentials, listCandidateCredentials, setCredentialSharing } from "./service";
 
@@ -11,14 +11,15 @@ describe("credential service privacy and RBAC", () => {
   it("never selects candidate names, primary keys or review details for public verification", async () => {
     const code = randomUUID();
     const findFirst = vi.fn().mockResolvedValue({ publicSlug: code, issuedAt: new Date("2026-11-23T12:00:00Z"), track: "GENERALIST", competencies: ["G1", "G2", "G3", "G4", "G5", "G6"],
-      attempt: { capstoneBlueprint: { version: 1 }, scoringPolicy: { version: 2 } } });
+      attempt: { capstoneBlueprint: { version: 1 }, scoringPolicy: { version: 2 }, appeals: [], deterministicScore: new Prisma.Decimal(80), writtenScore: new Prisma.Decimal(5), finalScore: new Prisma.Decimal(85) } });
     const db = { credential: { findFirst } } as unknown as PrismaClient;
     const view = await getPublicCredential(db, code);
     expect(view).toMatchObject({ credentialCode: code, status: "ACTIVE", blueprintVersion: 1, scoringPolicyVersion: 2 });
     const select = JSON.stringify(findFirst.mock.calls[0][0].select);
-    for (const secret of ["candidate", "name", '"id"', "finalScore", "rationale", "rawVoteJson"]) expect(select).not.toContain(secret);
+    for (const secret of ["candidate", "name", '"id":true', "rationale", "rawVoteJson"]) expect(select).not.toContain(secret);
+    expect(JSON.stringify(view)).not.toContain("finalScore");
     expect(findFirst.mock.calls[0][0].where).toMatchObject({ status: "ACTIVE", publicShareEnabled: true,
-      attempt: { status: "FINALIZED", mode: "CAPSTONE", track: "GENERALIST", passed: true, finalScore: { gte: 85 } } });
+      attempt: { status: "FINALIZED", mode: "CAPSTONE", track: "GENERALIST" } });
     expect(mocks.candidate).not.toHaveBeenCalled(); expect(mocks.admin).not.toHaveBeenCalled();
   });
   it("uses the same null result for malformed, unknown and restricted codes", async () => {

@@ -16,6 +16,7 @@ vi.mock("../lib/prisma", () => ({ prisma: {} }));
 vi.mock("../server/learning/service", () => ({ getLearningSnapshot: async () => ({ onboardingCompletedAt: new Date() }) }));
 vi.mock("../server/capstone/service", () => ({ getCapstoneReadiness: async () => ({ latestFinalized: null }) }));
 vi.mock("../server/credentials/service", () => ({ listCandidateCredentials: async () => [], listAdminCredentials: async () => [] }));
+vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: async () => ({ unlocked: false, listings: [] }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
 

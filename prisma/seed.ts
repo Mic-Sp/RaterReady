@@ -6,6 +6,7 @@ import { practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios } from "./practice-fixtures";
 import { technicalPreviewScenarios } from "./technical-fixtures";
 import { capstoneScenarios } from "./capstone-fixtures";
+import { curatedOpportunityFixtures } from "./opportunity-fixtures";
 
 /**
  * Prisma CLI entry point. Validates only database configuration (no auth secret or AI
@@ -17,7 +18,7 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
   try {
     await seedSyntheticData(prisma, passwords);
-    console.info(`DEMO - SYNTHETIC: seed complete (3 accounts, ${practiceScenarios.length + expandedPracticeScenarios.length} Generalist practice scenarios, ${technicalPreviewScenarios.length} non-credentialing Technical Preview scenarios, ${capstoneScenarios.length} isolated capstone scenarios, 1 capstone blueprint, 2 public information listings).`);
+    console.info(`DEMO - SYNTHETIC: seed complete (3 accounts, ${practiceScenarios.length + expandedPracticeScenarios.length} Generalist practice scenarios, ${technicalPreviewScenarios.length} non-credentialing Technical Preview scenarios, ${capstoneScenarios.length} isolated capstone scenarios, 1 capstone blueprint, ${2 + curatedOpportunityFixtures.length} curated opportunity listings).`);
   } finally {
     await prisma.$disconnect();
   }

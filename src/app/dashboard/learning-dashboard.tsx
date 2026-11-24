@@ -13,7 +13,7 @@ import type { CandidateCredential } from "../../lib/credential-content";
 import { CandidateCredentials } from "../components/candidate-credentials";
 
 /** Server-rendered learning progress uses independent persisted lesson rows, never diagnostic scores. */
-export function LearningDashboard({ user, profile, notice, readiness, credentials = [] }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string; readiness?: CapstoneReadiness; credentials?: CandidateCredential[] }) {
+export function LearningDashboard({ user, profile, notice, readiness, credentials = [], opportunities }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string; readiness?: CapstoneReadiness; credentials?: CandidateCredential[]; opportunities?: { unlocked: boolean } }) {
   const completed = profile.moduleProgress.filter((item) => item.level === profile.selectedLevel);
   const resume = nextLesson(profile.moduleProgress, profile.selectedLevel);
   const level = learningLevels.find((item) => item.code === profile.selectedLevel)!;
@@ -69,6 +69,10 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
       <Link href="/capstone" className="primary-button button-link">Check capstone readiness</Link>
     </section>
     <CandidateCredentials records={credentials} />
+    <section className="learning-section" aria-labelledby="opportunity-access-heading"><h2 id="opportunity-access-heading">Remote opportunity access</h2>
+      <p>{opportunities?.unlocked ? "Opportunity queue unlocked: a finalized passing capstone and active credential are recorded." : "Opportunity queue locked: a finalized Generalist score of at least 85 and an active credential from that attempt are required. Suspended or revoked credentials do not unlock the queue."}</p>
+      <Link href="/opportunities" className="inline-link">Check curated opportunity queue</Link>
+    </section>
     <section className="learning-section" aria-labelledby="optional-heading"><h2 id="optional-heading">Optional explorations</h2>
       <ul><li><Link href="/workflow-lab">Workflow Skills Lab</Link> · optional, unscored, never required for the Generalist credential</li>
         <li><Link href="/technical-preview">Technical Preview</Link> · non-credentialing</li></ul>

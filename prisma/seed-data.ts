@@ -5,6 +5,7 @@ import { hashPassword } from "../src/server/auth/passwords";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 import { seedCapstone } from "./seed-capstone";
+import { curatedOpportunityFixtures } from "./opportunity-fixtures";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
@@ -111,6 +112,15 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
         update: {},
       });
     }
+
+    for (const listing of curatedOpportunityFixtures) {
+      await tx.opportunityListing.upsert({ where: { code: listing.code }, update: {}, create: { ...listing,
+        partnershipStatus: "NO_FORMAL_PARTNERSHIP", disclosure: "NO_FORMAL_PARTNERSHIP — independently curated; no employer partnership, endorsement or preferential hiring is implied.",
+        isSyntheticFixture: true, demoLabel: DEMO_LABEL } });
+    }
+    await tx.auditEvent.createMany({ data: [{ eventKey: "stage-a-opportunities-v2", action: "SYNTHETIC_OPPORTUNITY_QUEUE_INSTALLED",
+      targetType: "SEED_VERSION", targetId: "stage-a-opportunities-v2", metadataJson: { demoLabel: DEMO_LABEL, additionalListingCount: curatedOpportunityFixtures.length,
+        referralPermission: "SIMULATED_FIXTURE_ONLY" } }], skipDuplicates: true });
 
     // ON CONFLICT DO NOTHING preserves append-only audit history, including across seed reruns.
     await tx.auditEvent.createMany({

@@ -1,0 +1,3 @@
+/** Neutral labels distinguish a public application from a simulated personal referral; no employer affiliation is implied. */
+export const opportunityLinkLabels = { PUBLIC_INFORMATION: "Public information", PUBLIC_APPLICATION: "Direct public application", CAREERS_PAGE: "Public careers page", PERSONAL_REFERRAL: "Personal referral (synthetic example)" } as const;
+export const opportunityIndependenceNotice = "NO_FORMAL_PARTNERSHIP — RaterReady independently curates these links. No employer partnership, endorsement, credential recognition or preferential hiring is implied. Acceptance, work, compensation and employment are not guaranteed.";

@@ -15,7 +15,7 @@ export function routeAccess(pathname: string): "public" | "authenticated" | "can
   }
   const inTree = (root: string) => path === root || path.startsWith(`${root}/`);
   if (inTree("/admin") || inTree("/api/admin")) return "admin";
-  if (["/dashboard", "/onboarding", "/diagnostic", "/learn", "/practice", "/workflow-lab", "/technical-preview", "/capstone"].some(inTree)) return "candidate";
+  if (["/dashboard", "/onboarding", "/diagnostic", "/learn", "/practice", "/workflow-lab", "/technical-preview", "/capstone", "/opportunities", "/appeals"].some(inTree)) return "candidate";
   if (path === "/" || path === "/login" || inTree("/verify") || inTree("/api/auth")) return "public";
   return "authenticated";
 }

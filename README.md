@@ -846,3 +846,85 @@ Manual browser verification at `http://127.0.0.1:3000`:
 6. Repeat with **Revoke**. Confirm blank/whitespace reasons are rejected. Withdraw
    sharing as Marcus while restricted, then reinstate; public verification must
    remain unavailable until Marcus explicitly opts in again.
+
+## Step 9B: grading appeals and gated opportunity curation
+
+Finalized candidate result views now include **Grading appeals** with a structured
+grading concern, evidence note, UUID reference, status and resolved disposition.
+The pilot target is three business days (Monday–Friday excluding weekends), with
+an explicit notice that holidays and owner availability may delay review. There
+is no guaranteed response date. A database partial unique index and parent-row
+lock prevent duplicate OPEN appeals. Submission evidence is immutable; its hash,
+reason and reference are recorded in the append-only audit without copying
+candidate prose into operational audit metadata.
+
+`/admin` lists pending and resolved appeals. `/admin/appeals/[reference]` shows the
+candidate evidence and current finalized result, with a link to the original
+rubric-first review. The owner can uphold the current grade or supply corrected
+40/30/25 category points and three 0–5 written criterion evaluations, plus a
+mandatory candidate-visible rationale. Resolved dispositions cannot be replaced.
+
+The original `AssessmentAttempt` score columns, original owner evaluations and AI
+receipts remain unchanged. `AssessmentAppeal` stores audited result revisions.
+`effectiveResult()` (and the equivalent database credential guard) reads the
+latest RESOLVED/ADJUSTED appeal as the current result. Readiness, candidate views,
+credential issuance, public verification and opportunity gates all use this rule;
+future result consumers must not infer current eligibility from raw historical
+`passed`/`finalScore` columns alone. A newly passing revision issues one private
+credential in the resolution transaction. A revision below 85 suspends an active
+credential with an audit event. Later passing revisions do not silently override
+existing credential lifecycle restrictions; the owner may reinstate separately.
+
+`/opportunities` and `/opportunities/referral-demo` require the candidate role and
+a finalized effective score >=85 with an ACTIVE credential on that same attempt.
+Private credential sharing is not required. Locked views never select listing
+URLs. Dashboard access cards explain missing passes or credential restrictions.
+
+The additive seed now contains four idempotent listings: the two original public
+information sources, a public application example attributed to the official
+[DataAnnotation Generalist role](https://www.dataannotation.tech/job-board/generalist),
+and a fictional personal-referral preview. The application/source was checked on
+2026-11-23. Referral permission, eligibility and benefits are explicitly simulated;
+there is no real personal referral token or live employer claim. The referral
+opens an internal gated preview rather than a fake external application. Every
+card shows organization, source, link type, last verification date, eligibility,
+limitations and `NO_FORMAL_PARTNERSHIP`/non-preferential-hiring disclosures.
+
+The owner can pause/reactivate listings or enter an actual verification date in
+`/admin`, with immutable change auditing. Future dates are rejected. Reseeding
+preserves owner edits and never advances verification dates automatically.
+
+Apply the additive migration and seed before preview (no reset is required):
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. Sign in as a candidate with a finalized attempt. Submit a concern/evidence note
+   from its result. Check the UUID reference, OPEN status, pilot target notice and
+   absence of a second submission form while it remains open.
+2. As `admin-michael`, open the pending appeal. Reject a blank disposition rationale,
+   then uphold the grade with a written explanation. As the candidate, reload and
+   confirm the resolved rationale and unchanged score.
+3. For the threshold test, use a finalized non-pass. Submit a new appeal and apply
+   an evidence-supported correction reaching >=85 through the category/criterion
+   controls. Confirm the revised result, original score disclosure and one private
+   credential, with no replacement of the original review.
+4. Check `/opportunities` before and after passing. Suspend/revoke the credential
+   and confirm the dashboard and guessed queue/referral routes remain locked.
+   Reinstate with an admin reason and confirm access returns for a passing result.
+5. Inspect every source, link type, last-verified date, eligibility and independence
+   disclosure. Open the synthetic referral preview and confirm its permission and
+   benefit disclosures explicitly describe simulation, not live referral access.
+6. In `/admin`, pause a listing and confirm it disappears from the queue. Change
+   its verification date after checking its source; confirm reseeding preserves the
+   curation. The integration suite verifies the append-only audit events.

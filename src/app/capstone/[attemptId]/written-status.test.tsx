@@ -6,6 +6,7 @@ import { CapstoneExam } from "./workspace";
 
 vi.mock("../workspace-actions", () => ({ autosaveCapstoneAction: vi.fn(), submitCapstoneExamAction: vi.fn(), syncCapstoneClockAction: vi.fn().mockResolvedValue(null) }));
 vi.mock("../../credentials/actions", () => ({ updateCredentialSharingAction: vi.fn() }));
+vi.mock("../../appeals/actions", () => ({ submitAppealAction: vi.fn() }));
 afterEach(cleanup);
 const initial: CapstoneWorkspace = { slots: [], snapshot: { id: "frozen-attempt", status: "PENDING_REVIEW", revision: 2,
   serverNow: "2026-11-21T12:30:00.000Z", startedAt: "2026-11-21T12:00:00.000Z", expiresAt: "2026-11-21T13:00:00.000Z", savedAt: "2026-11-21T12:29:00.000Z", submittedAt: "2026-11-21T12:30:00.000Z",
@@ -21,7 +22,7 @@ describe("candidate written grading status privacy and accessibility", () => {
     expect(screen.getByText(`${passed ? "Passed" : "Not yet passed"} · ${finalScore.toFixed(2)} / 100`)).toBeTruthy();
     expect(screen.getByText("5.00 / 5")).toBeTruthy();
     for (const competency of ["G1", "G2", "G3", "G4", "G5", "G6"]) expect(screen.getByRole("link", { name: new RegExp(`^Practice ${competency}:`) }).getAttribute("href")).toBe(`/practice?competency=${competency}`);
-    expect(screen.queryAllByRole("textbox")).toHaveLength(0);
+    expect(screen.getByRole("textbox", { name: "Appeal reason and evidence note" })).toBeTruthy();
     expect(container.innerHTML).not.toContain("answerKeyJson"); expect(container.innerHTML).not.toContain("rationale");
     expect(screen.queryByText(/Retake policy: cooldown ends/) !== null).toBe(!passed);
   });

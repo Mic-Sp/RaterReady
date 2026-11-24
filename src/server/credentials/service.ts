@@ -6,6 +6,8 @@ import { requireAdmin, requireCandidate } from "../../lib/auth";
 import { AuthorizationError } from "../auth/guards";
 import { capstoneDatabaseNow } from "../capstone/clock";
 import { credentialPrivateSelect as privateSelect, credentialPrivateView as privateView } from "./projection";
+import { appealSelect, appealOrder } from "../appeals/projection";
+import { effectiveResult } from "../domain/effective-result";
 
 const codeSchema = z.uuidv4();
 const lifecycleSchema = z.object({ status: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]), reason: z.string().trim().min(1).max(4000) }).strict();
@@ -94,7 +96,8 @@ export async function changeCredentialStatus(db: PrismaClient, credentialCode: s
 /**
  * Anonymous verification returns a strict evidence-only DTO. Status, consent, finalized
  * eligibility and frozen pins are predicates, never explanations for an unavailable code.
- * Candidate names, internal IDs, scores, raw votes, and private audit reasons are never selected.
+ * Candidate names, internal IDs, raw votes, and private audit reasons are never selected.
+ * Numeric original/revised scores are read only for eligibility and never published.
  * No cache is used: the public route also sets no-store to honor withdrawal immediately.
  */
 export async function getPublicCredential(db: PrismaClient, credentialCode: string) {
@@ -103,14 +106,16 @@ export async function getPublicCredential(db: PrismaClient, credentialCode: stri
   const record = await db.credential.findFirst({ where: { publicSlug: parsed.data, status: "ACTIVE", publicShareEnabled: true, isDemo: true,
     publicFields: { hasEvery: ["TRACK", "ISSUED_AT", "COMPETENCIES"] },
     competencies: { hasEvery: ["G1", "G2", "G3", "G4", "G5", "G6"] }, track: "GENERALIST",
-    attempt: { mode: "CAPSTONE", track: "GENERALIST", status: "FINALIZED", passed: true, finalScore: { gte: 85 }, isSyntheticFixture: true,
+    attempt: { mode: "CAPSTONE", track: "GENERALIST", status: "FINALIZED", isSyntheticFixture: true,
       capstoneBlueprintId: { not: null }, scoringPolicyId: { not: null }, reviewCase: { status: "FINALIZED" } } },
     select: {
       publicSlug: true, issuedAt: true, track: true, competencies: true,
-      attempt: { select: { capstoneBlueprint: { select: { version: true } }, scoringPolicy: { select: { version: true } } } },
+      attempt: { select: { deterministicScore: true, writtenScore: true, finalScore: true,
+        appeals: { select: { status: appealSelect.status, disposition: appealSelect.disposition, resolvedDeterministicScore: true, resolvedWrittenScore: true, resolvedFinalScore: true }, orderBy: [...appealOrder] },
+        capstoneBlueprint: { select: { version: true } }, scoringPolicy: { select: { version: true } } } },
     },
   });
-  if (!record || record.competencies.length !== 6) return null;
+  if (!record || record.competencies.length !== 6 || !effectiveResult(record.attempt).passed) return null;
   return { credentialCode: record.publicSlug, status: "ACTIVE" as const, issuedAt: record.issuedAt.toISOString(), track: record.track,
     competencies: record.competencies, blueprintVersion: record.attempt.capstoneBlueprint!.version,
     scoringPolicyVersion: record.attempt.scoringPolicy!.version };

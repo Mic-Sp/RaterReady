@@ -38,6 +38,7 @@ export function useCapstoneSession(initial: CapstoneWorkspace) {
 
   const applySnapshot = useCallback((next: CapstoneSnapshot) => {
     const previous = snapshot.current;
+    if (previous.status === "FINALIZED" && next.status === "FINALIZED" && next.serverNow < previous.serverNow) return;
     if (previous.status === "FINALIZED" && next.status !== "FINALIZED") return;
     // Late ACTIVE polls/acknowledgments can never reopen a locally confirmed lock.
     if (previous.status !== "IN_PROGRESS" && next.status === "IN_PROGRESS") return;
@@ -46,6 +47,9 @@ export function useCapstoneSession(initial: CapstoneWorkspace) {
     snapshot.current = merged; setCurrent(merged); setClockError(false);
     if (merged.status !== "IN_PROGRESS") setDirty(false);
   }, []);
+
+  // Server Action revalidation may return new finalized appeal/consent data without remounting this exam shell.
+  useEffect(() => { if (initial.snapshot.status === "FINALIZED") applySnapshot(initial.snapshot); }, [initial.snapshot, applySnapshot]);
 
   const stop = useCallback((code: CapstoneMutationCode) => { pause.current = code; setBlocked(code); setMessage(capstoneSaveMessages[code]); }, []);
 

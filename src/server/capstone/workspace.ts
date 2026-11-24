@@ -8,6 +8,8 @@ import { enqueueWrittenGrading } from "../ai/written-grading";
 import { gradingRuntime, type GradingRuntime } from "../ai/judges";
 import type { FinalizedCapstoneResult } from "../../lib/capstone-results";
 import { credentialPrivateSelect, credentialPrivateView } from "../credentials/projection";
+import { appealSelect, appealOrder, appealView } from "../appeals/projection";
+import { effectiveResult } from "../domain/effective-result";
 
 const idSchema = z.string().min(1).max(100);
 const metaSelect = {
@@ -18,6 +20,7 @@ const metaSelect = {
   responses: { select: { position: true, savedAt: true, gradingJobs: { select: { status: true } } } },
   reviewCase: { select: { status: true } },
   credential: { select: credentialPrivateSelect },
+  appeals: { select: appealSelect, orderBy: [...appealOrder] },
 } as const satisfies Prisma.AssessmentAttemptSelect;
 type Meta = Prisma.AssessmentAttemptGetPayload<{ select: typeof metaSelect }>;
 
@@ -43,18 +46,20 @@ export class CapstoneWorkspaceError extends Error { constructor() { super("This 
 
 /** Freeze-state metadata only; no answer details or criterion-level correctness leave the scoring boundary. */
 function snapshot(a: Meta, now: Date): CapstoneSnapshot {
+  const effective = effectiveResult(a);
   // Candidate projection deliberately selects statuses only, never votes, rationales, routing reasons or raw receipts.
   const jobs = a.responses.flatMap((r) => r.gradingJobs);
   const writtenGrading = jobs.some((j) => j.status === "RUNNING") ? "EVALUATING" : jobs.some((j) => j.status === "QUEUED") ? "QUEUED"
     : jobs.length === 6 || a.reviewCase ? "AWAITING_OWNER_REVIEW" : "NOT_STARTED";
   return { id: a.id, status: a.status, revision: a.revision, serverNow: now.toISOString(), startedAt: a.startedAt.toISOString(), expiresAt: a.expiresAt!.toISOString(),
     savedAt: a.revision > 0 && a.responses.length ? new Date(Math.max(...a.responses.map((r) => r.savedAt.getTime()))).toISOString() : null,
-    submittedAt: a.submittedAt?.toISOString() ?? null, deterministicScore: a.deterministicScore?.toNumber() ?? null,
+    submittedAt: a.submittedAt?.toISOString() ?? null, deterministicScore: a.status === "FINALIZED" ? effective.deterministicScore : a.deterministicScore?.toNumber() ?? null,
     // Only a finalized summary leaves the server: no question/key, judge vote or review rationale is selected for results.
     result: a.status === "FINALIZED" && a.finalizedAt && a.deterministicScore !== null && a.writtenScore !== null && a.finalScore !== null && a.passed !== null
-      ? { attemptId: a.id, deterministicScore: a.deterministicScore.toNumber(), writtenScore: a.writtenScore.toNumber(), finalScore: a.finalScore.toNumber(),
-        passed: a.passed, finalizedAt: a.finalizedAt.toISOString(), credential: a.credential ? credentialPrivateView(a.credential) : null,
-        retakeAvailableAfter: a.passed ? null : new Date(a.finalizedAt.getTime() + a.capstoneBlueprint!.retakeCooldownHours * 3600000).toISOString() } : null,
+      ? { attemptId: a.id, deterministicScore: effective.deterministicScore!, writtenScore: effective.writtenScore!, finalScore: effective.finalScore!,
+        passed: effective.passed, finalizedAt: a.finalizedAt.toISOString(), credential: a.credential ? credentialPrivateView(a.credential) : null,
+        originalFinalScore: effective.adjusted ? a.finalScore.toNumber() : null, appeals: a.appeals.map(appealView),
+        retakeAvailableAfter: effective.passed ? null : new Date(a.finalizedAt.getTime() + a.capstoneBlueprint!.retakeCooldownHours * 3600000).toISOString() } : null,
     blueprintVersion: a.capstoneBlueprint!.version, scoringPolicyVersion: a.scoringPolicy!.version, writtenGrading };
 }
 

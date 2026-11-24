@@ -7,8 +7,9 @@ async function main() {
   try {
     const owner = await db.user.findUniqueOrThrow({ where: { accountCode: "admin-michael" } });
     if (owner.role !== "ADMIN_REVIEWER" || owner.accountStatus !== "ACTIVE" || !owner.isSyntheticFixture) throw new Error("Active synthetic owner required.");
-    const attempts = await db.assessmentAttempt.findMany({ where: { mode: "CAPSTONE", track: "GENERALIST", status: "FINALIZED", passed: true,
-      finalScore: { gte: 85 }, isSyntheticFixture: true, credential: null, reviewCase: { status: "FINALIZED" } }, select: { id: true } });
+    const attempts = await db.assessmentAttempt.findMany({ where: { mode: "CAPSTONE", track: "GENERALIST", status: "FINALIZED",
+      OR: [{ passed: true, finalScore: { gte: 85 } }, { appeals: { some: { status: "RESOLVED", disposition: "ADJUSTED" } } }],
+      isSyntheticFixture: true, credential: null, reviewCase: { status: "FINALIZED" } }, select: { id: true } });
     let issued = 0;
     for (const attempt of attempts) {
       const credential = await db.$transaction((tx) => issueCredentialForFinalizedPass(tx, attempt.id, owner.id), { timeout: 15000 });

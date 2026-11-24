@@ -1,5 +1,6 @@
 import type { Competency } from "@prisma/client";
 import type { CandidateCredential } from "./credential-content";
+import type { AppealView } from "./appeal-content";
 
 /** Guidance concerns transferable competencies, never secure item answers, model votes, or reviewer prose. */
 export const competencyResultGuidance: Record<Competency, string> = {
@@ -16,4 +17,6 @@ export type FinalizedCapstoneResult = {
   attemptId: string; deterministicScore: number; writtenScore: number; finalScore: number; passed: boolean; finalizedAt: string;
   retakeAvailableAfter?: string | null;
   credential?: CandidateCredential | null;
+  originalFinalScore?: number | null;
+  appeals?: AppealView[];
 };

@@ -35,6 +35,7 @@ async function loadReview(tx: Prisma.TransactionClient, attemptId: string, owner
   const attempt = await tx.assessmentAttempt.findUniqueOrThrow({ where: { id: attemptId }, select: {
     id: true, mode: true, track: true, status: true, isSyntheticFixture: true, submissionKey: true, submittedAt: true,
     deterministicScore: true, reviewCase: { select: reviewSelect },
+    appeals: { where: { status: "RESOLVED", disposition: "ADJUSTED" }, select: { id: true }, take: 1 },
     scoringPolicy: { select: { evaluationJudgmentPoints: true, rubricApplicationPoints: true,
       factualVerificationPoints: true, writtenJustificationPoints: true, passingThreshold: true } },
     capstoneBlueprint: { select: { slots: { where: { writtenPrompt: { not: null } }, orderBy: { position: "asc" },
@@ -153,6 +154,7 @@ export async function finalizeOwnerReview(db: PrismaClient, attemptId: string, i
       || state.attempt.deterministicScore === null) throw new Error("Invalid frozen scoring policy or subtotal.");
     const result = computeFinalizedScore(state.attempt.deterministicScore.toNumber(), scores);
     if (state.review.status === "FINALIZED") {
+      if (state.attempt.appeals.length) throw new Error("This result has an appeal revision. Inspect the current finalized result instead of replaying original adjudication.");
       if (state.attempt.status !== "FINALIZED" || JSON.stringify(validateOwnerScores(state.review.finalScoresJson, state.responses.map((r) => r.id))) !== JSON.stringify(scores)
         || state.review.rationale !== parsed.rationale) throw new Error("Final adjudication is immutable.");
       await issueCredentialForFinalizedPass(tx, id, owner.id);

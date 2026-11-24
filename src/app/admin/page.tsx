@@ -8,6 +8,10 @@ import { submitSignOut } from "../actions/session";
 import { listAdminCredentials } from "../../server/credentials/service";
 import { CredentialLifecycleControls } from "./credential-controls";
 import { CredentialDisclosures } from "../components/credential-disclosures";
+import { listAdminAppeals } from "../../server/appeals/service";
+import { listAdminOpportunities } from "../../server/opportunities/service";
+import { OpportunityControls } from "./opportunity-controls";
+import { opportunityLinkLabels } from "../../lib/opportunity-content";
 
 export const metadata: Metadata = { title: "Admin reviewer console | RaterReady" };
 
@@ -16,6 +20,8 @@ export default async function AdminConsolePage() {
   const user = await requirePageRole("ADMIN_REVIEWER");
   const view = await getReviewConsole(prisma);
   const credentials = await listAdminCredentials(prisma);
+  const appeals = await listAdminAppeals(prisma);
+  const opportunities = await listAdminOpportunities(prisma);
   const m = view.metrics;
   return <article className="page-card learning-page reviewer-layout" aria-labelledby="console-heading">
     <div className="learner-identity"><p>Signed in as <strong>{user.name}</strong></p><p><span className="role-badge">Admin reviewer</span> <span className="demo-badge">DEMO - SYNTHETIC</span></p>
@@ -44,6 +50,14 @@ export default async function AdminConsolePage() {
             <Link href={`/admin/reviews/${row.reviewCaseId}`} className="inline-link">{id === "pending" ? "Adjudicate" : "View finalized review"} {row.attemptId}</Link>
           </li>)}</ul>}
       </section>)}
+    <section className="learning-section" aria-labelledby="admin-appeals-heading"><h2 id="admin-appeals-heading">Grading appeals</h2>
+      {([{ title: "Pending appeals", rows: appeals.pending }, { title: "Resolved appeal history", rows: appeals.resolved }]).map(({ title, rows }) => <section key={title} aria-label={title}>
+        <h3>{title}</h3>{!rows.length ? <p>No {title.toLowerCase()}.</p> : <ul className="practice-catalog">{rows.map((a) => <li key={a.reference}>
+          <p>{a.candidateName} · Attempt {a.attemptId}</p><p>Status: {a.status}{a.disposition && ` · ${a.disposition}`}</p>
+          <p>Submitted: {reviewTimestamp(a.submittedAt)}</p><Link href={`/admin/appeals/${a.reference}`} className="inline-link">Inspect appeal {a.reference}</Link>
+        </li>)}</ul>}
+      </section>)}
+    </section>
     <section className="learning-section" aria-labelledby="credential-inventory-heading"><h2 id="credential-inventory-heading">Issued credentials</h2>
       <p>Showing the latest {credentials.length} issued credentials (up to 100). Sharing preferences are retained during suspension or revocation. Reinstatement restores public visibility only if the candidate still consents.</p>
       {!credentials.length ? <p>No credentials have been issued yet.</p> : <ul className="practice-catalog">{credentials.map((record) => <li key={record.credentialCode}>
@@ -54,6 +68,12 @@ export default async function AdminConsolePage() {
         <p>Covered competencies: {record.competencies.join(" · ")}</p><p>Blueprint version: {record.blueprintVersion ?? "Not recorded"} · Scoring policy version: {record.scoringPolicyVersion ?? "Not recorded"}</p>
         <CredentialLifecycleControls credentialCode={record.credentialCode} currentStatus={record.status} />
       </li>)}</ul>}
+    </section>
+    <section className="learning-section" aria-labelledby="admin-opportunities-heading"><h2 id="admin-opportunities-heading">Opportunity curation</h2>
+      <ul className="practice-catalog">{opportunities.map((l) => <li key={l.code}><h3>{l.title}</h3><p>Organization: {l.organization} · {opportunityLinkLabels[l.linkType]}</p>
+        <p>Source: {l.sourceLabel}</p><a href={l.sourceUrl} rel="noreferrer" className="inline-link">{l.sourceUrl}</a>
+        <p>{l.disclosure}</p><OpportunityControls code={l.code} active={l.active} verifiedAt={l.lastVerifiedAt} />
+      </li>)}</ul>
     </section>
   </article>;
 }

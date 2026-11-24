@@ -118,6 +118,17 @@ enum OpportunityLinkType {
   PUBLIC_INFORMATION
   PUBLIC_APPLICATION
   CAREERS_PAGE
+  PERSONAL_REFERRAL
+}
+
+enum AppealStatus {
+  OPEN
+  RESOLVED
+}
+
+enum AppealDisposition {
+  UPHELD
+  ADJUSTED
 }
 
 /// Stage A cannot represent an employer partnership.
@@ -342,6 +353,7 @@ model AssessmentAttempt {
   responses                     SubmissionResponse[]
   reviewCase                    ReviewCase?
   credential                    Credential?
+  appeals                       AssessmentAppeal[]
 
   @@index([candidateId, mode, startedAt])
   @@index([status])
@@ -551,6 +563,31 @@ model Credential {
   revokedAt          DateTime?               @db.Timestamptz(3)
 }
 
+/// Original attempts/reviews remain immutable; resolved appeals are audited result revisions.
+/// A partial SQL unique index permits only one OPEN appeal per attempt, including concurrent requests.
+model AssessmentAppeal {
+  id                         String            @id @default(cuid())
+  publicReference            String            @unique @db.Uuid
+  attemptId                  String
+  attempt                    AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  reason                     String
+  evidenceNote               String
+  status                     AppealStatus      @default(OPEN)
+  submittedAt                DateTime          @default(now()) @db.Timestamptz(3)
+  beforeScoreJson            Json
+  disposition                AppealDisposition?
+  dispositionRationale       String?
+  resolvedById               String?
+  resolvedAt                 DateTime?         @db.Timestamptz(3)
+  resolutionScoresJson       Json?
+  resolvedDeterministicScore Decimal?          @db.Decimal(5, 2)
+  resolvedWrittenScore       Decimal?          @db.Decimal(3, 2)
+  resolvedFinalScore         Decimal?          @db.Decimal(5, 2)
+
+  @@index([attemptId, status])
+  @@index([status, submittedAt])
+}
+
 model OpportunityListing {
   id                 String              @id @default(cuid())
   code               String              @unique
@@ -561,6 +598,13 @@ model OpportunityListing {
   partnershipStatus  PartnershipStatus   @default(NO_FORMAL_PARTNERSHIP)
   disclosure         String              @default("NO_FORMAL_PARTNERSHIP — independently curated public link; no endorsement or placement agreement.")
   limitationsNote    String
+  sourceLabel        String              @default("Source requires owner verification")
+  sourceUrl          String              @default("https://example.org/")
+  eligibilityNote    String              @default("Check current eligibility and screening with the source.")
+  active             Boolean             @default(true)
+  /// Referral permission and any referrer benefit must be explicit; Stage A fixture permission is simulated.
+  referralDisclosure String?
+  referralPermissionNote String?
   /// Last actual public-link verification, not the time a seed happens to run.
   lastVerifiedAt     DateTime            @db.Timestamptz(3)
   isSyntheticFixture Boolean             @default(true)

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { canIssueGeneralistCredential } from "../domain/credentials";
 import { capstoneDatabaseNow } from "../capstone/clock";
+import { appealSelect, appealOrder } from "../appeals/projection";
+import { effectiveResult } from "../domain/effective-result";
 
 /**
  * Internal transaction helper, called only by verified owner finalization/recovery.
@@ -15,9 +17,11 @@ export async function issueCredentialForFinalizedPass(tx: Prisma.TransactionClie
   await tx.$queryRaw`SELECT "id" FROM "AssessmentAttempt" WHERE "id" = ${attemptId} FOR UPDATE`;
   const attempt = await tx.assessmentAttempt.findUniqueOrThrow({ where: { id: attemptId }, select: {
     mode: true, track: true, status: true, passed: true, finalScore: true, finalizedAt: true, isSyntheticFixture: true,
+    deterministicScore: true, writtenScore: true, appeals: { select: appealSelect, orderBy: [...appealOrder] },
     capstoneBlueprint: { select: { version: true } }, scoringPolicy: { select: { version: true } }, reviewCase: { select: { status: true } },
   } });
-  if (!canIssueGeneralistCredential({ ...attempt, finalScore: attempt.finalScore?.toNumber() ?? null,
+  const current = effectiveResult(attempt);
+  if (!canIssueGeneralistCredential({ ...attempt, finalScore: current.finalScore, passed: current.passed,
     blueprintVersion: attempt.capstoneBlueprint?.version ?? null, scoringPolicyVersion: attempt.scoringPolicy?.version ?? null,
     reviewStatus: attempt.reviewCase?.status ?? null })) return null;
   const existing = await tx.credential.findUnique({ where: { attemptId } });
