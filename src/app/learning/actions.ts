@@ -14,6 +14,7 @@ export async function chooseLevel(formData: FormData): Promise<void> {
   await selectLearningLevel(prisma, user.id, level.data);
   revalidatePath("/dashboard");
   revalidatePath("/onboarding");
+  revalidatePath("/welcome");
   redirect("/dashboard?notice=level-saved");
 }
 

@@ -1181,3 +1181,65 @@ Manual checks at `http://127.0.0.1:3000`:
 4. Check desktop, tablet and 320px mobile widths, then 200% zoom/text. Confirm the
    cards reflow in G1–G6 order with readable badges, visible focus and no clipping
    or horizontal scrolling. No Welcome Check-In is included in this step.
+
+## Step 11C — Welcome & starting-level check-in
+
+`/welcome` is a candidate-only, revisitable self-report check-in, linked from
+the initial `/onboarding` page and the dashboard's learning-level card. Warm
+copy defines AI, large language model (LLM), RLHF and rubric in plain language.
+Three optional native radio groups ask about AI tools, comparing answers with
+a guide, and windows/tabs/copy-paste/find shortcuts. There are no scored tasks,
+required answers, time limits or personal-disclosure fields.
+
+The public, pure recommendation helper suggests Advanced Calibration when all
+three areas feel comfortable; Intermediate Practice when both AI and evaluation
+are at least somewhat familiar; otherwise Foundations for any answered sample.
+An empty check-in makes no suggestion. These are starting suggestions, not
+assessment results. Workflow Skills Lab help appears for Foundations or when
+computer comfort is partial, new or unanswered; it is always optional.
+
+Answers stay in component memory, are not saved to the server, and clear on
+reload. Only choosing a level uses the existing candidate-authorized `chooseLevel` Server Action and
+`CandidateProfile.selectedLevel`. Accepting takes one click; all three choices,
+skip links and the separate Optional Skills Check remain available without
+answering. Skipping returns new members to direct level choices and existing
+members to their dashboard without changing placement or progress. No schema,
+migration or seed changes are needed, and no database sync is required.
+
+Named question/result/choice regions preserve reading order and keyboard access.
+Showing advice focuses its heading; editing answers removes stale advice. The
+questions are deliberately outside an answer-submission form so they cannot
+be sent in a query or saved, including with JavaScript disabled. Native level
+forms and skip links still work independently. Visible disclosures retain the
+non-certifying boundary, finalized 85% Generalist Qualification Exam standard
+after owner review, and RaterReady's internal G1–G6 identifiers.
+
+Unit tests cover every full-answer combination, blank/partial responses,
+encouraging copy, native groups, accessible focus, unrestricted choices and
+server guards. Integration tests verify acceptance/overrides preserve lessons,
+practice, diagnostic, exposure and credential/assessment state. Browser tests
+exercise skip before/during/after advice, all three suggestions, one-click
+acceptance, overrides, revisits, optional workflow help, skills-check handoff,
+anonymous/admin restrictions, WCAG contrast and 320px/200% text reflow.
+
+Use the typecheck, lint, test and preview commands listed in Step 11A above.
+For just the welcome browser scenarios, use the same disposable test database:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser -- tests/browser/welcome.spec.ts
+```
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. From onboarding choose Try the welcome check-in, or use Revisit the welcome
+   check-in on the dashboard. Read the reassurance and three plain-language topics.
+2. Skip immediately, with a partial answer, and after viewing a suggestion.
+   Confirm no learning level or completed lesson changes just from using or skipping it.
+3. Choose the first option in each group: check Foundations and optional Workflow
+   Skills Lab help. Choose the middle options for Intermediate Practice, or the
+   last options for Advanced Calibration. Every other level remains selectable.
+4. Accept a suggestion, reload the dashboard and revisit. Confirm the chosen level
+   persists and lessons remain saved. Try an override and the separate Optional
+   Skills Check handoff; the check-in must never grant a credential or exam result.
+5. Use Tab, arrow keys, Space and Enter; inspect mobile at 320px and 200% zoom/text.
+   Check clear focus, readable disclosures and no horizontal scrolling or clipping.

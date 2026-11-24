@@ -136,6 +136,7 @@ describe("Credentials and database-authoritative RBAC", () => {
     await expect(requireCandidate()).rejects.toMatchObject({ status: 403 });
     expect((await protectedRequest("/dashboard", result.cookie))?.status).toBe(403);
     expect((await protectedRequest("/capstone", result.cookie))?.status).toBe(403);
+    expect((await protectedRequest("/welcome", result.cookie))?.status).toBe(403);
   });
 
   it("redirects anonymous browser navigation to sign-in while denying unauthorized mutations", async () => {
@@ -147,7 +148,7 @@ describe("Credentials and database-authoritative RBAC", () => {
     expect(mutation?.status).toBe(401);
   });
 
-  it.each(["/learner", "/dashboard", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route"])("requires authentication for %s", async (path) => {
+  it.each(["/learner", "/dashboard", "/welcome", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route"])("requires authentication for %s", async (path) => {
     expect((await protectedRequest(path))?.status).toBe(401);
   });
 

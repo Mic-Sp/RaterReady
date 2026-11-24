@@ -27,6 +27,7 @@ import { authenticateCredentials, findActiveSessionUser } from "../src/server/au
 import { authorizeSession } from "../src/server/auth/guards";
 import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
 import { diagnosticScorecardItems } from "../src/lib/diagnostic-scorecard";
+import { recommendWelcomeStartingLevel } from "../src/lib/welcome-check-in";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -330,6 +331,30 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(restored.diagnostic).not.toHaveProperty("passed");
     await skipDiagnostic(prisma, candidateId);
     expect((await getLearningSnapshot(prisma, candidateId)).diagnosticStatus).toBe("COMPLETED");
+  });
+
+  it("persists welcome acceptance and overrides without touching diagnostic, progress or certification state", async () => {
+    const before = await getLearningSnapshot(prisma, candidateId);
+    const attempts = await prisma.assessmentAttempt.count({ where: { candidateId } });
+    const credentials = await prisma.credential.count({ where: { attempt: { candidateId } } });
+    const exposures = await prisma.scenarioExposure.findMany({ where: { candidateId }, orderBy: { familyId: "asc" } });
+    const recommendation = recommendWelcomeStartingLevel({ ai: "NEW", evaluation: "NEW", workflow: "NEW" });
+    // Viewing, skipping or calculating advice is read-only. Only the same explicit choice service used by welcome forms can save placement.
+    expect(await getLearningSnapshot(prisma, candidateId)).toEqual(before);
+    await selectLearningLevel(prisma, candidateId, recommendation.suggestedLevel);
+    expect((await getLearningSnapshot(prisma, candidateId)).selectedLevel).toBe("FOUNDATIONS");
+    await selectLearningLevel(prisma, candidateId, "ADVANCED");
+    await selectLearningLevel(prisma, candidateId, "INTERMEDIATE");
+    const after = await getLearningSnapshot(prisma, candidateId);
+    expect(after.selectedLevel).toBe("INTERMEDIATE");
+    expect(after.onboardingCompletedAt).toEqual(before.onboardingCompletedAt);
+    expect(after.moduleProgress).toEqual(before.moduleProgress);
+    expect(after.practiceProgress).toEqual(before.practiceProgress);
+    expect(after.diagnostic).toEqual(before.diagnostic);
+    expect(after.diagnosticStatus).toBe(before.diagnosticStatus);
+    expect(await prisma.assessmentAttempt.count({ where: { candidateId } })).toBe(attempts);
+    expect(await prisma.credential.count({ where: { attempt: { candidateId } } })).toBe(credentials);
+    expect(await prisma.scenarioExposure.findMany({ where: { candidateId }, orderBy: { familyId: "asc" } })).toEqual(exposures);
   });
 
   it("publishes all six new competency families with pinned rubric v2 and repeatable identities", async () => {

@@ -24,6 +24,13 @@ describe("candidate learning Server Action boundaries", () => {
     form.set("suggestedLevel", "FOUNDATIONS");
     await expect(chooseLevel(form)).rejects.toThrow("REDIRECT:/dashboard");
     expect(mocks.selectLearningLevel).toHaveBeenCalledWith("TEST_DB", "authenticated-candidate", "ADVANCED");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/welcome");
+  });
+
+  it("rejects an invalid level from a welcome choice before writing a profile", async () => {
+    const form = new FormData(); form.set("level", "EXPERT");
+    await expect(chooseLevel(form)).rejects.toThrow("REDIRECT:/onboarding?notice=invalid-level");
+    expect(mocks.selectLearningLevel).not.toHaveBeenCalled();
   });
 
   it("allows skipping before answering anything without requesting an explanation", async () => {

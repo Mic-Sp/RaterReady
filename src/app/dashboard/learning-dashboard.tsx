@@ -53,6 +53,7 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
         <button className="secondary-button" type="submit">Save learning level</button>
       </form>
       <Link href="/onboarding" className="inline-link">Revisit all starting options</Link>
+      <Link href="/welcome" className="inline-link">Revisit the welcome check-in</Link>
     </section>
     <section className="learning-section dashboard-wide" aria-labelledby="curriculum-heading"><h2 id="curriculum-heading">Six-module curriculum</h2>
       <p>G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Follow the sequence or revisit any lesson.</p>
