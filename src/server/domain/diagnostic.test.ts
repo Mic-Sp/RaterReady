@@ -29,6 +29,25 @@ describe("advisory diagnostic boundaries", () => {
     expect(evaluateDiagnostic({ G1: "1" }).suggestedLevel).toBe("FOUNDATIONS");
   });
 
+  it("varies actionable guidance by competency for aligned, focus and unanswered samples", () => {
+    for (const answers of [{}, { G1: "0", G2: "1", G3: "2", G4: "1", G5: "2", G6: "0" },
+      { G1: "1", G2: "0", G3: "0", G4: "0", G5: "0", G6: "1" }] as const) {
+      expect(new Set(evaluateDiagnostic(answers).items.map((item) => item.message)).size).toBe(6);
+    }
+    const focus = evaluateDiagnostic({ G3: "0", G4: "0", G5: "0", G6: "1" });
+    expect(focus.items[2].message).toContain("tie");
+    expect(focus.items[3].message).toContain("calculation");
+    expect(focus.items[4].message).toContain("evidence");
+    expect(focus.items[5].message).toContain("instructions");
+  });
+
+  it.each([[2, "FOUNDATIONS"], [3, "INTERMEDIATE"], [4, "INTERMEDIATE"], [5, "ADVANCED"], [6, "ADVANCED"]] as const)(
+    "preserves the advisory threshold for %s aligned samples", (count, level) => {
+      const answers = { G1: "0", G2: "1", G3: "2", G4: "1", G5: "2", G6: "0" } as const;
+      expect(evaluateDiagnostic(Object.fromEntries(Object.entries(answers).slice(0, count))).suggestedLevel).toBe(level);
+    },
+  );
+
   it("accepts bounded selection IDs only, not arbitrary prose, client scores or personal narratives", () => {
     expect(diagnosticAnswersSchema.safeParse({ G1: "my story" }).success).toBe(false);
     expect(diagnosticAnswersSchema.safeParse({ G1: "0", finalScore: 100 }).success).toBe(false);

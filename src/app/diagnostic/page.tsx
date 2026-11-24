@@ -3,13 +3,14 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requirePageRole } from "../../server/auth/page-access";
 import { prisma } from "../../lib/prisma";
-import { competencies, diagnosticTasks, learningLevels } from "../../lib/learning-content";
+import { competencies, diagnosticTasks } from "../../lib/learning-content";
 import { getLearningSnapshot } from "../../server/learning/service";
 import { diagnosticAnswersSchema, evaluateDiagnostic } from "../../server/domain/diagnostic";
 import { beginSkillsCheck, skipSkillsCheck } from "../learning/actions";
 import { submitDiagnostic } from "./actions";
 import { LevelChoices } from "../components/level-choices";
 import { EvaluationReference } from "../components/evaluation-reference";
+import { AdvisoryScorecard } from "./advisory-scorecard";
 
 export const metadata: Metadata = { title: "Optional skills check | RaterReady" };
 
@@ -43,12 +44,13 @@ export default async function DiagnosticPage({ searchParams }: { searchParams: P
         <button className="secondary-button" type="submit" name="intent" value="save">Save selections for later</button>
         <button className="primary-button" type="submit" name="intent" value="finish">Get advisory feedback</button>
       </form> : null}
-    {feedback && <section className="learning-section" aria-labelledby="feedback-heading"><h2 id="feedback-heading">Your advisory learning snapshot</h2>
-      <p role="status">Skills check complete. No credential or Generalist Qualification Exam result has been issued.</p>
-      <p>Suggested starting level: <strong><SyntheticText rebrand>{learningLevels.find((level) => level.code === feedback.suggestedLevel)?.title ?? "Choose any level"}</SyntheticText></strong>. You can override this suggestion below.</p>
-      <ul className="feedback-list">{feedback.items.map((item) => <li key={item.competency}><h3><SyntheticText>{item.competency}</SyntheticText> · <SyntheticText rebrand>{competencies.find((c) => c.code === item.competency)!.title}</SyntheticText></h3><p><strong><SyntheticText>{item.outcome}</SyntheticText></strong>. <SyntheticText rebrand>{item.message}</SyntheticText></p><Link href={`/learn/${item.competency}?level=${profile.selectedLevel}`} className="inline-link">Explore <SyntheticText>{item.competency}</SyntheticText></Link></li>)}</ul>
-      <h2>Choose your learning level</h2><LevelChoices suggested={feedback.suggestedLevel} selected={profile.onboardingCompletedAt ? profile.selectedLevel : undefined} />
-    </section>}
+    {feedback && <><AdvisoryScorecard feedback={feedback} />
+      <section className="learning-section" aria-labelledby="choose-level-heading">
+        <h2 id="choose-level-heading" tabIndex={-1}>Choose your learning level</h2>
+        <p>All three levels are open. Choose the suggestion or another starting point that feels right for you.</p>
+        <LevelChoices suggested={feedback.suggestedLevel} selected={profile.onboardingCompletedAt ? profile.selectedLevel : undefined} />
+      </section>
+    </>}
     {!completed && session?.status === "IN_PROGRESS" && <form action={skipSkillsCheck}><button type="submit" className="text-button">Skip the diagnostic without submitting</button></form>}
     <EvaluationReference />
     <Link href="/onboarding" className="inline-link">Choose any level without finishing this check</Link>

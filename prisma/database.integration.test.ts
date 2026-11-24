@@ -26,6 +26,7 @@ import { verifyPassword } from "../src/server/auth/passwords";
 import { authenticateCredentials, findActiveSessionUser } from "../src/server/auth/accounts";
 import { authorizeSession } from "../src/server/auth/guards";
 import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
+import { diagnosticScorecardItems } from "../src/lib/diagnostic-scorecard";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -305,8 +306,14 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await completeLesson(prisma, candidateId, "FOUNDATIONS", "G1")).toEqual(completion);
     await selectLearningLevel(prisma, candidateId, "ADVANCED");
     const session = await startDiagnostic(prisma, candidateId);
-    const feedback = await saveDiagnostic(prisma, candidateId, { G1: "1" }, session.revision, true);
+    const feedback = await saveDiagnostic(prisma, candidateId, { G1: "1", G4: "1" }, session.revision, true);
     expect(feedback.suggestedLevel).toBe("FOUNDATIONS");
+    const cards = diagnosticScorecardItems(feedback);
+    expect(cards).toHaveLength(6);
+    expect(cards.filter((item) => item.status === "strong").map((item) => item.competency)).toEqual(["G3"]);
+    expect(cards.find((item) => item.competency === "G3")).toMatchObject({ title: "Factual Verification", sampled: true });
+    expect(cards.find((item) => item.competency === "G4")).toMatchObject({ statusLabel: "Suggested focus area", sampled: false });
+    expect(new Set(cards.map((item) => item.message)).size).toBe(6);
     const finished = await getLearningSnapshot(prisma, candidateId);
     expect(finished.selectedLevel).toBe("ADVANCED");
     expect(finished.diagnosticStatus).toBe("COMPLETED");

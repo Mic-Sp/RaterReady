@@ -1135,3 +1135,49 @@ Manual checks at `http://127.0.0.1:3000`:
 4. Confirm practice submission/reset, exam saves and final submission still work.
    Check the rubric-first owner lock and the retained G1–G6/internal-competency,
    independent-platform and non-endorsement disclosures beside credentials.
+
+## Step 11B — Optional Skills Check advisory scorecard
+
+Completed `/diagnostic` results now show a Suggested Starting Level summary with
+an explanation and an explicit invitation to choose any level or switch later.
+Six named competency cards use the current practice titles, textual Strong signal
+or Suggested focus area badges, varied evidence-based guidance and Practice G1–G6
+links. Unanswered samples say Not sampled; they are not presented as incorrect.
+The grid has three columns on desktop, two on tablet and one on mobile, with
+code/title on separate lines and the same reading and keyboard order throughout.
+
+Version-1 diagnostic IDs follow the original lesson order. The presentation maps
+the factual sample to current G3, comparison to G4, instruction boundaries to G5
+and justification to G6. Existing selections, keys, advisory thresholds and
+explicit level choices remain intact. Completed sessions are evaluated on the
+server for display; this change needs no migration or reseed.
+
+Visible disclosures state that this is optional, untimed and non-certifying,
+never grants credentials, never waives the finalized 85% Generalist Qualification
+Exam standard after owner review, and uses RaterReady's internal G1–G6 identifiers.
+Unit tests cover all level suggestions, signal mapping, varied messages and
+disclosures. Database integration verifies persisted feedback, independent level
+choices, preserved lesson completion and no assessment/credential creation.
+Browser checks cover the real save/resume/finish flow, statuses, practice links,
+keyboard focus, contrast, 3/2/1-column layouts and 320px/200% text reflow.
+
+Run the verification commands in Step 11A above with a disposable local test
+database. Start the local browser preview with:
+
+```sh
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. Sign in as a synthetic candidate and open Optional Skills Check. Select some
+   responses, leave one unanswered and choose Get advisory feedback.
+2. Check Suggested Starting Level, its explanation, the freedom to switch and
+   all six cards. Each should have a separate code/title, a textual status,
+   specific guidance and a Practice G1–G6 link. Unanswered items say Not sampled.
+3. Read the non-certifying disclosures, then use Tab/Enter to choose a starting
+   level or follow a practice link. Return to `/diagnostic`; feedback persists.
+   Choosing a different level must preserve completed lessons.
+4. Check desktop, tablet and 320px mobile widths, then 200% zoom/text. Confirm the
+   cards reflow in G1–G6 order with readable badges, visible focus and no clipping
+   or horizontal scrolling. No Welcome Check-In is included in this step.
