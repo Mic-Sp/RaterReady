@@ -42,7 +42,10 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     for (const row of rows) expect(initialHtml).not.toContain(row.scenario.expertExplanation);
     await expect(page.getByText("Capstone Mode — Coaching Disabled", { exact: true })).toBeVisible();
     await expect(page.getByRole("timer")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Capstone", exact: true })).toHaveAttribute("aria-current", "location");
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
     await expect(page.getByText("Seven-Step Independent Evaluation Method", { exact: false })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Understanding Rubrics & Evaluation Criteria" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Expert explanation", exact: true })).toHaveCount(0);
     const postBodies: string[] = [];
     page.on("request", (request) => { if (request.method() === "POST") postBodies.push(request.postData() ?? ""); });

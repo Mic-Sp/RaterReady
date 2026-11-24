@@ -928,3 +928,76 @@ Manual checks at `http://127.0.0.1:3000`:
 6. In `/admin`, pause a listing and confirm it disappears from the queue. Change
    its verification date after checking its source; confirm reseeding preserves the
    curation. The integration suite verifies the append-only audit events.
+
+## Step 10A: shared navigation, desktop layout and rubric reference
+
+The pre-implementation audit found exact server-side candidate/admin page guards,
+independent action guards (including shared mutation helpers), a default-private
+proxy policy and no registration route. Synthetic banners, simulated-output labels,
+internal G1–G6 disclosures and independent opportunity/credential disclosures are
+retained. Dashboard, onboarding and admin contained duplicate identity/sign-out
+blocks; other authenticated pages had no consistent navigation. The shared 31rem
+shell constrained dashboard, onboarding, diagnostic, lessons, Workflow Lab,
+capstone readiness and opportunities. Practice/Technical Preview catalogs and
+reviewer pages used broad 78rem overrides instead of distinguishing catalogs from
+comparison workspaces.
+
+The root layout now verifies the current identity on the server and renders one
+shared navigation/identity/sign-out header. Candidates receive Dashboard, Practice,
+Workflow Lab, Technical Preview, Capstone and Opportunities; reviewers receive
+Reviewer Console. A text role badge and `DEMO - SYNTHETIC` badge remain visible.
+Page/action authorization remains independent of navigation. Active links announce
+the current page or parent section. The skip link bypasses the entire header, and
+links wrap in DOM order on narrow screens without a collapsed menu or focus trap.
+
+Authenticated dashboard/admin/catalog pages use `max-w-6xl` (72rem). A/B practice,
+technical comparisons, active capstone exams and rubric-first review comparisons
+use an 80rem (`max-w-7xl`) canvas. Dashboard summary cards pair at 48rem, curriculum
+modules use three columns at 64rem, and admin operational metrics retain four
+desktop columns. Mobile layouts remain sequential. Public sign-in stays compact.
+
+**Understanding Rubrics & Evaluation Criteria** is linked near the dashboard
+intro and rendered directly below its cards. The same guide is available inside
+Practice's on-demand Seven-Step reference disclosure at every learning level.
+It explains rubric weights/priorities, factual accuracy, instruction following,
+and safety against supplied guidelines, with clearly synthetic examples. It is
+absent from the locked capstone workspace. Workspace card order, practice submission
+behavior and capstone save confirmations are unchanged.
+
+Verification uses a disposable local `raterready_test*` database, never the main
+Neon database. Use the earlier setup instructions, then run sequentially:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+If Chromium is already installed at a different version, set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable before the browser command.
+The unit/component tests cover role-specific links, current-section updates,
+server-verified root identity, one shared sign-out control, anonymous layout, and
+rubric content. Browser tests cover real navigation, sign-out, keyboard reference
+access, desktop geometry, 320px reflow with 200% text, and axe WCAG checks. Existing
+capstone and reviewer tests also assert the shared navigation and retained coaching
+and rubric-first locks. Screenshots are written to Playwright's `test-results/`.
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. As a candidate, visit every global destination and a lesson, diagnostic and
+   practice scenario. Confirm the name, Candidate badge, demo label and exactly
+   one Sign out button. Sign out from an interior page and confirm protected
+   navigation returns to sign-in.
+2. As `admin-michael`, check `/admin`, a pending review and an appeal. Confirm
+   Reviewer Console is the only global destination, Sign out works, and AI votes
+   stay hidden until the independent preliminary review is saved.
+3. At a wide desktop viewport, inspect dashboard card pairs and three-column
+   curriculum, the Practice catalog and A/B workspace, and admin metrics. Verify
+   the workspaces are wider than their catalogs.
+4. At 320px and with 200% text/zoom, check wrapping navigation, sequential cards,
+   no horizontal scrolling, visible keyboard focus and Skip to main content.
+5. Follow the dashboard rubric link and open Practice's Seven-Step reference by
+   keyboard. Read all three criteria, weights/priorities and the Safety & stated
+   policy example; verify the guide does not appear inside the capstone exam.

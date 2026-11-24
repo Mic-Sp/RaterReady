@@ -26,7 +26,7 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ rev
   const unlocked = view.stage === "ADJUDICATION" ? view : null;
   const completed = unlocked?.status === "FINALIZED";
   const finalScores = completed ? validateOwnerScores(unlocked.finalScores, view.prompts.map((p) => p.responseId)) : null;
-  return <article className="page-card learning-page reviewer-layout" aria-labelledby="review-heading">
+  return <article className="page-card learning-page reviewer-layout reviewer-workspace" aria-labelledby="review-heading">
     <nav aria-label="Reviewer navigation"><Link href="/admin" className="inline-link">Return to reviewer console</Link></nav>
     <p className="eyebrow">DEMO - SYNTHETIC · Owner adjudication</p>
     <h1 id="review-heading">{completed ? "Finalized owner review" : unlocked ? "Stage 2: AI vote comparison & final disposition" : "Stage 1: Independent rubric evaluation"}</h1>

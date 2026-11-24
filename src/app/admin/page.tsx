@@ -4,7 +4,6 @@ import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { getReviewConsole } from "../../server/review/service";
 import { reviewReasonLabels, reviewTimestamp } from "../../lib/review-presentation";
-import { submitSignOut } from "../actions/session";
 import { listAdminCredentials } from "../../server/credentials/service";
 import { CredentialLifecycleControls } from "./credential-controls";
 import { CredentialDisclosures } from "../components/credential-disclosures";
@@ -17,15 +16,13 @@ export const metadata: Metadata = { title: "Admin reviewer console | RaterReady"
 
 /** Owner/admin-only Server Component; authorize independently of middleware before rendering. */
 export default async function AdminConsolePage() {
-  const user = await requirePageRole("ADMIN_REVIEWER");
+  await requirePageRole("ADMIN_REVIEWER");
   const view = await getReviewConsole(prisma);
   const credentials = await listAdminCredentials(prisma);
   const appeals = await listAdminAppeals(prisma);
   const opportunities = await listAdminOpportunities(prisma);
   const m = view.metrics;
   return <article className="page-card learning-page reviewer-layout" aria-labelledby="console-heading">
-    <div className="learner-identity"><p>Signed in as <strong>{user.name}</strong></p><p><span className="role-badge">Admin reviewer</span> <span className="demo-badge">DEMO - SYNTHETIC</span></p>
-      <form action={submitSignOut}><button type="submit" className="text-button">Sign out</button></form></div>
     <p className="eyebrow">Owner operations</p><h1 id="console-heading">Admin reviewer console</h1>
     <p className="page-intro">Review independent rubric judgments, compare written evaluations, and finalize synthetic capstone attempts.</p>
     {/* Named sections complement the shared main landmark; metrics and statuses always have text labels. */}

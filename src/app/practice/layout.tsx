@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Route marker widens only practice pages; A/B reading order stays sequential in the DOM. */
+/** Practice route wrapper preserves DOM reading order; only comparison workspaces receive the 80rem canvas. */
 export default function PracticeLayout({ children }: { children: ReactNode }) {
   return <div className="practice-layout">{children}</div>;
 }

@@ -61,6 +61,8 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await accessible(page);
       await page.getByRole("link", { name: `Adjudicate ${fixture.attempt.id}`, exact: true }).click();
       await expect(page.getByRole("heading", { name: "Stage 1: Independent rubric evaluation", exact: true })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Reviewer Console", exact: true })).toHaveAttribute("aria-current", "location");
+      await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
       await page.goto(`${path}?stage=ADJUDICATION`);
       await expect(page.getByRole("heading", { name: "Stage 1: Independent rubric evaluation", exact: true })).toBeVisible();
       const lockedHtml = await page.content();

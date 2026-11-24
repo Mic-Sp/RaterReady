@@ -23,6 +23,17 @@
 }
 
 .app-shell { width: min(100% - 2.5rem, 31rem); margin: 0 auto; padding: 2.5rem 0 2rem; overflow-wrap: anywhere; }
+/* Authenticated catalogs/dashboard/admin use max-w-6xl (72rem); public sign-in stays compact. */
+.authenticated-shell { width: min(100% - 2.5rem, 72rem); }
+.authenticated-navigation { margin-top: 1.25rem; border-top: 1px solid #cfdee5; border-bottom: 1px solid #cfdee5; padding: .75rem 0; }
+.navigation-links { display: flex; flex-wrap: wrap; gap: .25rem .5rem; list-style: none; padding: 0; margin: 0; }
+.navigation-links li { min-width: 0; }
+.navigation-links a { display: block; min-height: 2.75rem; padding: .6rem .8rem; border: 1px solid transparent; border-radius: .4rem; text-underline-offset: .2rem; }
+.navigation-links a[aria-current] { background: #dcefe9; border-color: #91bdae; font-weight: 700; text-decoration-thickness: 2px; }
+.navigation-identity { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-top: .75rem; }
+.navigation-identity > p { flex: 1 1 15rem; }
+.navigation-identity form { margin: 0; }
+.navigation-identity .text-button { padding: .6rem .8rem; }
 .brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.65rem; font-weight: 750; letter-spacing: -.05em; text-decoration: none; }
 .brand-mark { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: .65rem; background: var(--ink); color: #fff; font-size: 1.4rem; letter-spacing: -.06em; }
 .brand-description { margin-top: .5rem; color: var(--muted); font-size: .9375rem; }
@@ -54,14 +65,9 @@ h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.2; letter-spacing: -.
 .form-note { margin-top: 1rem; color: var(--muted); font-size: .875rem; text-align: center; }
 .site-footer { padding: 1.5rem .5rem 0; color: var(--muted); font-size: .875rem; text-align: center; }
 .site-footer p + p { margin-top: .3rem; }
-.identity-card { margin: 1.5rem 0; padding: 1.15rem; border: 1px solid #cfdee5; border-radius: .65rem; background: #f5f9fa; }
-.identity-label { color: var(--muted); font-size: .875rem; }
-.identity-name { margin: .25rem 0 .8rem; font-weight: 700; overflow-wrap: anywhere; }
-.badge-row { display: flex; flex-wrap: wrap; gap: .6rem; }
 .role-badge, .demo-badge { border-radius: .3rem; padding: .25rem .55rem; font-size: .875rem; font-weight: 700; }
 .role-badge { color: #145347; background: #dcefe9; border: 1px solid #91bdae; }
 .demo-badge { color: #654710; background: #fff9e8; border: 1px solid #c8ad62; }
-.shell-description { margin-bottom: 1.5rem; color: var(--muted); }
 .skip-link { position: fixed; left: 1rem; top: -8rem; z-index: 10; background: var(--surface); border: 2px solid var(--ink); padding: .7rem 1rem; border-radius: .4rem; }
 .skip-link:focus { top: 1rem; }
 @media (max-width: 380px) {
@@ -92,14 +98,32 @@ h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.2; letter-spacing: -.
 .text-button { display: inline-block; background: transparent; border: 0; text-decoration: underline; color: var(--ink); padding: .6rem 0; min-height: 2.75rem; font-weight: 600; text-underline-offset: .2rem; }
 .inline-link { display: block; padding: .7rem 0; min-height: 2.75rem; text-decoration: underline; text-underline-offset: .2rem; }
 .button-link { text-decoration: none; text-align: center; margin-top: 1rem; }
-.learner-identity { padding-bottom: 1rem; margin-bottom: 1.4rem; border-bottom: 1px solid #cfdee5; }
-.learner-identity p { font-size: .9375rem; }
-.learner-identity .role-badge, .learner-identity .demo-badge { display: inline-block; margin: .3rem 0; }
 .reference-panel { border: 1px solid var(--border); padding: 1rem; margin-top: 1.5rem; border-radius: .65rem; }
 .reference-panel summary { cursor: pointer; font-weight: 700; min-height: 2.75rem; }
 .reference-panel p { margin-top: .75rem; }
 .readiness-card { background: #f3f7fa; border: 1px solid #cfdee5; border-radius: .65rem; padding: 1rem; }
 progress { width: 100%; height: 1rem; accent-color: var(--focus); margin: .8rem 0; }
+.dashboard-grid, .rubric-criteria { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.dashboard-grid > *, .rubric-criteria > div { min-width: 0; }
+.rubric-guide { scroll-margin-top: 1rem; }
+.rubric-criteria { margin: 1rem 0; }
+.rubric-criteria > div { border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; background: #f5f9fa; }
+.rubric-criteria dt { font-weight: 700; margin-bottom: .5rem; }
+.rubric-criteria dd { margin: 0; }
+/* Explicit list markers keep curriculum sequence apparent in both desktop and mobile layouts. */
+.curriculum-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem 2rem; }
+.curriculum-list > li { min-width: 0; }
+.learning-page .curriculum-list > li + li, .learning-page .practice-catalog > li + li { margin-top: 0; }
+/* At 48rem, summary cards pair without changing reading/tab order; curriculum and criteria use three columns at 64rem. */
+@media (min-width: 48rem) {
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-wide { grid-column: 1 / -1; }
+  .curriculum-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .level-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 64rem) {
+  .curriculum-list, .rubric-criteria { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .form-field select { width: 100%; min-height: 3rem; margin: .6rem 0; border: 1px solid var(--border); border-radius: .5rem; padding: .6rem 2rem .6rem .7rem; font: inherit; color: var(--ink); background-color: #fff; }
 .curriculum-list, .feedback-list { margin-top: 1rem; }
 .curriculum-list li, .feedback-list li { padding-bottom: .9rem; border-bottom: 1px solid #d3dfe5; }
@@ -110,13 +134,16 @@ progress { width: 100%; height: 1rem; accent-color: var(--focus); margin: .8rem 
 .diagnostic-form > button { margin-top: 1rem; }
 
 /* A/B workspaces use a wide canvas with sequential reading order on narrow screens. */
-body:has(.practice-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
+/* Split-screen workspaces use max-w-7xl (80rem), while their catalogs retain the shared 72rem shell. */
+body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { width: min(100% - 2.5rem, 80rem); max-width: 80rem; }
 .practice-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
 .response-panel { min-width: 0; border: 1px solid var(--border); padding: 1.25rem; border-radius: .65rem; background: #f5f9fa; }
 .simulation-label { color: #654710; font-weight: 700; font-size: .875rem; }
 .response-copy { margin-top: 1rem; white-space: pre-wrap; }
-.practice-catalog { list-style: none !important; padding: 0 !important; display: grid; gap: 1rem; }
-.practice-catalog > li { padding: 1.25rem; border: 1px solid var(--border); border-radius: .65rem; }
+/* A zero-minimum track prevents native date/select controls from widening admin cards at mobile zoom. */
+.practice-catalog { list-style: none !important; padding: 0 !important; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.practice-catalog > li { min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: .65rem; }
+@media (min-width: 48rem) { .practice-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .practice-catalog h2 a, .curriculum-list a { text-decoration: underline; text-underline-offset: .2rem; }
 .practice-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 1rem; align-items: end; margin-top: 1.5rem; }
 .practice-filters .form-field { margin: 0; min-width: 0; }
@@ -146,7 +173,6 @@ body:has(.practice-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
 .exam-slot-nav [aria-current="step"] { border: 3px solid var(--focus); font-weight: 700; background: #eaf6f1; }
 .exam-slot { margin-top: 1.5rem; scroll-margin-top: 9rem; }
 /* Reviewer landmarks follow DOM order; comparisons and criterion controls reflow without horizontal scrolling. */
-body:has(.reviewer-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
 .operations-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
 .operations-grid > div { padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; }
 .operations-grid dt { color: var(--muted); }
@@ -160,7 +186,7 @@ body:has(.reviewer-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
 .review-form legend { padding: 0 .4rem; font-weight: 700; }
 @media (max-width: 760px) {
   .operations-grid, .judge-grid, .criterion-inputs { grid-template-columns: minmax(0, 1fr); }
-  body:has(.reviewer-layout) .app-shell { width: calc(100% - 2rem); }
+  .authenticated-shell, body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { width: calc(100% - 2rem); }
 }
 @media (max-width: 480px) {
   .score-breakdown { grid-template-columns: minmax(0, 1fr); }
@@ -176,5 +202,4 @@ body:has(.reviewer-layout) .app-shell { width: min(100% - 2.5rem, 78rem); }
 @media (max-width: 760px) {
   .practice-columns, .practice-filters { grid-template-columns: minmax(0, 1fr); }
   .practice-buttons { flex-direction: column; }
-  body:has(.practice-layout) .app-shell { width: calc(100% - 2rem); }
 }

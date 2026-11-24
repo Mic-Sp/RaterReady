@@ -4,7 +4,7 @@ import type { getLearningSnapshot } from "../../server/learning/service";
 import { nextLesson } from "../../server/learning/service";
 import { competencies, learningLevels } from "../../lib/learning-content";
 import { generalistPracticeCompetencies } from "../../lib/generalist-competencies";
-import { LearnerIdentity } from "../components/learner-identity";
+import { RubricGuide } from "../components/rubric-guide";
 import { EvaluationReference } from "../components/evaluation-reference";
 import { chooseLevel, beginSkillsCheck } from "../learning/actions";
 import type { CapstoneReadiness } from "../../server/capstone/service";
@@ -21,11 +21,14 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
   const nextPractice = competencies.find((item) => !practiceAreas.has(item.code))?.code ?? "G1";
   const notices: Record<string, string> = { "level-saved": "Learning level saved. All completed lessons remain saved.", "lesson-saved": "Lesson completion saved. This is learning progress, not a certification result.", "diagnostic-skipped": "Skills check skipped. Your learning level and completed lessons are unchanged." };
   return <section className="page-card learning-page" aria-labelledby="landing-heading">
-    <LearnerIdentity user={user} /><p className="eyebrow">Generalist learning</p><h1 id="landing-heading">Your candidate dashboard</h1>
+    <p className="eyebrow">Generalist learning</p><h1 id="landing-heading">Your candidate dashboard</h1>
     <p className="page-intro">Welcome, {user.name}. Keep building independent evaluation judgment at your own pace.</p>
     <p>G1–G6 below are RaterReady’s internal Generalist competency identifiers.</p>
     {notice && Object.hasOwn(notices, notice) && <p role="status" className="success-note">{notices[notice]}</p>}
-    <section className="learning-section" aria-labelledby="practice-progress-heading"><h2 id="practice-progress-heading">Generalist practice progress</h2>
+    <Link href="#rubric-guide" className="inline-link">Understanding Rubrics &amp; Evaluation Criteria</Link>
+    {/* Desktop pairs summary cards in DOM order; full-width curriculum grids reflow sequentially on mobile. */}
+    <div className="dashboard-grid">
+    <section className="learning-section dashboard-wide" aria-labelledby="practice-progress-heading"><h2 id="practice-progress-heading">Generalist practice progress</h2>
       <p>{practiceAreas.size} of 6 competency areas practiced</p><progress max={6} value={practiceAreas.size} aria-label="Competency areas with submitted practice" />
       <p>Practice completion records submissions, not mastery, passing status or capstone readiness. All scenarios remain open for unlimited retries.</p>
       {profile.practiceDrafts[0] && <p><Link href={`/practice/${profile.practiceDrafts[0].scenarioId}`} className="inline-link">Resume saved draft: {profile.practiceDrafts[0].scenario.title}</Link></p>}
@@ -50,7 +53,7 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
       </form>
       <Link href="/onboarding" className="inline-link">Revisit all starting options</Link>
     </section>
-    <section className="learning-section" aria-labelledby="curriculum-heading"><h2 id="curriculum-heading">Six-module curriculum</h2>
+    <section className="learning-section dashboard-wide" aria-labelledby="curriculum-heading"><h2 id="curriculum-heading">Six-module curriculum</h2>
       <p>G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Follow the sequence or revisit any lesson.</p>
       <ol className="curriculum-list">{competencies.map((item) => <li key={item.code}><h3><Link href={`/learn/${item.code}?level=${profile.selectedLevel}`}>{item.code} · {item.title}</Link></h3>
         <p>{completed.some((entry) => entry.competency === item.code) ? "Complete at this level" : "Not yet marked complete at this level"}</p>
@@ -68,7 +71,7 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
       <p>The capstone passing standard stays at 85% or higher after owner review and finalization. This dashboard and the skills check do not issue credentials.</p>
       <Link href="/capstone" className="primary-button button-link">Check capstone readiness</Link>
     </section>
-    <CandidateCredentials records={credentials} />
+    <div className="dashboard-wide"><CandidateCredentials records={credentials} /></div>
     <section className="learning-section" aria-labelledby="opportunity-access-heading"><h2 id="opportunity-access-heading">Remote opportunity access</h2>
       <p>{opportunities?.unlocked ? "Opportunity queue unlocked: a finalized passing capstone and active credential are recorded." : "Opportunity queue locked: a finalized Generalist score of at least 85 and an active credential from that attempt are required. Suspended or revoked credentials do not unlock the queue."}</p>
       <Link href="/opportunities" className="inline-link">Check curated opportunity queue</Link>
@@ -76,6 +79,8 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
     <section className="learning-section" aria-labelledby="optional-heading"><h2 id="optional-heading">Optional explorations</h2>
       <ul><li><Link href="/workflow-lab">Workflow Skills Lab</Link> · optional, unscored, never required for the Generalist credential</li>
         <li><Link href="/technical-preview">Technical Preview</Link> · non-credentialing</li></ul>
-    </section><EvaluationReference />
+    </section>
+    <div className="learning-section dashboard-wide"><RubricGuide /><EvaluationReference /></div>
+    </div>
   </section>;
 }

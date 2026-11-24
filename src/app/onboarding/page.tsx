@@ -5,7 +5,6 @@ import { prisma } from "../../lib/prisma";
 import { getLearningSnapshot } from "../../server/learning/service";
 import { EvaluationReference } from "../components/evaluation-reference";
 import { LevelChoices } from "../components/level-choices";
-import { LearnerIdentity } from "../components/learner-identity";
 import { beginSkillsCheck, skipSkillsCheck } from "../learning/actions";
 
 export const metadata: Metadata = { title: "Choose a learning path | RaterReady" };
@@ -16,7 +15,6 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const profile = await getLearningSnapshot(prisma, user.id);
   const { notice } = await searchParams;
   return <section className="page-card learning-page" aria-labelledby="welcome-heading">
-    <LearnerIdentity user={user} />
     <p className="eyebrow">Generalist learning · your starting point</p>
     <h1 id="welcome-heading">Choose where to begin.</h1>
     <p className="page-intro">Take a short skills check or choose any level directly. You can change levels and revisit earlier lessons at any time. Completed lessons stay saved.</p>

@@ -64,7 +64,7 @@ test("Technical Preview reuses accessible practice scoring with approved ties an
     const exposures = await db.scenarioExposure.findMany({ where: { candidateId: user.id }, orderBy: { familyId: "asc" } });
     const attempts = await db.assessmentAttempt.count({ where: { candidateId: user.id, track: "TECHNICAL_PREVIEW" } });
     await signIn(page, "demo-elena");
-    await page.getByRole("link", { name: "Technical Preview", exact: true }).click();
+    await page.getByRole("main").getByRole("link", { name: "Technical Preview", exact: true }).click();
     await expect(page.locator(".practice-catalog > li")).toHaveCount(5);
     await expect(page.getByRole("complementary", { name: "Technical Preview · non-credentialing" })).toContainText("do not grant a Technical credential or alter Generalist capstone eligibility");
     await accessible(page);

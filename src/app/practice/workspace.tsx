@@ -63,7 +63,7 @@ export function PracticeWorkspace({ scenario, draft }: WorkspaceData) {
     <section className="learning-section" aria-labelledby="evidence-heading"><h2 id="evidence-heading">Supplied verification evidence</h2>
       <ul>{scenario.evidence.map((source) => <li key={source.id}><strong>{source.id}</strong><p>{source.text}</p></li>)}</ul>
     </section>
-    <EvaluationReference />
+    <EvaluationReference includeRubricGuide />
     <details className="reference-panel scratchpad"><summary>Temporary research scratchpad · not saved</summary>
       <p id="scratchpad-notice">Notes stay only in this page’s memory, never in server or browser storage. They are not sent with draft saves or submissions. Reloading clears them; use Clear research notes when finished. Do not enter personal information, passwords, or sensitive disclosures.</p>
       <label htmlFor="research-notes">Research scratchpad</label>

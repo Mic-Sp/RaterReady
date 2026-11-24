@@ -6,8 +6,9 @@ import SignInPage from "./login/page";
 import CandidateDashboardPage from "./dashboard/page";
 import AdminConsolePage from "./admin/page";
 import { submitSignOut } from "./actions/session";
-import { LandingShell } from "./components/landing-shell";
+import { AuthenticatedNavigation } from "./components/authenticated-navigation";
 import type { AuthIdentity } from "../server/auth/accounts";
+import RootLayout from "./layout";
 
 const mocks = vi.hoisted(() => ({ requireSession: vi.fn(), requireCandidate: vi.fn(), requireAdmin: vi.fn(), signOut: vi.fn(), redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -17,7 +18,7 @@ vi.mock("../server/learning/service", () => ({ getLearningSnapshot: async () => 
 vi.mock("../server/capstone/service", () => ({ getCapstoneReadiness: async () => ({ latestFinalized: null }) }));
 vi.mock("../server/credentials/service", () => ({ listCandidateCredentials: async () => [], listAdminCredentials: async () => [] }));
 vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: async () => ({ unlocked: false, listings: [] }) }));
-vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
+vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound, usePathname: () => "/dashboard" }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
 
 const candidate: AuthIdentity = { id: "demo-marcus", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, demoLabel: "DEMO - SYNTHETIC" };
@@ -63,13 +64,33 @@ describe("protected role-routing shell", () => {
     expect(mocks.signOut).not.toHaveBeenCalled();
   });
 
-  it.each([candidate, admin])("shows $role identity, demo status and sign-out without future activities", (identity) => {
-    const html = renderToStaticMarkup(<LandingShell user={identity} />);
+  it.each([candidate, admin])("shows $role identity, demo status and sign-out in shared navigation", (identity) => {
+    const html = renderToStaticMarkup(<AuthenticatedNavigation user={identity} />);
     expect(html).toContain(identity.name);
     expect(html).toContain(identity.role === "CANDIDATE" ? "Candidate" : "Admin reviewer");
     expect(html).toContain("DEMO - SYNTHETIC");
     expect(html).toContain("Sign out");
     expect(html).not.toContain("passwordHash");
     expect(html).not.toMatch(/<select|type="radio"|href=".*(?:signup|register)/);
+  });
+
+  it.each([candidate, admin])("renders $role navigation before the shared main landmark", async (identity) => {
+    mocks.requireSession.mockResolvedValue(identity);
+    const html = renderToStaticMarkup(await RootLayout({ children: <h1>Guarded page content</h1> }));
+    expect(mocks.requireSession).toHaveBeenCalledOnce();
+    expect(html).toContain(identity.name);
+    expect(html).toContain("authenticated-shell max-w-6xl");
+    expect(html.indexOf('aria-label="Main navigation"')).toBeLessThan(html.indexOf('<main id="main-content"'));
+    expect(html.match(/>Sign out</g)).toHaveLength(1);
+    expect(html.match(/<main /g)).toHaveLength(1);
+  });
+
+  it("keeps public sign-in compact with synthetic labeling and no authenticated controls", async () => {
+    mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
+    const html = renderToStaticMarkup(await RootLayout({ children: <h1>Sign in</h1> }));
+    expect(html).toContain("DEMO - SYNTHETIC");
+    expect(html).not.toContain('aria-label="Main navigation"');
+    expect(html).not.toContain("authenticated-shell");
+    expect(html).not.toContain("Sign out");
   });
 });
