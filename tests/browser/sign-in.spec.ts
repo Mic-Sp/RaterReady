@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Real form entry and keyboard submission; credentials are local synthetic fixtures only. */
 async function signIn(page: Page, accountCode: keyof typeof testPasswords) {
@@ -15,6 +16,7 @@ async function signIn(page: Page, accountCode: keyof typeof testPasswords) {
 async function checkAccessibility(page: Page) {
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(result.violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 test("public sign-in semantics, keyboard controls, mobile reflow and WCAG checks", async ({ page }) => {

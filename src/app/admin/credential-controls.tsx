@@ -1,5 +1,7 @@
 "use client";
 
+import { SyntheticText } from "../components/demo-badge";
+
 import { useActionState, useEffect, useRef, useState } from "react";
 import { changeCredentialStatusAction } from "./credential-actions";
 
@@ -17,7 +19,7 @@ export function CredentialLifecycleControls({ credentialCode, currentStatus }: {
       </select></div>
     <div className="form-field"><label htmlFor={`reason-${credentialCode}`}>Written lifecycle reason (required)</label>
       <textarea id={`reason-${credentialCode}`} name="reason" maxLength={4000} required value={reason} onChange={(event) => setReason(event.target.value)} disabled={pending} /></div>
-    <div role="status" tabIndex={-1} ref={status}>{state.error ? <p className="form-error">{state.error}</p> : state.message && <p className="success-note">{state.message}</p>}</div>
-    <button type="submit" className="secondary-button" disabled={pending}>{pending ? "Saving lifecycle change…" : "Save credential status"}</button>
+    <div role="status" tabIndex={-1} ref={status}>{state.error ? <p className="form-error"><SyntheticText rebrand>{state.error}</SyntheticText></p> : state.message && <p className="success-note"><SyntheticText rebrand>{state.message}</SyntheticText></p>}</div>
+    <button type="submit" className="secondary-button" disabled={pending}><SyntheticText>{pending ? "Saving lifecycle change…" : "Save credential status"}</SyntheticText></button>
   </form>;
 }

@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { loadCapstoneWorkspace } from "../../../server/capstone/workspace";
 import { CapstoneExam } from "./workspace";
 
-export const metadata: Metadata = { title: "Timed Generalist capstone | RaterReady" };
+export const metadata: Metadata = { title: "Timed Generalist Qualification Exam | RaterReady" };
 
 /** Authorize the candidate and owned attempt before selecting any exam text; unavailable IDs share one generic page. */
 export default async function CapstoneExamPage({ params }: { params: Promise<{ attemptId: string }> }) {

@@ -18,7 +18,7 @@ describe("candidate written grading status privacy and accessibility", () => {
       attemptId: initial.snapshot.id, deterministicScore: finalScore - 5, writtenScore: 5, finalScore, passed,
       finalizedAt: "2026-11-23T12:00:00.000Z", retakeAvailableAfter: passed ? null : "2026-11-25T12:00:00.000Z",
     } } }} />);
-    expect(screen.getByRole("heading", { name: "Your finalized capstone result" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Your finalized Generalist Qualification Exam result" })).toBeTruthy();
     expect(screen.getByText(`${passed ? "Passed" : "Not yet passed"} · ${finalScore.toFixed(2)} / 100`)).toBeTruthy();
     expect(screen.getByText("5.00 / 5")).toBeTruthy();
     for (const competency of ["G1", "G2", "G3", "G4", "G5", "G6"]) expect(screen.getByRole("link", { name: new RegExp(`^Practice ${competency}:`) }).getAttribute("href")).toBe(`/practice?competency=${competency}`);

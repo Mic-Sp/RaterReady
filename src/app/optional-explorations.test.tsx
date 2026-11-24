@@ -38,7 +38,7 @@ describe("optional exploration boundaries and semantics", () => {
 
   it("fixes the preview catalog/workspace track before loading any learner-facing metadata", async () => {
     render(await TechnicalPreviewPage());
-    expect(screen.getByRole("complementary").textContent).toContain("do not grant a Technical credential or alter Generalist capstone eligibility");
+    expect(screen.getByRole("complementary").textContent).toContain("do not grant a Technical credential or alter Generalist Qualification Exam eligibility");
     expect(mocks.list).toHaveBeenCalledWith("TEST_DB", {}, "TECHNICAL_PREVIEW");
     mocks.load.mockResolvedValue({ scenario: { id: "preview-id" }, draft: null });
     await TechnicalExercisePage({ params: Promise.resolve({ scenarioId: "preview-id" }) });

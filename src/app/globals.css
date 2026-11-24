@@ -37,7 +37,7 @@
 .brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.65rem; font-weight: 750; letter-spacing: -.05em; text-decoration: none; }
 .brand-mark { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: .65rem; background: var(--ink); color: #fff; font-size: 1.4rem; letter-spacing: -.06em; }
 .brand-description { margin-top: .5rem; color: var(--muted); font-size: .9375rem; }
-.demo-notice { margin: 1.6rem 0; padding: 1rem 1.15rem; border: 1px solid #c8ad62; border-radius: .75rem; background: #fff9e8; color: #654710; font-size: .9375rem; }
+.demo-notice { margin: 1.6rem 0; padding: 1rem 1.15rem; border: 2px solid #925a0d; border-radius: .75rem; background: #fff4d6; color: #633704; font-size: .9375rem; }
 .notice-label { margin-bottom: .2rem; font-weight: 750; font-size: .875rem; letter-spacing: .06em; }
 .page-card { padding: 2rem; border: 1px solid #d3dfe5; border-radius: 1rem; background: var(--surface); box-shadow: 0 6px 24px #243d4d06; }
 .eyebrow { color: var(--muted); font-size: .875rem; font-weight: 700; margin-bottom: .6rem; }
@@ -67,7 +67,8 @@ h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.2; letter-spacing: -.
 .site-footer p + p { margin-top: .3rem; }
 .role-badge, .demo-badge { border-radius: .3rem; padding: .25rem .55rem; font-size: .875rem; font-weight: 700; }
 .role-badge { color: #145347; background: #dcefe9; border: 1px solid #91bdae; }
-.demo-badge { color: #654710; background: #fff9e8; border: 1px solid #c8ad62; }
+/* Every synthetic marker uses one text-bearing amber treatment; wrapping preserves 320px/200% reflow and forced-color borders. */
+.demo-badge { display: inline-flex; align-items: center; vertical-align: baseline; max-width: 100%; padding: .25rem .6rem; margin-block: .15rem; border: 2px solid #925a0d; border-radius: 999px; color: #633704; background: #fff0c2; font-family: Arial, Helvetica, sans-serif; font-size: .8125rem; font-weight: 800; line-height: 1.4; letter-spacing: .035em; white-space: normal; }
 .skip-link { position: fixed; left: 1rem; top: -8rem; z-index: 10; background: var(--surface); border: 2px solid var(--ink); padding: .7rem 1rem; border-radius: .4rem; }
 .skip-link:focus { top: 1rem; }
 @media (max-width: 380px) {
@@ -138,6 +139,20 @@ progress { width: 100%; height: 1rem; accent-color: var(--focus); margin: .8rem 
 body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { width: min(100% - 2.5rem, 80rem); max-width: 80rem; }
 .practice-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
 .response-panel { min-width: 0; border: 1px solid var(--border); padding: 1.25rem; border-radius: .65rem; background: #f5f9fa; }
+/* Task/evidence/rubric cards and A/B surfaces share explicit boundaries, while heading text distinguishes their purpose without color. */
+.workspace-card { min-width: 0; margin-top: 1.75rem; border: 2px solid var(--border); border-radius: .8rem; background: #fff; }
+.workspace-card-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); border-radius: .65rem .65rem 0 0; background: #e8eff4; }
+.learning-page .workspace-card-header h2 { margin: 0; font-size: 1.25rem; }
+.workspace-card-content { padding: 1.25rem; }
+.workspace-task .workspace-card-header { background: #e8eff4; }
+.workspace-evidence { background: #f3faf6; }
+.workspace-evidence .workspace-card-header { background: #dfeee7; }
+.workspace-rubric { background: #f6f5fc; }
+.workspace-rubric .workspace-card-header { background: #e9e5f5; }
+.workspace-card.response-panel { padding: 0; margin-top: 0; background: #fff; }
+.workspace-card .response-copy { margin-top: 0; }
+.workspace-card-header .simulation-label { margin-top: .65rem; }
+@media (max-width: 480px) { .workspace-card-header, .workspace-card-content { padding: .9rem; } }
 .simulation-label { color: #654710; font-weight: 700; font-size: .875rem; }
 .response-copy { margin-top: 1rem; white-space: pre-wrap; }
 /* A zero-minimum track prevents native date/select controls from widening admin cards at mobile zoom. */

@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
 import { expectSourceFirst } from "./workspace-order";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Authenticate normally; config and setup restrict every database operation to a disposable local fixture database. */
 async function signIn(page: Page, accountCode: "demo-marcus" | "demo-elena") {
@@ -16,6 +17,7 @@ async function signIn(page: Page, accountCode: "demo-marcus" | "demo-elena") {
 /** Real browser semantics and contrast complement native keyboard and mobile reflow checks. */
 async function accessible(page: Page) {
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 test("optional workflow guide supports a keyboard self-check, rule notices and dashboard return", async ({ page }) => {
@@ -67,7 +69,7 @@ test("Technical Preview reuses accessible practice scoring with approved ties an
     await signIn(page, "demo-elena");
     await page.getByRole("main").getByRole("link", { name: "Technical Preview", exact: true }).click();
     await expect(page.locator(".practice-catalog > li")).toHaveCount(5);
-    await expect(page.getByRole("complementary", { name: "Technical Preview · non-credentialing" })).toContainText("do not grant a Technical credential or alter Generalist capstone eligibility");
+    await expect(page.getByRole("complementary", { name: "Technical Preview · non-credentialing" })).toContainText("do not grant a Technical credential or alter Generalist Qualification Exam eligibility");
     await accessible(page);
     await page.getByRole("link", { name: /Rank technical solutions: accept an equivalent tie/ }).click();
     await expect(page.locator("pre code")).toHaveCount(2);

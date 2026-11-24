@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Authenticate through the real form; only the config-validated disposable local database is touched. */
 async function signIn(page: Page, accountCode: "demo-marcus" | "admin-michael") {
@@ -20,6 +21,7 @@ async function noOverflow(page: Page) {
 /** WCAG contrast and landmark checks supplement native keyboard navigation. */
 async function accessible(page: Page) {
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 test("candidate navigation persists across all learning views, with wide layouts and a keyboard rubric reference", async ({ page }) => {
@@ -35,11 +37,15 @@ test("candidate navigation persists across all learning views, with wide layouts
     const nav = page.getByRole("navigation", { name: "Main navigation" });
     const destinations = [
       ["Dashboard", "/dashboard"], ["Practice", "/practice"], ["Workflow Lab", "/workflow-lab"],
-      ["Technical Preview", "/technical-preview"], ["Capstone", "/capstone"], ["Opportunities", "/opportunities"],
+      ["Technical Preview", "/technical-preview"], ["Qualification Exam", "/capstone"], ["Opportunities", "/opportunities"],
     ];
     for (const [label, path] of destinations) {
       await nav.getByRole("link", { name: label, exact: true }).click();
       await expect(page).toHaveURL(path);
+      if (path === "/capstone") {
+        await expect(page.getByRole("heading", { name: "Generalist Qualification Exam readiness", exact: true })).toBeVisible();
+        await expect(page).toHaveTitle("Generalist Qualification Exam readiness | RaterReady");
+      }
       await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
       await expect(page.getByRole("banner")).toContainText("Marcus Vance");

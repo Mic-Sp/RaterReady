@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
 import { expectSourceFirst } from "./workspace-order";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Exercise real authentication, actions and persistence against the config-guarded local test database. */
 async function signIn(page: Page) {
@@ -16,6 +17,7 @@ async function signIn(page: Page) {
 /** Automated WCAG checks supplement keyboard, focus, responsive reading order and persistence assertions. */
 async function accessible(page: Page) {
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 test("key-free accessible A/B practice saves drafts, accepts approved ties and persists unlimited retries", async ({ page }) => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { SyntheticText } from "../components/demo-badge";
+
 import { useState } from "react";
 
 const habits = [
@@ -24,9 +26,9 @@ export function WorkflowChecklist() {
     <p role="status" aria-live="polite" aria-atomic="true">{checked.length} of {habits.length} workflow habits checked · unscored self-check</p>
     <fieldset className="workflow-checklist" aria-describedby="workflow-memory-notice"><legend>Explore any workflow habit</legend>
       {habits.map((habit) => <section className="workflow-habit" key={habit.id} aria-labelledby={`${habit.id}-heading`}>
-        <h3 id={`${habit.id}-heading`}>{habit.title}</h3><ul id={`${habit.id}-guide`}>{habit.steps.map((step) => <li key={step}>{step}</li>)}</ul>
+        <h3 id={`${habit.id}-heading`}><SyntheticText rebrand>{habit.title}</SyntheticText></h3><ul id={`${habit.id}-guide`}>{habit.steps.map((step) => <li key={step}><SyntheticText>{step}</SyntheticText></li>)}</ul>
         <label className="radio-choice"><input type="checkbox" checked={checked.includes(habit.id)} aria-describedby={`${habit.id}-guide`}
-          onChange={(event) => setChecked((previous) => event.target.checked ? [...previous, habit.id] : previous.filter((id) => id !== habit.id))} /><span>{habit.label}</span></label>
+          onChange={(event) => setChecked((previous) => event.target.checked ? [...previous, habit.id] : previous.filter((id) => id !== habit.id))} /><span><SyntheticText>{habit.label}</SyntheticText></span></label>
       </section>)}
     </fieldset>
     <button className="secondary-button" type="button" disabled={!checked.length} onClick={() => setChecked([])}>Reset self-check</button>

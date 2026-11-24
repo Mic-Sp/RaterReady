@@ -1,7 +1,10 @@
 import { expect, type Page } from "@playwright/test";
+import { expectWorkspaceCards, expectSyntheticBadges } from "./presentation";
 
 /** Check DOM and visible heading geometry at the current viewport; source-first order must not be a desktop-only CSS illusion. */
 export async function expectSourceFirst(page: Page, evidence: string, rubric: string) {
+  await expectWorkspaceCards(page);
+  await expectSyntheticBadges(page);
   const titles = ["Task prompt", evidence, rubric, "Response A", "Response B"];
   const headings = await page.locator("main h2").allTextContents();
   const indexes = titles.map((title) => headings.indexOf(title));

@@ -1073,3 +1073,65 @@ Manual verification at `http://127.0.0.1:3000`:
    debounced autosave and Save now. Verify the banner changes from unsaved/saving
    to Saved to server at a UTC timestamp. Make another edit and confirm success
    clears until acknowledgment; reload after saving to confirm the text persists.
+
+## Step 11A: qualification terminology, synthetic badges and workspace cards
+
+Candidate and reviewer product copy now calls the assessment the **Generalist
+Qualification Exam**; compact navigation, mode and action labels use
+**Qualification Exam**. Dashboard readiness, metadata titles, eligibility, timed
+workspace, locked/pending/finalized states, opportunity gates and credential
+disclosures use the same terminology. `/capstone` and its attempt URLs, Prisma
+models/enums, published fixture data and grading contracts remain unchanged.
+`qualificationExamText()` maps legacy human-readable fixture/error copy only at
+presentation boundaries. Learners see readable exam/rubric names and their pinned
+versions; internal identifiers remain available in server metadata.
+
+`DemoBadge` supplies the shared amber pill: dark text, a crisp two-pixel border
+and a literal `DEMO - SYNTHETIC` label. `SyntheticText` uses the same badge for
+markers embedded in titles, sources, examples, explanations and reviewer text.
+It renders escaped React text and does not add announcements or focus targets.
+Candidate prose and code retain their original text; rebranding is opt-in for
+product/fixture copy. Editable form values and serialized data are not decorated.
+The global notice and credential disclosures share the amber callout treatment.
+
+`WorkspaceSection` separates task, evidence and pinned-rubric content with named
+cards and header bars. The shared A/B comparison uses matching individual cards
+with simulated-output badges. Borders, padding, distinct surfaces and spacing
+separate long passages without altering source-first DOM order, desktop A/B
+columns, mobile stacking, practice reset behavior or server save confirmation.
+Optional Skills Check results retain their existing layout and flow; no Welcome
+Check-In has been added.
+
+No migration or reseed is required. Verify with the existing disposable local
+test database and browser setup, running the database/browser suites sequentially:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+Presentation unit tests cover legacy-copy mapping, retained routes/codes, escaped
+embedded badges and named card boundaries. Browser checks inspect actual badge
+colors/borders, detect visible unstyled synthetic markers, and verify workspace
+header/body surfaces and spacing alongside the existing contrast, keyboard,
+320px/200% reflow, assessment-integrity and credential-privacy checks.
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. As a candidate, follow Qualification Exam from the navigation to `/capstone`.
+   Check dashboard readiness, screen title, start action, timed exam and locked/
+   pending/finalized result terminology. Existing attempt URLs should still work.
+2. Inspect synthetic markers in the global header, practice catalog and scenario,
+   source text, results/expert explanations, reviewer console/votes, credential
+   preview and public verification. Every visible marker should have the same
+   readable amber pill, including markers embedded in paragraphs.
+3. Open a Generalist Practice scenario, Technical Preview exercise and timed exam.
+   Check distinct task, evidence, rubric and A/B cards with header bars and space
+   between them. Verify source-first order, desktop columns and sequential mobile
+   layout at 320px and 200% text/zoom, with no clipped content or horizontal scroll.
+4. Confirm practice submission/reset, exam saves and final submission still work.
+   Check the rubric-first owner lock and the retained G1–G6/internal-competency,
+   independent-platform and non-endorsement disclosures beside credentials.

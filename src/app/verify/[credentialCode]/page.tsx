@@ -1,3 +1,4 @@
+import { SyntheticText } from "../../components/demo-badge";
 import type { Metadata } from "next";
 import { prisma } from "../../../lib/prisma";
 import { getPublicCredential } from "../../../server/credentials/service";
@@ -17,13 +18,13 @@ export default async function CredentialVerificationPage({ params }: { params: P
   const { credentialCode } = await params;
   const credential = await getPublicCredential(prisma, credentialCode);
   return <article className="page-card learning-page" aria-labelledby="verification-heading">
-    <p className="eyebrow">RaterReady · Public verification</p><h1 id="verification-heading">{credential ? "RaterReady Generalist credential" : "Credential unavailable"}</h1>
+    <p className="eyebrow">RaterReady · Public verification</p><h1 id="verification-heading"><SyntheticText>{credential ? "RaterReady Generalist credential" : "Credential unavailable"}</SyntheticText></h1>
     <CredentialDisclosures />
-    {credential ? <section className="learning-section" aria-labelledby="verified-evidence-heading"><h2 id="verified-evidence-heading">Verified assessment evidence</h2>
-      <p className="success-note">Active · Public sharing enabled</p><p>Credential code: {credential.credentialCode}</p>
-      <p>Track: RaterReady Generalist</p><p>Covered competencies: {credential.competencies.join(" · ")}</p>
+    {credential ? <section className="learning-section" aria-labelledby="verified-evidence-heading"><h2 id="verified-evidence-heading">Verified Generalist Qualification Exam evidence</h2>
+      <p className="success-note">Active · Public sharing enabled</p><p>Credential code: <SyntheticText>{credential.credentialCode}</SyntheticText></p>
+      <p>Track: RaterReady Generalist</p><p>Covered competencies: <SyntheticText>{credential.competencies.join(" · ")}</SyntheticText></p>
       <p>Blueprint version: {credential.blueprintVersion} · Scoring policy version: {credential.scoringPolicyVersion}</p>
-      <p>Issued: <time dateTime={credential.issuedAt}>{reviewTimestamp(credential.issuedAt)}</time></p>
+      <p>Issued: <time dateTime={credential.issuedAt}><SyntheticText>{reviewTimestamp(credential.issuedAt)}</SyntheticText></time></p>
       <p>Sharing includes assessment metadata only. Candidate names, assessment responses, and private review details are not published.</p>
     </section> : <p>This credential is unavailable for public verification. A code may be unknown, sharing may have been withdrawn, or a credential may be suspended or revoked.</p>}
   </article>;

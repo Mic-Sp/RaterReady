@@ -18,7 +18,7 @@ function saved(revision: number): CapstoneMutationResult {
 beforeEach(() => { vi.useFakeTimers(); vi.mocked(autosaveCapstoneAction).mockReset(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
-describe("continuous capstone autosave", () => {
+describe("continuous Generalist Qualification Exam autosave", () => {
   it("debounces changes and reports saved timestamps only after the server acknowledges them", async () => {
     let acknowledge!: (value: CapstoneMutationResult) => void;
     vi.mocked(autosaveCapstoneAction).mockReturnValue(new Promise((resolve) => { acknowledge = resolve; }));

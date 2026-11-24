@@ -1,3 +1,4 @@
+import { SyntheticText } from "../../components/demo-badge";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -23,14 +24,14 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const level = learningLevels.find((item) => item.code === levelCode.data)!;
   const completed = profile.moduleProgress.some((item) => item.competency === lesson.code && item.level === level.code);
   return <article className="page-card learning-page" aria-labelledby="lesson-heading">
-    <p className="eyebrow">{level.title} · reference lesson</p><h1 id="lesson-heading">{lesson.code} · {lesson.title}</h1>
-    <p className="page-intro">{lesson.code} is one of RaterReady’s internal G1–G6 Generalist competency identifiers.</p>
-    <section className="learning-section"><h2>Core principle</h2><p>{lesson.lesson}</p><p>{level.approach}</p></section>
-    <section className="learning-section"><h2>Synthetic example</h2><p>{lesson.example}</p></section>
+    <p className="eyebrow"><SyntheticText rebrand>{level.title}</SyntheticText> · reference lesson</p><h1 id="lesson-heading"><SyntheticText rebrand>{lesson.code}</SyntheticText> · <SyntheticText rebrand>{lesson.title}</SyntheticText></h1>
+    <p className="page-intro"><SyntheticText rebrand>{lesson.code}</SyntheticText> is one of RaterReady’s internal G1–G6 Generalist competency identifiers.</p>
+    <section className="learning-section"><h2>Core principle</h2><p><SyntheticText rebrand>{lesson.lesson}</SyntheticText></p><p><SyntheticText rebrand>{level.approach}</SyntheticText></p></section>
+    <section className="learning-section"><h2>Synthetic example</h2><p><SyntheticText rebrand>{lesson.example}</SyntheticText></p></section>
     <p>This reference lesson is unscored. Marking it complete records your reading progress only.</p>
     {completed ? <p className="success-note">Already complete at this level. Reviewing it never resets your progress.</p>
       : <form action={markLessonComplete}><input type="hidden" name="level" value={level.code} /><input type="hidden" name="competency" value={lesson.code} /><button type="submit" className="primary-button">Mark lesson complete</button></form>}
-    <section className="learning-section"><h2>View this lesson at any level</h2><ul>{learningLevels.map((item) => <li key={item.code}><Link href={`/learn/${lesson.code}?level=${item.code}`}>{item.title}</Link></li>)}</ul></section>
+    <section className="learning-section"><h2>View this lesson at any level</h2><ul>{learningLevels.map((item) => <li key={item.code}><Link href={`/learn/${lesson.code}?level=${item.code}`}><SyntheticText rebrand>{item.title}</SyntheticText></Link></li>)}</ul></section>
     <EvaluationReference /><Link href="/dashboard" className="inline-link">Return to dashboard</Link>
   </article>;
 }

@@ -1,3 +1,4 @@
+import { SyntheticText } from "./demo-badge";
 import { independentMethod } from "../../lib/learning-content";
 import { RubricGuide } from "./rubric-guide";
 
@@ -5,7 +6,7 @@ import { RubricGuide } from "./rubric-guide";
 export function EvaluationReference({ includeRubricGuide = false }: { includeRubricGuide?: boolean }) {
   return <details className="reference-panel"><summary>Seven-Step Independent Evaluation Method</summary>
     <p>Open this reference whenever it helps, at any learning level. No walkthrough is required.</p>
-    <ol>{independentMethod.map((step) => <li key={step}>{step}</li>)}</ol>
+    <ol>{independentMethod.map((step) => <li key={step}><SyntheticText>{step}</SyntheticText></li>)}</ol>
     {includeRubricGuide && <RubricGuide />}
   </details>;
 }

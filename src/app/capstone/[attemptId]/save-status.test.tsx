@@ -19,11 +19,11 @@ const initial: CapstoneWorkspace = { snapshot: { id: "attempt", status: "IN_PROG
 beforeEach(() => { vi.useFakeTimers(); vi.resetAllMocks(); HTMLElement.prototype.scrollIntoView = vi.fn(); mocks.sync.mockResolvedValue(initial.snapshot); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-describe("source-first capstone and truthful live save confirmation", () => {
+describe("source-first Generalist Qualification Exam and truthful live save confirmation", () => {
   it("orders the task, evidence, pinned rubric and A/B outputs before the form", () => {
     render(<CapstoneExam initial={initial} />);
     const headings = screen.getAllByRole("heading").map((heading) => heading.textContent);
-    const order = ["Task prompt", "Supplied source material", "Pinned rubric", "Response A", "Response B"].map((title) => headings.indexOf(title));
+    const order = ["Task prompt", "Supplied source material", "Pinned evaluation rubric", "Response A", "Response B"].map((title) => headings.indexOf(title));
     expect(order.every((position, index) => position >= 0 && (index === 0 || position > order[index - 1]))).toBe(true);
     const responseB = screen.getByRole("heading", { name: "Response B" });
     expect(responseB.compareDocumentPosition(screen.getByRole("form", { name: "Slot 1 evaluation" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -33,7 +33,7 @@ describe("source-first capstone and truthful live save confirmation", () => {
     let acknowledge!: (value: CapstoneMutationResult) => void;
     mocks.autosave.mockImplementation(() => new Promise((resolve) => { acknowledge = resolve; }));
     render(<CapstoneExam initial={initial} />);
-    const status = screen.getByRole("status", { name: "Capstone save status" });
+    const status = screen.getByRole("status", { name: "Qualification Exam save status" });
     const input = screen.getByRole("textbox", { name: "Written justification for slot 1" });
     fireEvent.change(input, { target: { value: "DEMO - SYNTHETIC: independent reasoning" } });
     expect(status.getAttribute("data-save-state")).toBe("unsaved");
@@ -64,7 +64,7 @@ describe("source-first capstone and truthful live save confirmation", () => {
 
   it.each([{ dirty: true }, { saving: true }, { blocked: "CONFLICT" as const }, { clockError: true }])("does not present historical saves as current success when %j", (patch) => {
     render(<CapstoneSaveStatus session={{ current: { ...initial.snapshot, revision: 1, savedAt: "2026-11-24T12:00:05.000Z" }, dirty: false, saving: false, blocked: null, clockError: false, message: "Check saved work.", ...patch }} />);
-    const status = screen.getByRole("status", { name: "Capstone save status" });
+    const status = screen.getByRole("status", { name: "Qualification Exam save status" });
     expect(status.getAttribute("data-save-state")).not.toBe("saved");
     expect(status.textContent).not.toContain("Saved to server at");
     expect(status.textContent).toContain("Last server-confirmed save:");

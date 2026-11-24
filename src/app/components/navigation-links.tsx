@@ -1,5 +1,7 @@
 "use client";
 
+import { SyntheticText } from "./demo-badge";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@prisma/client";
@@ -9,7 +11,7 @@ const candidateLinks = [
   { href: "/practice", label: "Practice" },
   { href: "/workflow-lab", label: "Workflow Lab" },
   { href: "/technical-preview", label: "Technical Preview" },
-  { href: "/capstone", label: "Capstone" },
+  { href: "/capstone", label: "Qualification Exam" },
   { href: "/opportunities", label: "Opportunities" },
 ];
 
@@ -19,6 +21,6 @@ export function NavigationLinks({ role }: { role: Role }) {
   // Only the server-verified role chooses links. Hiding a link never replaces authorization.
   const links = role === "ADMIN_REVIEWER" ? [{ href: "/admin", label: "Reviewer Console" }] : candidateLinks;
   return <nav aria-label="Main navigation"><ul className="navigation-links">{links.map(({ href, label }) =>
-    <li key={href}><Link href={href} aria-current={pathname === href ? "page" : pathname.startsWith(`${href}/`) ? "location" : undefined}>{label}</Link></li>
+    <li key={href}><Link href={href} aria-current={pathname === href ? "page" : pathname.startsWith(`${href}/`) ? "location" : undefined}><SyntheticText>{label}</SyntheticText></Link></li>
   )}</ul></nav>;
 }

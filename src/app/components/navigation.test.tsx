@@ -19,7 +19,7 @@ describe("shared authenticated navigation", () => {
     const nav = screen.getByRole("navigation", { name: "Main navigation" });
     expect(within(nav).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["Dashboard", "/dashboard"], ["Practice", "/practice"], ["Workflow Lab", "/workflow-lab"],
-      ["Technical Preview", "/technical-preview"], ["Capstone", "/capstone"], ["Opportunities", "/opportunities"],
+      ["Technical Preview", "/technical-preview"], ["Qualification Exam", "/capstone"], ["Opportunities", "/opportunities"],
     ]);
     expect(within(nav).getByRole("link", { name: "Practice", current: "location" })).toBeDefined();
     expect(screen.getByText(candidate.name)).toBeDefined();

@@ -1,5 +1,7 @@
 "use client";
 
+import { SyntheticText } from "../components/demo-badge";
+
 import { useActionState, useEffect, useRef, useState } from "react";
 import { submitSignIn } from "./actions";
 import { SIGN_IN_FAILURE, type SignInState } from "./form-state";
@@ -24,7 +26,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
   return (
     <form action={action} noValidate aria-label="Sign in to RaterReady" aria-busy={pending} className="sign-in-form">
       <div ref={status} role="status" aria-live="polite" aria-atomic="true" tabIndex={-1} className="form-status">
-        {pending ? <p>Signing you in…</p> : state.error ? <p key={state.attempt} className="form-error">{state.error}</p> : null}
+        {pending ? <p>Signing you in…</p> : state.error ? <p key={state.attempt} className="form-error"><SyntheticText rebrand>{state.error}</SyntheticText></p> : null}
       </div>
       <div className="form-field">
         <label htmlFor="account-code">Account identifier</label>
@@ -33,7 +35,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
           spellCheck={false} required maxLength={64} defaultValue={state.accountCode} readOnly={pending}
           aria-invalid={Boolean(state.fieldErrors?.accountCode)}
           aria-describedby={`account-hint${state.fieldErrors?.accountCode ? " account-error" : ""}`} />
-        {state.fieldErrors?.accountCode && <p id="account-error" className="field-error">{state.fieldErrors.accountCode}</p>}
+        {state.fieldErrors?.accountCode && <p id="account-error" className="field-error"><SyntheticText>{state.fieldErrors.accountCode}</SyntheticText></p>}
       </div>
       <div className="form-field">
         <label htmlFor="password">Password</label>
@@ -44,12 +46,12 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
             aria-describedby={`password-hint${state.fieldErrors?.password ? " password-error" : ""}`} />
           <button type="button" className="visibility-button" aria-label={showPassword ? "Hide password" : "Show password"}
             aria-controls="password" aria-pressed={showPassword} disabled={pending} onClick={() => setShowPassword(!showPassword)}>
-            {showPassword ? "Hide" : "Show"}
+            <SyntheticText>{showPassword ? "Hide" : "Show"}</SyntheticText>
           </button>
         </div>
-        {state.fieldErrors?.password && <p id="password-error" className="field-error">{state.fieldErrors.password}</p>}
+        {state.fieldErrors?.password && <p id="password-error" className="field-error"><SyntheticText>{state.fieldErrors.password}</SyntheticText></p>}
       </div>
-      <button type="submit" className="primary-button" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+      <button type="submit" className="primary-button" disabled={pending}><SyntheticText>{pending ? "Signing in…" : "Sign in"}</SyntheticText></button>
       <p className="form-note">Use only synthetic demonstration data in this demo.</p>
     </form>
   );

@@ -5,6 +5,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
 import { clearCapstones, setCoverage } from "./capstone-fixture";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Exercise real Credentials sessions; no browser-selected role or synthetic auth endpoint exists. */
 async function signIn(page: Page, account: "admin-michael" | "demo-marcus") {
@@ -16,6 +17,7 @@ async function signIn(page: Page, account: "admin-michael" | "demo-marcus") {
 /** Includes contrast and WCAG 2.2 AA; keyboard and zoom/reflow assertions supplement axe. */
 async function accessible(page: Page) {
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 /** Trusted local fixture pins boundary subtotals before locking submission; no production endpoint accepts totals. */
@@ -66,7 +68,12 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await page.goto(`${path}?stage=ADJUDICATION`);
       await expect(page.getByRole("heading", { name: "Stage 1: Independent rubric evaluation", exact: true })).toBeVisible();
       const lockedHtml = await page.content();
-      for (const job of jobs) { expect(lockedHtml).not.toContain(job.rationale!); expect(lockedHtml).not.toContain(job.modelVersion); }
+      for (const job of jobs) {
+        expect(lockedHtml).not.toContain(job.rationale!);
+        // Also inspect the unique prose after the synthetic prefix, so badge spans cannot disguise an early leak.
+        expect(lockedHtml).not.toContain(job.rationale!.replace("DEMO - SYNTHETIC: ", ""));
+        expect(lockedHtml).not.toContain(job.modelVersion);
+      }
       for (const field of ["rawVoteJson", "gradingReasons", "answerKeyJson", "allowedAlternativesJson", "finalScoresJson"]) expect(lockedHtml).not.toContain(field);
       await expect(page.getByRole("heading", { name: /^Judge [12] · slot/ })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: /^Frozen written rubric/ })).toHaveCount(3);
@@ -90,7 +97,8 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await expect(page.getByRole("heading", { name: /^Judge [12] · slot/ })).toHaveCount(6);
       await expect(page.getByText("Owner preliminary scores", { exact: true })).toHaveCount(3);
       await expect(page.getByText("Judges agree on every criterion.", { exact: true })).toHaveCount(3);
-      for (const job of jobs) expect(await page.content()).toContain(job.rationale!);
+      // Badges split rationale markup into spans; verify the unlocked visible prose rather than a contiguous HTML substring.
+      for (const job of jobs) await expect(page.getByText(`Rationale: ${job.rationale!}`, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/^Model version:/)).toHaveCount(6); await expect(page.getByText(/^Prompt version:/)).toHaveCount(6);
       await accessible(page);
       await page.setViewportSize({ width: 320, height: 740 }); await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -116,13 +124,16 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await expect(page.getByRole("link", { name: `View finalized review ${fixture.attempt.id}`, exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: `Adjudicate ${fixture.attempt.id}`, exact: true })).toHaveCount(0);
       await candidate.goto(`/capstone/${fixture.attempt.id}`);
-      await expect(candidate.getByRole("heading", { name: "Your finalized capstone result", exact: true })).toBeVisible();
+      await expect(candidate.getByRole("heading", { name: "Your finalized Generalist Qualification Exam result", exact: true })).toBeVisible();
       await expect(candidate.getByText(`${passed ? "Passed" : "Not yet passed"} · ${total.toFixed(2)} / 100`, { exact: true })).toBeVisible();
       await expect(candidate.getByText("5.00 / 5", { exact: true })).toBeVisible();
       for (const competency of ["G1", "G2", "G3", "G4", "G5", "G6"]) await expect(candidate.getByRole("link", { name: new RegExp(`^Practice ${competency}:`) })).toHaveAttribute("href", `/practice?competency=${competency}`);
       const resultHtml = await candidate.content();
       for (const field of ["answerKeyJson", "allowedAlternativesJson", "ownerPreliminaryJson", "rawVoteJson", "gradingReasons"]) expect(resultHtml).not.toContain(field);
-      for (const job of jobs) expect(resultHtml).not.toContain(job.rationale!);
+      for (const job of jobs) {
+        expect(resultHtml).not.toContain(job.rationale!);
+        expect(resultHtml).not.toContain(job.rationale!.replace("DEMO - SYNTHETIC: ", ""));
+      }
       await accessible(candidate);
       await candidate.setViewportSize({ width: 320, height: 740 }); await candidate.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
       expect(await candidate.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await accessible(candidate);
@@ -152,7 +163,7 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
           await enable.focus(); await candidate.keyboard.press("Enter");
           await expect(candidate.getByRole("button", { name: "Disable public verification", exact: true })).toBeVisible();
           await verification.goto(verifyPath);
-          await expect(verification.getByRole("heading", { name: "Verified assessment evidence", exact: true })).toBeVisible();
+          await expect(verification.getByRole("heading", { name: "Verified Generalist Qualification Exam evidence", exact: true })).toBeVisible();
           await expect(verification.getByText("DEMO - SYNTHETIC / PRELIMINARY PILOT CREDENTIAL", { exact: true })).toBeVisible();
           await expect(verification.getByText(/not an external industry standard/)).toBeVisible();
           await expect(verification.getByText(/unproctored browser-based assessment/)).toBeVisible();
@@ -179,7 +190,7 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
             await status.selectOption(next); await reason.fill(`DEMO - SYNTHETIC: owner lifecycle reason for ${next}.`); await save.click();
             await expect.poll(async () => (await db.credential.findUniqueOrThrow({ where: { id: credential.id } })).status).toBe(next);
             await verification.reload();
-            if (next === "ACTIVE") await expect(verification.getByRole("heading", { name: "Verified assessment evidence", exact: true })).toBeVisible();
+            if (next === "ACTIVE") await expect(verification.getByRole("heading", { name: "Verified Generalist Qualification Exam evidence", exact: true })).toBeVisible();
             else expect(await verification.locator("main").innerHTML()).toBe(unavailable);
           }
           await accessible(page);
@@ -194,7 +205,7 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         } finally { await anonymous.close(); }
       }
       await candidate.goto("/capstone");
-      await expect(candidate.getByRole("heading", { name: passed ? "Generalist capstone already passed" : "Retake cooldown active", exact: true })).toBeVisible();
+      await expect(candidate.getByRole("heading", { name: passed ? "Generalist Qualification Exam already passed" : "Retake cooldown active", exact: true })).toBeVisible();
       await accessible(candidate);
       if (!passed) {
         await candidate.goto("/opportunities");

@@ -1,3 +1,4 @@
+import { DemoBadge, SyntheticText } from "./demo-badge";
 import type { AuthIdentity } from "../../server/auth/accounts";
 import { submitSignOut } from "../actions/session";
 import { NavigationLinks } from "./navigation-links";
@@ -7,9 +8,9 @@ export function AuthenticatedNavigation({ user }: { user: AuthIdentity }) {
   return <div className="authenticated-navigation">
     <NavigationLinks role={user.role} />
     <div className="navigation-identity">
-      <p>Signed in as <strong>{user.name}</strong></p>
-      <span className="role-badge">{user.role === "ADMIN_REVIEWER" ? "Admin reviewer" : "Candidate"}</span>
-      <span className="demo-badge">DEMO - SYNTHETIC</span>
+      <p>Signed in as <strong><SyntheticText>{user.name}</SyntheticText></strong></p>
+      <span className="role-badge"><SyntheticText>{user.role === "ADMIN_REVIEWER" ? "Admin reviewer" : "Candidate"}</SyntheticText></span>
+      <DemoBadge />
       <form action={submitSignOut}><button type="submit" className="text-button">Sign out</button></form>
     </div>
   </div>;

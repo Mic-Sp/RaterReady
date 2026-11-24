@@ -1,3 +1,4 @@
+import { DemoBadge, SyntheticText } from "../components/demo-badge";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requirePageRole } from "../../server/auth/page-access";
@@ -22,8 +23,8 @@ export default async function DiagnosticPage({ searchParams }: { searchParams: P
   const completed = session?.status === "COMPLETED";
   const feedback = completed ? evaluateDiagnostic(answers) : null;
   return <section className="page-card learning-page" aria-labelledby="diagnostic-heading">
-    <p className="eyebrow">DEMO - SYNTHETIC · Generalist learning</p><h1 id="diagnostic-heading">Optional skills check</h1>
-    <p className="page-intro">Untimed and non-certifying. This is a small learning sample, not a pass/fail test. It never grants a credential or changes the 85% finalized capstone standard.</p>
+    <p className="eyebrow"><DemoBadge /> · Generalist learning</p><h1 id="diagnostic-heading">Optional skills check</h1>
+    <p className="page-intro">Untimed and non-certifying. This is a small learning sample, not a pass/fail test. It never grants a credential or changes the 85% finalized Generalist Qualification Exam standard.</p>
     <p>G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Use only the fictional task information; no personal disclosures are requested.</p>
     {!completed && <form action={skipSkillsCheck}><button type="submit" className="secondary-button">Skip the diagnostic</button><p className="field-hint">You can skip before answering anything, without explanation or penalty.</p></form>}
     {notice === "saved" && <p role="status" className="success-note">Your selections are saved. You can leave and resume later.</p>}
@@ -31,11 +32,11 @@ export default async function DiagnosticPage({ searchParams }: { searchParams: P
     {!session || session.status === "SKIPPED" ? <form action={beginSkillsCheck}><button className="primary-button" type="submit">Start optional skills check</button></form>
       : !completed ? <form action={submitDiagnostic} className="diagnostic-form">
         <input type="hidden" name="revision" value={session.revision} />
-        {diagnosticTasks.map((task) => <fieldset key={task.competency}><legend>{task.competency} · {competencies.find((item) => item.code === task.competency)!.title}</legend>
-          <p id={`${task.competency}-prompt`}>DEMO - SYNTHETIC: {task.prompt}</p>
+        {diagnosticTasks.map((task) => <fieldset key={task.competency}><legend><SyntheticText>{task.competency}</SyntheticText> · <SyntheticText rebrand>{competencies.find((item) => item.code === task.competency)!.title}</SyntheticText></legend>
+          <p id={`${task.competency}-prompt`}><DemoBadge />: <SyntheticText rebrand>{task.prompt}</SyntheticText></p>
           {task.options.map((option, index) => <label className="radio-choice" key={option}>
             <input type="radio" name={task.competency} value={String(index)} defaultChecked={answers[task.competency] === String(index)} aria-describedby={`${task.competency}-prompt`} />
-            <span>{option}</span>
+            <span><SyntheticText>{option}</SyntheticText></span>
           </label>)}
         </fieldset>)}
         <p>You can leave areas unanswered. Unanswered areas receive “Not observed” feedback.</p>
@@ -43,9 +44,9 @@ export default async function DiagnosticPage({ searchParams }: { searchParams: P
         <button className="primary-button" type="submit" name="intent" value="finish">Get advisory feedback</button>
       </form> : null}
     {feedback && <section className="learning-section" aria-labelledby="feedback-heading"><h2 id="feedback-heading">Your advisory learning snapshot</h2>
-      <p role="status">Skills check complete. No credential or capstone result has been issued.</p>
-      <p>Suggested starting level: <strong>{learningLevels.find((level) => level.code === feedback.suggestedLevel)?.title ?? "Choose any level"}</strong>. You can override this suggestion below.</p>
-      <ul className="feedback-list">{feedback.items.map((item) => <li key={item.competency}><h3>{item.competency} · {competencies.find((c) => c.code === item.competency)!.title}</h3><p><strong>{item.outcome}</strong>. {item.message}</p><Link href={`/learn/${item.competency}?level=${profile.selectedLevel}`} className="inline-link">Explore {item.competency}</Link></li>)}</ul>
+      <p role="status">Skills check complete. No credential or Generalist Qualification Exam result has been issued.</p>
+      <p>Suggested starting level: <strong><SyntheticText rebrand>{learningLevels.find((level) => level.code === feedback.suggestedLevel)?.title ?? "Choose any level"}</SyntheticText></strong>. You can override this suggestion below.</p>
+      <ul className="feedback-list">{feedback.items.map((item) => <li key={item.competency}><h3><SyntheticText>{item.competency}</SyntheticText> · <SyntheticText rebrand>{competencies.find((c) => c.code === item.competency)!.title}</SyntheticText></h3><p><strong><SyntheticText>{item.outcome}</SyntheticText></strong>. <SyntheticText rebrand>{item.message}</SyntheticText></p><Link href={`/learn/${item.competency}?level=${profile.selectedLevel}`} className="inline-link">Explore <SyntheticText>{item.competency}</SyntheticText></Link></li>)}</ul>
       <h2>Choose your learning level</h2><LevelChoices suggested={feedback.suggestedLevel} selected={profile.onboardingCompletedAt ? profile.selectedLevel : undefined} />
     </section>}
     {!completed && session?.status === "IN_PROGRESS" && <form action={skipSkillsCheck}><button type="submit" className="text-button">Skip the diagnostic without submitting</button></form>}

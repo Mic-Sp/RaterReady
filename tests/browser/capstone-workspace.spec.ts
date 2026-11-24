@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { clearCapstones, setCoverage, signInCapstone } from "./capstone-fixture";
 import { capstoneBlueprint } from "../../prisma/capstone-fixtures";
 import { expectSourceFirst } from "./workspace-order";
+import { expectSyntheticBadges } from "./presentation";
 
 /** All fixtures use config-guarded local test DBs. Prefer approved-alternative cases to exercise real final-scoring paths. */
 async function prepare(db: PrismaClient, alternatives = false) {
@@ -19,17 +20,20 @@ async function prepare(db: PrismaClient, alternatives = false) {
 async function start(page: Page, db: PrismaClient, id: string) {
   await signInCapstone(page, "demo-marcus"); await page.goto("/capstone");
   await page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ }).check();
-  await page.getByRole("button", { name: "Start timed capstone attempt", exact: true }).click();
+  await page.getByRole("button", { name: "Start timed Qualification Exam", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Your fixed server timer", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Resume active attempt", exact: true }).click();
   const attempt = await db.assessmentAttempt.findFirstOrThrow({ where: { candidateId: id, mode: "CAPSTONE" } });
   await expect(page).toHaveURL(`/capstone/${attempt.id}`);
-  await expect(page.getByRole("heading", { name: "Your capstone exam", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your Generalist Qualification Exam", exact: true })).toBeVisible();
   return attempt;
 }
 
 /** WCAG checks include contrast; keyboard navigation, reflow and server persistence are asserted separately. */
-async function accessible(page: Page) { expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]); }
+async function accessible(page: Page) {
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
+}
 
 test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-point alternative submission", async ({ page }) => {
   test.setTimeout(120000);
@@ -37,14 +41,14 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
   try {
     const prepared = await prepare(db, true); id = prepared.id;
     const attempt = await start(page, db, id);
-    await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
+    await expectSourceFirst(page, "Supplied source material", "Pinned evaluation rubric");
     const rows = await db.submissionResponse.findMany({ where: { attemptId: attempt.id }, orderBy: { position: "asc" }, include: { scenario: { include: { rubric: true } } } });
     const initialHtml = await page.content();
     for (const key of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "approvedByAccountCode", "reviewGuidance", "verificationInstruction", "acceptedJudgments"]) expect(initialHtml).not.toContain(key);
     for (const row of rows) expect(initialHtml).not.toContain(row.scenario.expertExplanation);
-    await expect(page.getByText("Capstone Mode — Coaching Disabled", { exact: true })).toBeVisible();
+    await expect(page.getByText("Qualification Exam Mode — Coaching Disabled", { exact: true })).toBeVisible();
     await expect(page.getByRole("timer")).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Capstone", exact: true })).toHaveAttribute("aria-current", "location");
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Qualification Exam", exact: true })).toHaveAttribute("aria-current", "location");
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
     await expect(page.getByText("Seven-Step Independent Evaluation Method", { exact: false })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Understanding Rubrics & Evaluation Criteria" })).toHaveCount(0);
@@ -57,7 +61,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await page.getByLabel("Written justification for slot 1", { exact: true }).fill(firstProse);
     await expect.poll(async () => (await db.submissionResponse.findUniqueOrThrow({ where: { attemptId_position: { attemptId: attempt.id, position: 1 } } })).writtenJustification).toBe(firstProse);
     await expect(page.getByText("All six slots saved on the server.", { exact: true })).toBeVisible();
-    const saveStatus = page.getByRole("status", { name: "Capstone save status" });
+    const saveStatus = page.getByRole("status", { name: "Qualification Exam save status" });
     await expect(saveStatus).toHaveAttribute("data-save-state", "saved");
     await expect(saveStatus).toContainText(/Saved to server at \d{2}:\d{2}:\d{2} UTC/);
     await expect(page.getByRole("form", { name: "Slot 1 evaluation", exact: true }).locator('[data-save-state="saved"]')).toContainText("Saved to server at");
@@ -79,7 +83,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     let alternatives = 0;
     for (const row of rows) {
       await page.getByRole("button", { name: new RegExp(`^Slot ${row.position}: G`) }).click();
-      await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
+      await expectSourceFirst(page, "Supplied source material", "Pinned evaluation rubric");
       const approved = row.scenario.allowedAlternativesJson as unknown as { judgment: string; rubricSelections: Record<string, string>; verifiedSourceIds: string[] }[];
       const key = (approved[0] ?? row.scenario.answerKeyJson) as { judgment: string; rubricSelections: Record<string, string>; verifiedSourceIds: string[] };
       if (approved[0]) alternatives += 1;
@@ -97,7 +101,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await expect(page.getByRole("progressbar")).toHaveAttribute("value", "6");
     await accessible(page);
     await page.setViewportSize({ width: 320, height: 740 }); await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
+    await expectSourceFirst(page, "Supplied source material", "Pinned evaluation rubric");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const a = await page.getByRole("region", { name: "Response A", exact: true }).boundingBox();
     const b = await page.getByRole("region", { name: "Response B", exact: true }).boundingBox();
@@ -106,10 +110,10 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await page.screenshot({ path: test.info().outputPath("capstone-workspace.png"), fullPage: true });
     await page.getByRole("button", { name: "Review final submission", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Confirm final submission", exact: true })).toBeFocused();
-    await expect(page.getByRole("button", { name: "Submit capstone", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Submit Qualification Exam", exact: true })).toBeDisabled();
     await page.getByRole("checkbox", { name: /I confirm this is my final submission/ }).check();
-    await page.getByRole("button", { name: "Submit capstone", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Capstone submitted — responses locked", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Submit Qualification Exam", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Generalist Qualification Exam submitted — responses locked", exact: true })).toBeVisible();
     await expect(page.getByText("Deterministic subtotal: 95 / 95", { exact: true })).toBeVisible();
     await expect(page.getByRole("status")).toContainText("owner review are pending");
     await expect(page.getByRole("radio")).toHaveCount(0); await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -134,7 +138,7 @@ test("stale tabs pause autosave and can explicitly reload the newer server draft
   try {
     id = (await prepare(db)).id; const attempt = await start(page, db, id);
     const other = await page.context().newPage(); await other.goto(`/capstone/${attempt.id}`);
-    await expect(other.getByRole("heading", { name: "Your capstone exam", exact: true })).toBeVisible();
+    await expect(other.getByRole("heading", { name: "Your Generalist Qualification Exam", exact: true })).toBeVisible();
     // Let both initial status checks finish before deliberately creating a stale revision.
     await other.getByRole("button", { name: "Check server status", exact: true }).click();
     const first = "DEMO - SYNTHETIC: first tab's saved reasoning.";
@@ -166,7 +170,7 @@ test("server expiry locks the workspace and rejects a replayed late autosave whi
     const prose = "DEMO - SYNTHETIC: saved before the server deadline.";
     await page.getByLabel("Written justification for slot 1", { exact: true }).fill(prose);
     await expect(page.getByText("All six slots saved on the server.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Capstone expired — responses locked", exact: true })).toBeVisible({ timeout: 25000 });
+    await expect(page.getByRole("heading", { name: "Generalist Qualification Exam expired — responses locked", exact: true })).toBeVisible({ timeout: 25000 });
     expect(captured).toBeDefined();
     const headers = { ...captured!.headers }; delete headers["content-length"]; delete headers.cookie; delete headers.host; delete headers.connection;
     const replay = await page.context().request.post(captured!.url, { headers, data: captured!.data });

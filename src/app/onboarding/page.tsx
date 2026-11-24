@@ -1,3 +1,4 @@
+import { SyntheticText } from "../components/demo-badge";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requirePageRole } from "../../server/auth/page-access";
@@ -23,7 +24,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     <section className="learning-section" aria-labelledby="optional-check-heading">
       <h2 id="optional-check-heading">Optional skills diagnostic</h2>
       <p>Untimed, non-certifying and skippable at any point. Selected-response tasks provide advisory feedback across G1–G6, RaterReady’s internal Generalist competency identifiers.</p>
-      <form action={beginSkillsCheck}><button type="submit" className="secondary-button">{profile.diagnosticStatus === "COMPLETED" ? "View advisory feedback" : "Take the optional skills check"}</button></form>
+      <form action={beginSkillsCheck}><button type="submit" className="secondary-button"><SyntheticText>{profile.diagnosticStatus === "COMPLETED" ? "View advisory feedback" : "Take the optional skills check"}</SyntheticText></button></form>
       {profile.diagnosticStatus !== "COMPLETED" && <form action={skipSkillsCheck}><button type="submit" className="text-button">Skip the diagnostic</button></form>}
     </section>
     <section className="learning-section" aria-labelledby="direct-path-heading"><h2 id="direct-path-heading">Or choose a learning level</h2>

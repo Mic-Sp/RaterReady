@@ -2,7 +2,7 @@
 export const credentialDisclosure = {
   label: "DEMO - SYNTHETIC / PRELIMINARY PILOT CREDENTIAL",
   competencies: "G1–G6 are RaterReady’s internal Generalist Competency identifiers, not an external industry standard.",
-  evidence: "This credential attests only to RaterReady’s own unproctored browser-based assessment. It does not imply third-party AI lab or platform endorsement, proctored identity verification, or guaranteed employment.",
+  evidence: "This credential attests only to RaterReady’s own Generalist Qualification Exam, an unproctored browser-based assessment. It does not imply third-party AI lab or platform endorsement, proctored identity verification, or guaranteed employment.",
 };
 
 /** Minimal private credential controls; the public identifier is a UUIDv4, never an internal primary key. */

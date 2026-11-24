@@ -1,3 +1,4 @@
+import { DemoBadge } from "./components/demo-badge";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -23,7 +24,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <p className="brand-description">Independent AI evaluation training</p>
             {user && <AuthenticatedNavigation user={user} />}
             <aside className="demo-notice" aria-label="Synthetic demonstration access">
-              <p className="notice-label">DEMO - SYNTHETIC</p>
+              <p className="notice-label"><DemoBadge /></p>
               <p>Training and reviewer access use synthetic demonstration accounts. Shared pilot credentials may be verified publicly.</p>
             </aside>
           </header>

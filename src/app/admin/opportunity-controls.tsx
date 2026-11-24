@@ -1,5 +1,7 @@
 "use client";
 
+import { SyntheticText } from "../components/demo-badge";
+
 import { useActionState, useEffect, useRef } from "react";
 import { updateOpportunityAction } from "./opportunity-actions";
 
@@ -19,7 +21,7 @@ export function OpportunityControls({ code, active, verifiedAt }: { code: string
       <option value="true">Active</option><option value="false">Paused</option></select></div>
     <div className="form-field"><label htmlFor={`op-date-${code}`}>Last verified date (UTC calendar date)</label><input type="date" id={`op-date-${code}`} name="verificationDate" required defaultValue={verifiedAt.slice(0, 10)} disabled={pending} /></div>
     </div>
-    <div role="status" ref={status} tabIndex={-1}>{state.error ? <p className="form-error">{state.error}</p> : state.message && <p className="success-note">{state.message}</p>}</div>
-    <button type="submit" className="secondary-button" disabled={pending}>{pending ? "Saving curation…" : "Save opportunity curation"}</button>
+    <div role="status" ref={status} tabIndex={-1}>{state.error ? <p className="form-error"><SyntheticText rebrand>{state.error}</SyntheticText></p> : state.message && <p className="success-note"><SyntheticText rebrand>{state.message}</SyntheticText></p>}</div>
+    <button type="submit" className="secondary-button" disabled={pending}><SyntheticText>{pending ? "Saving curation…" : "Save opportunity curation"}</SyntheticText></button>
   </form>;
 }

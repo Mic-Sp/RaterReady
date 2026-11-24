@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
+import { expectSyntheticBadges } from "./presentation";
 
 /** Config permits only disposable local databases; resets synthetic learning fixtures, never Neon. */
 async function resetLearner(db: PrismaClient, accountCode: string) {
@@ -24,6 +25,7 @@ async function signIn(page: Page, accountCode: keyof typeof testPasswords) {
 /** WCAG rules include contrast; native keyboard reference disclosure is checked independently. */
 async function checkAccessibility(page: Page) {
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await expectSyntheticBadges(page);
 }
 
 test("direct advanced entry, optional reference and progress-preserving level switches", async ({ page }) => {
@@ -55,7 +57,7 @@ test("direct advanced entry, optional reference and progress-preserving level sw
     await page.reload();
     await expect(page.getByText("Advanced Calibration · 1 of 6 lessons marked complete", { exact: false })).toBeVisible();
     expect(await db.moduleProgress.count({ where: { candidateId } })).toBe(1);
-    await expect(page.getByRole("heading", { name: "Capstone readiness", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Generalist Qualification Exam readiness", exact: true })).toBeVisible();
     await expect(page.getByText("Not yet assessed", { exact: true })).toBeVisible();
     await checkAccessibility(page);
     await page.screenshot({ path: test.info().outputPath("learning-dashboard.png"), fullPage: true });

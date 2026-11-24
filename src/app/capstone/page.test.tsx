@@ -20,7 +20,7 @@ const base: CapstoneReadiness = { kind: "MISSING_PRACTICE", serverNow: "2026-11-
     scoringPolicy: { code: "capstone-scoring", version: 1, passingThreshold: 85, judgment: 40, rubric: 30, verification: 25, written: 5 } } };
 beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ id: "guarded-candidate" }); mocks.readiness.mockResolvedValue(base); });
 
-describe("capstone readiness page", () => {
+describe("Generalist Qualification Exam readiness page", () => {
   it("checks the exact page role before any readiness lookup", async () => {
     mocks.guard.mockRejectedValue(new Error("Forbidden"));
     await expect(CapstoneReadinessPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("Forbidden");
