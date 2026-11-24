@@ -12,7 +12,10 @@ export async function updateOpportunityAction(_previous: CredentialActionState, 
   await requireAdmin();
   try {
     const code = z.string().min(1).max(100).parse(form.get("code"));
-    await updateOpportunityListing(prisma, code, { active: z.enum(["true", "false"]).parse(form.get("active")) === "true", verificationDate: form.get("verificationDate") });
+    // FormData contains strings: Boolean("false") is true. Accept only these two
+    // literal values so Paused reaches PostgreSQL as the boolean false.
+    const active = z.enum(["true", "false"]).parse(form.get("active")) === "true";
+    await updateOpportunityListing(prisma, code, { active, verificationDate: form.get("verificationDate") });
     revalidatePath("/admin"); revalidatePath("/opportunities"); revalidatePath("/opportunities/referral-demo");
     return { error: null, message: "Opportunity curation saved. Changes are recorded in the immutable audit trail." };
   } catch { return { error: "Curation could not be saved. Use a valid verification date that is not in the future.", message: null }; }

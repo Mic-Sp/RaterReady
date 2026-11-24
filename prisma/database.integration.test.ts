@@ -1120,13 +1120,13 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     await expect(setCredentialSharing(prisma, code, false)).rejects.toMatchObject({ status: 403 });
   });
 
-  /** Trusted local golden fixture pins an original 84-point result; production appeal actions never accept a total. */
-  async function finalizedAppealFixture() {
+  /** Trusted local fixture defaults to an 84-point result; an 80-point subtotal supplies a passing curation test. Actions never accept totals. */
+  async function finalizedAppealFixture(subtotal = 79) {
     const id = await capstoneCandidate();
     const attempt = (await startCapstoneAttempt(prisma, id, startInput())).attempt!.id;
     await saveCapstoneDraft(prisma, id, { attemptId: attempt, revision: 0, responses: await completedCapstoneResponses(attempt) });
     await prisma.assessmentAttempt.update({ where: { id: attempt }, data: { status: "PENDING_REVIEW", submittedAt: new Date(),
-      submissionKey: `appeal-fixture:${attempt}`, deterministicScore: 79 } });
+      submissionKey: `appeal-fixture:${attempt}`, deterministicScore: subtotal } });
     await processWrittenGrading(prisma, attempt);
     const written = await ownerScores(attempt); await savePreliminaryReview(prisma, attempt, written);
     await finalizeOwnerReview(prisma, attempt, { scores: written, rationale: "DEMO - SYNTHETIC: original finalized appeal fixture." });
@@ -1186,7 +1186,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     await expect(submitGradingAppeal(prisma, attempt, input)).rejects.toMatchObject({ status: 403 });
   });
 
-  it("keeps opportunity source/referral disclosures and owner curation intact across seeds, with immutable audit events", async () => {
+  it("persists pause/reactivate across connections, filters the candidate queue and preserves curation across seeds", async () => {
+    await finalizedAppealFixture(80);
     const listings = await listAdminOpportunities(prisma);
     expect(listings).toHaveLength(4);
     for (const listing of listings) {
@@ -1196,7 +1197,21 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     const referral = listings.find((l) => l.linkType === "PERSONAL_REFERRAL")!;
     expect(referral.referralPermissionNote).toContain("simulated"); expect(referral.referralDisclosure).toContain("No real referrer");
     const current = await prisma.opportunityListing.findUniqueOrThrow({ where: { code: referral.code } });
+    const reader = new PrismaClient({ datasourceUrl: testUrl });
     try {
+      const verificationDate = current.lastVerifiedAt.toISOString().slice(0, 10);
+      await updateOpportunityListing(prisma, referral.code, { active: true, verificationDate });
+      expect((await getCandidateOpportunities(prisma)).listings.some((l) => l.code === referral.code)).toBe(true);
+      const before = await prisma.auditEvent.count({ where: { targetId: current.id, action: "OPPORTUNITY_CURATION_CHANGED" } });
+      await updateOpportunityListing(prisma, referral.code, { active: false, verificationDate });
+      expect(await reader.opportunityListing.findUnique({ where: { code: referral.code } })).toMatchObject({ active: false, lastVerifiedAt: current.lastVerifiedAt });
+      expect((await listAdminOpportunities(reader)).find((l) => l.code === referral.code)?.active).toBe(false);
+      expect((await getCandidateOpportunities(reader)).listings.some((l) => l.code === referral.code)).toBe(false);
+      await updateOpportunityListing(prisma, referral.code, { active: false, verificationDate });
+      expect(await prisma.auditEvent.count({ where: { targetId: current.id, action: "OPPORTUNITY_CURATION_CHANGED" } })).toBe(before + 1);
+      await updateOpportunityListing(prisma, referral.code, { active: true, verificationDate });
+      expect((await reader.opportunityListing.findUniqueOrThrow({ where: { code: referral.code } })).active).toBe(true);
+      expect((await getCandidateOpportunities(reader)).listings.some((l) => l.code === referral.code)).toBe(true);
       await updateOpportunityListing(prisma, referral.code, { active: false, verificationDate: "2026-11-22" });
       await seedSyntheticData(prisma, testPasswords);
       expect(await prisma.opportunityListing.findUnique({ where: { code: referral.code } })).toMatchObject({ active: false, lastVerifiedAt: new Date("2026-11-22T00:00:00.000Z") });
@@ -1205,6 +1220,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       await expect(prisma.auditEvent.update({ where: { id: audits[0].id }, data: { metadataJson: {} } })).rejects.toThrow(/append-only/);
       await expect(updateOpportunityListing(prisma, referral.code, { active: true, verificationDate: "2099-01-01" })).rejects.toThrow(/future/);
     } finally {
+      await reader.$disconnect();
       await updateOpportunityListing(prisma, referral.code, { active: current.active, verificationDate: current.lastVerifiedAt.toISOString().slice(0, 10) });
     }
   });

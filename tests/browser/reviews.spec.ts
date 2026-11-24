@@ -273,11 +273,24 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         try {
           const curation = page.getByRole("form", { name: `Opportunity curation ${listing.code}`, exact: true });
           await curation.getByLabel("Listing availability", { exact: true }).selectOption("false");
-          await curation.getByLabel("Last verified date (UTC calendar date)", { exact: true }).fill("2026-11-22");
           await curation.getByRole("button", { name: "Save opportunity curation", exact: true }).click();
           await expect.poll(async () => (await db.opportunityListing.findUniqueOrThrow({ where: { code: listing.code } })).active).toBe(false);
+          await expect(curation.getByRole("status")).toContainText("Opportunity curation saved.");
+          await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("false");
+          await page.reload();
+          await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("false");
+          await expect(curation.getByLabel("Last verified date (UTC calendar date)", { exact: true })).toHaveValue(listing.lastVerifiedAt.toISOString().slice(0, 10));
           await candidate.reload(); await expect(candidate.getByRole("heading", { name: "Available curated listings", exact: true })).toBeVisible();
           await expect(candidate.getByRole("link", { name: "Preview synthetic personal referral", exact: true })).toHaveCount(0);
+          await curation.getByLabel("Listing availability", { exact: true }).selectOption("true");
+          await curation.getByRole("button", { name: "Save opportunity curation", exact: true }).click();
+          await expect.poll(async () => (await db.opportunityListing.findUniqueOrThrow({ where: { code: listing.code } })).active).toBe(true);
+          await expect(curation.getByRole("status")).toContainText("Opportunity curation saved.");
+          await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("true");
+          await page.reload();
+          await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("true");
+          await candidate.reload();
+          await expect(candidate.getByRole("link", { name: "Preview synthetic personal referral", exact: true })).toBeVisible();
           expect(await db.auditEvent.count({ where: { targetId: listing.id, action: "OPPORTUNITY_CURATION_CHANGED" } })).toBeGreaterThan(0);
         } finally { await db.opportunityListing.update({ where: { id: listing.id }, data: { active: listing.active, lastVerifiedAt: listing.lastVerifiedAt } }); }
         expect(await db.auditEvent.count({ where: { targetId: revision.id, action: "GRADING_APPEAL_RESOLVED" } })).toBe(1);
