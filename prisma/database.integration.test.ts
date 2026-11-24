@@ -443,6 +443,9 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     const first = await saveOrSubmitPractice(prisma, candidateId, data, true);
     expect(first).toMatchObject({ revision: 2, result: { deterministicScore: 95, feedback: { approvedAlternativeUsed: true, alternativeExplanation: alternative.rationale } } });
     expect(first.submittedAt).toBe(first.savedAt);
+    const reloaded = await loadPracticeWorkspace(prisma, candidateId, scenario.id);
+    expect(reloaded.result).toMatchObject({ deterministicScore: 95, feedback: { submittedJudgment: "TIE", acceptedJudgments: ["A_BETTER", "TIE"] } });
+    for (const field of ["answerKeyJson", "allowedAlternativesJson", "approvedByAccountCode"]) expect(JSON.stringify(reloaded)).not.toContain(field);
     await expect(saveOrSubmitPractice(prisma, candidateId, data, true)).rejects.toHaveProperty("name", "PracticeDraftConflict");
     const retry = await saveOrSubmitPractice(prisma, candidateId, { ...data, revision: 2 }, true);
     expect(retry.result?.attemptId).not.toBe(first.result?.attemptId);
@@ -457,6 +460,32 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(after.practiceProgress.find((item) => item.competency === "G6" && item.level === "ADVANCED")?.submissionCount).toBe(previousCount + 2);
     expect(after.moduleProgress).toEqual(before.moduleProgress);
     expect(after.diagnosticStatus).toBe(before.diagnosticStatus);
+  });
+
+  it.each(["GENERALIST", "TECHNICAL_PREVIEW"] as const)("reloads results and resets an owned %s draft without erasing attempts or participation", async (track) => {
+    const fixture = track === "GENERALIST" ? expandedPracticeScenarios[0] : technicalPreviewScenarios[0];
+    const scenario = await prisma.scenario.findFirstOrThrow({ where: { family: { code: fixture.familyCode }, bank: "PRACTICE", track, version: 1 }, include: { rubric: true } });
+    const input = { scenarioId: scenario.id, scenarioVersion: scenario.version, rubricVersion: scenario.rubric.version, revision: 0,
+      ...fixture.answerKeyJson, writtenJustification: "DEMO - SYNTHETIC: submitted independent reasoning." };
+    expect((await loadPracticeWorkspace(prisma, candidateId, scenario.id, track)).result).toBeUndefined();
+    const submitted = await saveOrSubmitPractice(prisma, candidateId, input, true, track);
+    const attempts = await prisma.assessmentAttempt.count({ where: { candidateId } });
+    const progress = await prisma.practiceProgress.findMany({ where: { candidateId }, orderBy: { competency: "asc" } });
+    const reloaded = await loadPracticeWorkspace(prisma, candidateId, scenario.id, track);
+    expect(reloaded.result).toMatchObject({ feedback: { submittedJudgment: input.judgment, acceptedJudgments: [fixture.answerKeyJson.judgment] } });
+    expect(await prisma.assessmentAttempt.count({ where: { candidateId } })).toBe(attempts);
+    const reset = { scenarioId: scenario.id, scenarioVersion: scenario.version, rubricVersion: scenario.rubric.version, revision: submitted.revision,
+      rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" };
+    await saveOrSubmitPractice(prisma, candidateId, reset, false, track);
+    const blank = await loadPracticeWorkspace(prisma, candidateId, scenario.id, track);
+    expect(blank.draft).toMatchObject({ revision: 2, submittedAt: null, rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" });
+    expect(blank.draft?.judgment).toBeUndefined(); expect(blank.result).toBeUndefined();
+    for (const field of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "acceptedJudgments"]) expect(JSON.stringify(blank)).not.toContain(field);
+    await expect(saveOrSubmitPractice(prisma, candidateId, reset, false, track)).rejects.toHaveProperty("name", "PracticeDraftConflict");
+    expect(await prisma.assessmentAttempt.count({ where: { candidateId } })).toBe(attempts);
+    expect(await prisma.practiceProgress.findMany({ where: { candidateId }, orderBy: { competency: "asc" } })).toEqual(progress);
+    // Release this test's empty draft fixture so later independent track tests can start at revision zero.
+    await prisma.practiceDraft.delete({ where: { candidateId_scenarioId: { candidateId, scenarioId: scenario.id } } });
   });
 
   it("allows only one concurrent revision update and rolls back a failed evaluation", async () => {

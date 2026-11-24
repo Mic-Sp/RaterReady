@@ -9,7 +9,7 @@ import { PracticeEvaluationError } from "../../server/domain/practice-scoring";
 import type { PracticeFormState } from "./form-state";
 
 /**
- * Candidate-only action separates save/submit intent. Ownership comes from the session,
+ * Candidate-only action separates save/submit/reset intent. Ownership comes from the session,
  * metadata/controls are checked against the published practice DTO, and errors expose no keys.
  */
 export async function updatePractice(previous: PracticeFormState, formData: FormData): Promise<PracticeFormState> {
@@ -28,12 +28,12 @@ async function updateForTrack(previous: PracticeFormState, formData: FormData, t
   const intent = formData.get("intent");
   const data = practiceDraftSchema.safeParse({
     scenarioId: formData.get("scenarioId"), scenarioVersion: Number(formData.get("scenarioVersion")), rubricVersion: Number(formData.get("rubricVersion")),
-    revision: Number(formData.get("revision") ?? NaN), judgment: formData.get("judgment") || undefined,
-    rubricSelections: Object.fromEntries([...formData.entries()].filter(([name]) => name.startsWith("rating:")).map(([name, value]) => [name.slice(7), value])),
-    verifiedSourceIds: formData.getAll("verifiedSourceIds"), writtenJustification: formData.get("writtenJustification") ?? "",
+    revision: Number(formData.get("revision") ?? NaN), judgment: intent === "reset" ? undefined : formData.get("judgment") || undefined,
+    rubricSelections: intent === "reset" ? {} : Object.fromEntries([...formData.entries()].filter(([name]) => name.startsWith("rating:")).map(([name, value]) => [name.slice(7), value])),
+    verifiedSourceIds: intent === "reset" ? [] : formData.getAll("verifiedSourceIds"), writtenJustification: intent === "reset" ? "" : formData.get("writtenJustification") ?? "",
   });
-  if (!data.success || (intent !== "save" && intent !== "submit")) {
-    return { ...previous, sequence, result: undefined, error: "Check your practice selections and justification length, then try again.", fieldErrors: {} };
+  if (!data.success || (intent !== "save" && intent !== "submit" && intent !== "reset")) {
+    return { ...previous, sequence, error: "Check your practice selections and justification length, then try again.", fieldErrors: {} };
   }
   const { judgment, rubricSelections, verifiedSourceIds, writtenJustification } = data.data;
   const values = { judgment, rubricSelections, verifiedSourceIds, writtenJustification };
@@ -49,12 +49,14 @@ async function updateForTrack(previous: PracticeFormState, formData: FormData, t
       if (!writtenJustification.trim()) fieldErrors.writtenJustification = "Explain your judgment using the rubric and supplied evidence.";
     }
     if (Object.keys(fieldErrors).length) return { ...previous, sequence, values, result: undefined, fieldErrors, error: "Complete the highlighted evaluation fields, or save a partial draft." };
+    // Reset is a CAS-protected empty draft save. It clears the submitted marker, never completed progress or past attempts.
     const saved = await saveOrSubmitPractice(prisma, user.id, data.data, intent === "submit", track);
     revalidatePath("/dashboard"); revalidatePath(track === "GENERALIST" ? "/practice" : "/technical-preview");
-    return { sequence, revision: saved.revision, savedAt: saved.savedAt, submittedAt: saved.submittedAt, values,
-      message: intent === "save" ? "Draft saved on the server. No evaluation was submitted." : "Practice submitted. Your feedback is ready.",
+    return { sequence, revision: saved.revision, savedAt: saved.savedAt, submittedAt: saved.submittedAt, values, intent,
+      message: intent === "reset" ? "New practice attempt ready. All evaluation inputs are clear; completed practice remains saved."
+        : intent === "save" ? "Draft saved on the server. No evaluation was submitted." : "Practice submitted. Your feedback is ready.",
       ...(saved.result ? { result: saved.result } : {}) };
   } catch (error) {
-    return { ...previous, sequence, values, result: undefined, fieldErrors: {}, error: error instanceof PracticeDraftConflict || error instanceof PracticeEvaluationError ? error.message : "Practice could not be saved. Your current entries are still shown. Try again or reload your saved draft." };
+    return { ...previous, sequence, ...(intent === "reset" ? {} : { values, result: undefined }), fieldErrors: {}, error: error instanceof PracticeDraftConflict || error instanceof PracticeEvaluationError ? error.message : "Practice could not be saved. Your current entries are still shown. Try again or reload your saved draft." };
   }
 }

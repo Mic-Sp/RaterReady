@@ -9,6 +9,7 @@ import { ResponseComparison } from "../../components/response-comparison";
 import { submitCapstoneExamAction } from "../workspace-actions";
 import { capstoneSaveMessages, useCapstoneCountdown, useCapstoneSession } from "./use-capstone-session";
 import { FinalizedResult } from "../finalized-result";
+import { CapstoneSaveStatus } from "./save-status";
 
 /** Explicit server UTC timestamps are read-only evidence of saves/deadlines, never computed client save claims. */
 function timestamp(value: string) { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "long", timeZone: "UTC" }).format(new Date(value)); }
@@ -95,23 +96,21 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
     <p>Blueprint version {session.current.blueprintVersion} · scoring policy version {session.current.scoringPolicyVersion}. G1–G6 are RaterReady’s internal Generalist competency identifiers.</p>
     {remaining <= 300 && <p role="status" className="form-error">{remaining === 0 ? "Checking expiry with the server. Editing is paused." : remaining <= 60 ? "One minute or less remains. Only server-confirmed saves are retained." : "Five minutes or less remain."}</p>}
     {session.clockError && <p className="form-error" role="status">Server status could not be refreshed. The fixed deadline still applies.</p>}
-    <div className="practice-status" role="status" aria-live="polite" aria-atomic="true">
-      <p>{session.saving ? "Saving responses on the server…" : session.message}</p>
-      {session.current.savedAt && <p>Last server-confirmed save: <time dateTime={session.current.savedAt}>{timestamp(session.current.savedAt)}</time> · revision {session.current.revision}{session.dirty ? " · newer changes are not confirmed yet" : ""}</p>}
-    </div>
+    <CapstoneSaveStatus session={session} />
     {session.blocked === "CONFLICT" || session.blocked === "INVALID" ? <button className="secondary-button" type="button" onClick={session.reloadServerDraft}>Reload the server draft (replaces unsaved local edits)</button> : session.blocked && <button className="secondary-button" type="button" onClick={() => { void session.retrySave(); }}>Retry saving</button>}
     <p>Slot {active + 1} of 6 · {completed} complete</p><nav aria-label="Capstone scenario slots"><ol className="exam-slot-nav">{initial.slots.map((item, index) => <li key={item.position}>
       <button type="button" disabled={confirming || preparing || submitting} aria-current={active === index ? "step" : undefined} onClick={() => setActive(index)}>Slot {item.position}: {item.competency} · {complete[index] ? "Complete" : "Incomplete"}</button>
     </li>)}</ol></nav><progress max={6} value={completed} aria-label="Capstone slots with all required fields completed" />
     {slot && draft && <section aria-labelledby={`slot-${slot.position}-heading`} className="exam-slot">
       <h2 id={`slot-${slot.position}-heading`} ref={heading} tabIndex={-1}>Slot {slot.position} · {slot.competency}</h2><h3>{slot.title}</h3><p>Scenario version {slot.scenarioVersion}</p>
+      {/* Source-first reading order is the same in the DOM and on mobile; no keys or coaching are introduced. */}
       <section className="learning-section" aria-labelledby={`slot-${slot.position}-task`}><h2 id={`slot-${slot.position}-task`}>Task prompt</h2><p>{slot.prompt}</p></section>
-      <ResponseComparison responseA={slot.responseA} responseB={slot.responseB} idPrefix={`slot-${slot.position}-response`} />
+      <section className="learning-section" aria-labelledby={`slot-${slot.position}-evidence`}><h2 id={`slot-${slot.position}-evidence`}>Supplied source material</h2><ul>{slot.evidence.map((source) => <li key={source.id}><strong>{source.id}</strong><p>{source.text}</p></li>)}</ul></section>
       <section className="learning-section" aria-labelledby={`slot-${slot.position}-rubric`}><h2 id={`slot-${slot.position}-rubric`}>Pinned rubric</h2><p>{slot.rubric.code} · version {slot.rubric.version}</p>
         <ul>{slot.rubric.criteria.map((criterion) => <li key={criterion.id}>{criterion.label}</li>)}</ul>
         {slot.writtenPrompt && <p>Written review rubric: alignment 0–2, evidence 0–2, clarity 0–1. Written points are assigned later.</p>}
       </section>
-      <section className="learning-section" aria-labelledby={`slot-${slot.position}-evidence`}><h2 id={`slot-${slot.position}-evidence`}>Supplied source material</h2><ul>{slot.evidence.map((source) => <li key={source.id}><strong>{source.id}</strong><p>{source.text}</p></li>)}</ul></section>
+      <ResponseComparison responseA={slot.responseA} responseB={slot.responseB} idPrefix={`slot-${slot.position}-response`} />
       <form className="practice-evaluation-form" noValidate onSubmit={(event) => { event.preventDefault(); void session.retrySave(); }} aria-label={`Slot ${slot.position} evaluation`}>
         <p>Judgment and criterion ratings are required for final submission. You can save a partial draft at any time.</p>
         <fieldset disabled={disabled}><legend>Comparative judgment</legend>{practiceJudgments.map((choice) => <label key={choice.id} className="radio-choice"><input type="radio" required name={`slot-${slot.position}-judgment`} value={choice.id} checked={draft.judgment === choice.id}
@@ -123,6 +122,7 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
         {slot.writtenPrompt && <div className="form-field"><label htmlFor={`slot-${slot.position}-written`}>Written justification for slot {slot.position}</label><p id={`slot-${slot.position}-written-prompt`} className="field-hint">{slot.writtenPrompt}</p>
           <textarea id={`slot-${slot.position}-written`} required rows={6} maxLength={12000} value={draft.writtenJustification} disabled={disabled} aria-describedby={`slot-${slot.position}-written-prompt`}
             onChange={(event) => session.edit(slot.position, { writtenJustification: event.target.value })} /></div>}
+        <CapstoneSaveStatus session={session} compact />
         <button className="secondary-button" type="submit" disabled={disabled || session.saving}>Save now</button>
       </form>
     </section>}

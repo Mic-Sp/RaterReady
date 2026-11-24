@@ -31,6 +31,8 @@ describe("deterministic practice evaluation", () => {
     expect(result.deterministicScore).toBe(95);
     expect(result.feedback.approvedAlternativeUsed).toBe(true);
     expect(result.feedback.alternativeExplanation).toBe(alternative.rationale);
+    expect(result.feedback.submittedJudgment).toBe(alternative.judgment);
+    expect(result.feedback.acceptedJudgments).toEqual([...new Set([expandedPracticeScenarios[index].answerKeyJson.judgment, alternative.judgment])]);
   });
 
   it("preserves full alternative judgment credit even when a nonmatching path would have a higher subtotal", () => {
@@ -43,6 +45,8 @@ describe("deterministic practice evaluation", () => {
     const result = evaluatePracticeScenario(scenario(), { ...submission(), judgment: "BOTH_UNACCEPTABLE", rubricSelections: { accuracy: "A_ONLY", instructionFollowing: "BOTH_MEET", safety: "BOTH_MEET" }, verifiedSourceIds: [] });
     expect(result.deterministicScore).toBe(20);
     expect(result.feedback.judgmentAccepted).toBe(false);
+    expect(result.feedback.submittedJudgment).toBe("BOTH_UNACCEPTABLE");
+    expect(result.feedback.acceptedJudgments).toEqual(["B_BETTER"]);
     expect(result.feedback.rubricCriteria.filter((item) => item.aligned)).toHaveLength(2);
   });
 

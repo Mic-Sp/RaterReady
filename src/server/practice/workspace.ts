@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { loadPracticeScenario, persistPracticeEvaluation, type PracticeTrack } from "./service";
-import { practiceSubmissionSchema, PracticeEvaluationError } from "../domain/practice-scoring";
+import { evaluatePracticeScenario, practiceSubmissionSchema, PracticeEvaluationError } from "../domain/practice-scoring";
 
 /** Partial draft inputs deliberately allow unanswered controls; research scratchpad is not an accepted field. */
 export const practiceDraftSchema = z.object({
@@ -27,14 +27,27 @@ export async function listPracticeScenarios(db: PrismaClient, filters: { compete
     select: { id: true, title: true, version: true, competencies: true, difficulty: true }, orderBy: [{ title: "asc" }, { version: "desc" }] });
 }
 
-/** Load only the current learner's resumable selections and a deep key-free DTO within the server-selected track. */
+/** Load owned draft/result state within the fixed practice track; only submitted drafts may receive safe feedback. */
 export async function loadPracticeWorkspace(db: PrismaClient, candidateId: string, scenarioId: string, track: PracticeTrack = "GENERALIST") {
   const scenario = await loadPracticeScenario(db, candidateId, scenarioId, track);
   if (!scenario.rubric.practice) throw new PracticeEvaluationError("INVALID_CONFIGURATION");
   const draft = await db.practiceDraft.findUnique({ where: { candidateId_scenarioId: { candidateId, scenarioId } } });
-  return { scenario, draft: draft ? { savedAt: draft.savedAt.toISOString(), submittedAt: draft.submittedAt?.toISOString() ?? null,
+  const ownDraft = draft ? { savedAt: draft.savedAt.toISOString(), submittedAt: draft.submittedAt?.toISOString() ?? null,
     ...practiceDraftSchema.parse({ scenarioId, scenarioVersion: draft.scenarioVersion, rubricVersion: draft.rubricVersion, revision: draft.revision,
-      ...z.object({ judgment: practiceDraftSchema.shape.judgment, rubricSelections: practiceDraftSchema.shape.rubricSelections, verifiedSourceIds: practiceDraftSchema.shape.verifiedSourceIds }).parse(draft.selectionsJson), writtenJustification: draft.writtenJustification }) } : null };
+      ...z.object({ judgment: practiceDraftSchema.shape.judgment, rubricSelections: practiceDraftSchema.shape.rubricSelections, verifiedSourceIds: practiceDraftSchema.shape.verifiedSourceIds }).parse(draft.selectionsJson), writtenJustification: draft.writtenJustification }) } : null;
+  let result: ReturnType<typeof evaluatePracticeScenario> | undefined;
+  if (ownDraft?.submittedAt) {
+    // This trusted owned submission marker is checked before selecting keys. Reloading feedback never creates another attempt.
+    const grading = await db.scenario.findFirst({ where: { id: scenarioId, bank: "PRACTICE", status: "PUBLISHED", track, isSyntheticFixture: true },
+      select: { id: true, version: true, bank: true, status: true, track: true, isSyntheticFixture: true,
+        answerKeyJson: true, allowedAlternativesJson: true, expertExplanation: true, evidenceJson: true,
+        rubric: { select: { id: true, version: true, criteriaJson: true } } } });
+    if (!grading) throw new PracticeEvaluationError("UNAVAILABLE");
+    result = evaluatePracticeScenario(grading, { scenarioId: ownDraft.scenarioId, scenarioVersion: ownDraft.scenarioVersion,
+      rubricVersion: ownDraft.rubricVersion, judgment: ownDraft.judgment, rubricSelections: ownDraft.rubricSelections,
+      verifiedSourceIds: ownDraft.verifiedSourceIds, writtenJustification: ownDraft.writtenJustification });
+  }
+  return { scenario, draft: ownDraft, result };
 }
 
 /** Validate public control membership before writing; no answer keys are read during draft saves. */

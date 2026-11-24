@@ -19,5 +19,5 @@ export default async function PracticeWorkspacePage({ params }: { params: Promis
     if (error instanceof PracticeEvaluationError) notFound();
     throw error;
   }
-  return <PracticeWorkspace key={data.scenario.id} scenario={data.scenario} draft={data.draft} />;
+  return <PracticeWorkspace key={data.scenario.id} {...data} />;
 }

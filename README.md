@@ -1001,3 +1001,75 @@ Manual checks at `http://127.0.0.1:3000`:
 5. Follow the dashboard rubric link and open Practice's Seven-Step reference by
    keyboard. Read all three criteria, weights/priorities and the Safety & stated
    policy example; verify the guide does not appear inside the capstone exam.
+
+## Step 10B: evidence-first workspaces, practice results and capstone save status
+
+Generalist Practice, Technical Preview and every active capstone slot now share
+the same DOM reading order: task prompt, supplied evidence/policy notes, pinned
+versioned rubric, simulated Response A/B, then judgment controls, written
+justification and scratchpad. A/B remains side by side on desktop and sequential
+on mobile. Practice retains its optional evaluation reference; capstone coaching
+and answer keys remain unavailable.
+
+A successful practice submission replaces the form with **Results & Feedback**
+and moves focus to its heading. It shows the submitted choice and accepted
+judgments with explicit Response (A), Response (B), or Valid Tie labels, including
+approved alternatives, alongside the expert explanation and submitted reasoning.
+An unaccepted candidate tie is labeled Tie rather than Valid Tie. Only safe
+choice identifiers leave the evaluator; raw keys and approval objects stay on
+the server. Reloading an owned submitted draft reconstructs feedback without
+creating another attempt or awarding participation again.
+
+**Start new attempt** saves an empty draft using the acknowledged revision and
+server-selected track. It clears selections, source checks, justification and
+temporary notes, then focuses the first judgment control. Reloading keeps the
+new draft empty. Completed participation and prior assessment/submission rows
+remain intact. A stale or failed reset retains the locked results and its
+feedback instead of re-enabling the submitted form.
+
+Capstone now has a persistent, polite live-region banner for unsaved, saving,
+saved and error states, plus a compact confirmation beside Save now with no
+duplicate live announcement. The contrasting saved state displays **Saved to server
+at HH:MM:SS UTC** using the server-returned timestamp and revision. New edits,
+in-flight requests, conflicts and unavailable server status remove the current
+success treatment; any previous timestamp is identified as historical. Timer,
+autosave serialization, final-submission locking and owner review are unchanged.
+
+No schema migration is needed. Run the following with an existing disposable
+local test database, sequentially so browser and integration fixtures do not
+interfere:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm test
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+Use the earlier Chromium executable override if needed. Unit/integration coverage
+checks source order, result transitions, truthful A/B/tie labels, persisted empty
+resets, stale revisions, preserved history and delayed server acknowledgments.
+Browser checks exercise both practice tracks, results/reset reloads, keyboard
+focus, desktop/mobile reading order, capstone timestamps against PostgreSQL,
+contrast/reflow and the retained key/coaching boundaries.
+
+Manual verification at `http://127.0.0.1:3000`:
+
+1. Open a Generalist Practice scenario and a Technical Preview exercise. At
+   desktop and mobile widths, verify task → evidence/policy → versioned rubric
+   → simulated A/B → controls/justification/scratchpad.
+2. Submit a completed exercise. Verify Results & Feedback receives focus, the
+   submitted and accepted choices explicitly identify (A), (B) or a valid tie,
+   and no editable submission controls remain. Reload and verify results remain
+   locked without adding another practice submission.
+3. Choose Start new attempt. Check all radio buttons/source checkboxes are
+   unchecked, justification/notes are empty and keyboard focus returns to the
+   judgment controls. Reload to confirm the empty draft persists. Submitting
+   without answering should request the required fields; fill them to practice
+   again. Confirm completed practice remains recorded on the dashboard.
+4. After meeting the existing capstone readiness policy, start/resume an exam.
+   Check source-first order in several slots. Edit a response, then test both
+   debounced autosave and Save now. Verify the banner changes from unsaved/saving
+   to Saved to server at a UTC timestamp. Make another edit and confirm success
+   clears until acknowledgment; reload after saving to confirm the text persists.

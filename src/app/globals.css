@@ -158,6 +158,12 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
 .practice-buttons { display: flex; gap: 1rem; margin-top: 1rem; }
 .practice-status { margin: 1rem 0; padding: 1rem; background: #eef5f7; border-left: 3px solid var(--focus); }
 .practice-status p { font-size: .9375rem; }
+/* Save status uses text plus contrasting surfaces; only an acknowledged, clean server snapshot receives the saved treatment. */
+.capstone-save-status { margin: 1rem 0; padding: 1rem 1.25rem; border: 3px solid var(--border); border-radius: .65rem; background: #eef5f7; }
+.capstone-save-status .save-confirmation { font-size: 1.125rem; }
+.capstone-save-status.save-saved { background: #145347; color: #fff; border-color: #145347; }
+.capstone-save-status.save-unsaved { background: #fff9e8; color: #654710; border-color: #8a661a; }
+.capstone-save-status.save-error { background: #fff2f3; color: #7f1d2b; border-color: var(--error); }
 .score-breakdown { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem 1rem; max-width: 34rem; margin: 1rem 0; }
 .feedback-card { padding: 1.25rem; background: #f2f8f6; border: 1px solid #91bdae; border-radius: .65rem; }
 .code-response { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
+import { expectSourceFirst } from "./workspace-order";
 
 /** Exercise real authentication, actions and persistence against the config-guarded local test database. */
 async function signIn(page: Page) {
@@ -37,6 +38,7 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await accessible(page);
     await page.getByRole("link", { name: /G6 Evaluation Justification & Calibration/ }).click();
     await expect(page.getByRole("heading", { name: "Your independent evaluation" })).toBeVisible();
+    await expectSourceFirst(page, "Supplied verification evidence", "Pinned evaluation rubric");
     const initialHtml = await page.content();
     for (const key of ["answerKeyJson", "allowedAlternativesJson", "approvedByAccountCode", scenario.expertExplanation]) expect(initialHtml).not.toContain(key);
     await expect(page.getByText("DEMO - SYNTHETIC · Simulated AI output", { exact: true })).toHaveCount(2);
@@ -81,6 +83,7 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("practice-desktop.png"), fullPage: true });
     await page.setViewportSize({ width: 320, height: 740 });
+    await expectSourceFirst(page, "Supplied verification evidence", "Pinned evaluation rubric");
     const mobileA = await page.getByRole("region", { name: "Response A", exact: true }).boundingBox();
     const mobileB = await page.getByRole("region", { name: "Response B", exact: true }).boundingBox();
     expect(mobileB!.y).toBeGreaterThan(mobileA!.y + mobileA!.height);
@@ -91,15 +94,40 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole("button", { name: "Submit for evaluation", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Practice feedback", exact: true })).toBeFocused();
+    await expect(page.getByRole("heading", { name: "Results & Feedback", exact: true })).toBeFocused();
+    await expect(page.getByText(/^Your selection: Valid Tie — Response \(A\) and Response \(B\)/)).toBeVisible();
+    await expect(page.getByText(/^Accepted answer\(s\): Response \(A\); Valid Tie/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit for evaluation", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("radio")).toHaveCount(0);
     await expect(page.getByText("Structured practice score: 95 / 95", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Approved alternative accepted", exact: true })).toBeVisible();
     await expect(page.getByText(/The simulated owner approves a tie because both responses are accurate/)).toBeVisible();
     await expect(page.getByText(scenario.expertExplanation, { exact: true })).toBeVisible();
     await accessible(page);
-    await page.getByRole("button", { name: "Try again — unlimited practice", exact: true }).click();
+    await page.screenshot({ path: test.info().outputPath("practice-results.png"), fullPage: true });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Results & Feedback", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit for evaluation", exact: true })).toHaveCount(0);
+    expect(await db.assessmentAttempt.count({ where: { candidateId: learner.id, mode: "PRACTICE" } })).toBe(attemptsBefore + 1);
+    await page.getByRole("button", { name: "Start new attempt", exact: true }).click();
+    await expect(page.getByRole("group", { name: "Comparative judgment" }).getByRole("radio").first()).toBeFocused();
+    await expect(page.locator('input[type="radio"]:checked, input[type="checkbox"]:checked')).toHaveCount(0);
+    await expect(page.getByLabel("Written justification", { exact: true })).toHaveValue("");
+    await page.locator("summary", { hasText: "Temporary research scratchpad" }).click();
+    await expect(page.getByLabel("Research scratchpad", { exact: true })).toHaveValue("");
+    await page.reload();
+    await expect(page.getByLabel("Written justification", { exact: true })).toHaveValue("");
+    await expect(page.locator('input[type="radio"]:checked, input[type="checkbox"]:checked')).toHaveCount(0);
     await page.getByRole("button", { name: "Submit for evaluation", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Practice feedback", exact: true })).toBeVisible();
+    await expect(page.getByRole("status")).toContainText("Complete the highlighted evaluation fields");
+    expect(await db.assessmentAttempt.count({ where: { candidateId: learner.id, mode: "PRACTICE" } })).toBe(attemptsBefore + 1);
+    await page.getByRole("group", { name: "Comparative judgment" }).getByRole("radio", { name: "Response B is better", exact: true }).check();
+    for (const name of ["Factual accuracy", "Instruction following", "Safety and stated policy"]) await page.getByRole("group", { name, exact: true }).getByRole("radio", { name: "Both meet the criterion", exact: true }).check();
+    await page.getByRole("checkbox", { name: "Use source: demo-calibration-record", exact: true }).check();
+    await page.getByLabel("Written justification", { exact: true }).fill(prose);
+    await page.getByRole("button", { name: "Submit for evaluation", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Results & Feedback", exact: true })).toBeVisible();
+    await expect(page.getByText("Your selection: Response (B)", { exact: true })).toBeVisible();
     expect(await db.assessmentAttempt.count({ where: { candidateId: learner.id, mode: "PRACTICE" } })).toBe(attemptsBefore + 2);
     expect(await db.practiceProgress.findUnique({ where: { candidateId_competency_level: { candidateId: learner.id, competency: "G6", level: "ADVANCED" } } })).toMatchObject({ submissionCount: 2 });
     await page.getByRole("link", { name: "Return to dashboard", exact: true }).click();

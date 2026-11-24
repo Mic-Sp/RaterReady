@@ -79,4 +79,20 @@ describe("practice Server Action security and state", () => {
     await expect(updateTechnicalPreview(initial, data)).rejects.toThrow("Forbidden");
     expect(mocks.load).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
   });
+
+  it.each([[updatePractice, "GENERALIST"], [updateTechnicalPreview, "TECHNICAL_PREVIEW"]] as const)("persists an explicit empty reset using the acknowledged revision and fixed track %s", async (action, track) => {
+    const data = form("reset"); data.set("revision", "4"); data.set("judgment", "A_BETTER"); data.set("writtenJustification", "Old text must not return");
+    const result = await action({ ...initial, submittedAt: "2026-11-20T15:00:00.000Z" }, data);
+    expect(mocks.save).toHaveBeenCalledWith("TEST_DB", "guarded-candidate", expect.objectContaining({ revision: 4, judgment: undefined, rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" }), false, track);
+    expect(result).toMatchObject({ intent: "reset", submittedAt: null, values: { judgment: undefined, rubricSelections: {}, verifiedSourceIds: [], writtenJustification: "" } });
+    expect(result.result).toBeUndefined();
+  });
+
+  it("keeps a failed reset locked with its prior feedback and revision", async () => {
+    const previous = { ...initial, revision: 4, submittedAt: "2026-11-20T15:00:00.000Z", values: { ...initial.values, writtenJustification: "Submitted reasoning" } };
+    mocks.save.mockRejectedValue(new Error("Internal error"));
+    const result = await updatePractice(previous, form("reset"));
+    expect(result).toMatchObject({ revision: 4, submittedAt: previous.submittedAt, values: previous.values });
+    expect(result.error).toBeDefined();
+  });
 });

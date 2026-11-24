@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { clearCapstones, setCoverage, signInCapstone } from "./capstone-fixture";
 import { capstoneBlueprint } from "../../prisma/capstone-fixtures";
+import { expectSourceFirst } from "./workspace-order";
 
 /** All fixtures use config-guarded local test DBs. Prefer approved-alternative cases to exercise real final-scoring paths. */
 async function prepare(db: PrismaClient, alternatives = false) {
@@ -36,9 +37,10 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
   try {
     const prepared = await prepare(db, true); id = prepared.id;
     const attempt = await start(page, db, id);
+    await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
     const rows = await db.submissionResponse.findMany({ where: { attemptId: attempt.id }, orderBy: { position: "asc" }, include: { scenario: { include: { rubric: true } } } });
     const initialHtml = await page.content();
-    for (const key of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "approvedByAccountCode", "reviewGuidance", "verificationInstruction"]) expect(initialHtml).not.toContain(key);
+    for (const key of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "approvedByAccountCode", "reviewGuidance", "verificationInstruction", "acceptedJudgments"]) expect(initialHtml).not.toContain(key);
     for (const row of rows) expect(initialHtml).not.toContain(row.scenario.expertExplanation);
     await expect(page.getByText("Capstone Mode — Coaching Disabled", { exact: true })).toBeVisible();
     await expect(page.getByRole("timer")).toBeVisible();
@@ -55,6 +57,12 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await page.getByLabel("Written justification for slot 1", { exact: true }).fill(firstProse);
     await expect.poll(async () => (await db.submissionResponse.findUniqueOrThrow({ where: { attemptId_position: { attemptId: attempt.id, position: 1 } } })).writtenJustification).toBe(firstProse);
     await expect(page.getByText("All six slots saved on the server.", { exact: true })).toBeVisible();
+    const saveStatus = page.getByRole("status", { name: "Capstone save status" });
+    await expect(saveStatus).toHaveAttribute("data-save-state", "saved");
+    await expect(saveStatus).toContainText(/Saved to server at \d{2}:\d{2}:\d{2} UTC/);
+    await expect(page.getByRole("form", { name: "Slot 1 evaluation", exact: true }).locator('[data-save-state="saved"]')).toContainText("Saved to server at");
+    const confirmed = await db.submissionResponse.findUniqueOrThrow({ where: { attemptId_position: { attemptId: attempt.id, position: 1 } } });
+    await expect(saveStatus.locator("time").first()).toHaveAttribute("dateTime", confirmed.savedAt.toISOString());
     const slotThree = page.getByRole("button", { name: /^Slot 3: G3/ });
     await slotThree.focus(); await page.keyboard.press("Enter");
     const thirdProse = "DEMO - SYNTHETIC: a separate source-grounded thought for slot three.";
@@ -71,6 +79,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     let alternatives = 0;
     for (const row of rows) {
       await page.getByRole("button", { name: new RegExp(`^Slot ${row.position}: G`) }).click();
+      await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
       const approved = row.scenario.allowedAlternativesJson as unknown as { judgment: string; rubricSelections: Record<string, string>; verifiedSourceIds: string[] }[];
       const key = (approved[0] ?? row.scenario.answerKeyJson) as { judgment: string; rubricSelections: Record<string, string>; verifiedSourceIds: string[] };
       if (approved[0]) alternatives += 1;
@@ -83,9 +92,12 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     expect(alternatives).toBe(2);
     await page.getByRole("button", { name: "Save now", exact: true }).click();
     await expect(page.getByText("All six slots saved on the server.", { exact: true })).toBeVisible();
+    await expect(saveStatus).toHaveAttribute("data-save-state", "saved");
+    await expect(saveStatus).toContainText(/Saved to server at \d{2}:\d{2}:\d{2} UTC/);
     await expect(page.getByRole("progressbar")).toHaveAttribute("value", "6");
     await accessible(page);
     await page.setViewportSize({ width: 320, height: 740 }); await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await expectSourceFirst(page, "Supplied source material", "Pinned rubric");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const a = await page.getByRole("region", { name: "Response A", exact: true }).boundingBox();
     const b = await page.getByRole("region", { name: "Response B", exact: true }).boundingBox();

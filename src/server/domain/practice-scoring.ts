@@ -59,7 +59,7 @@ function sameSources(left: string[], right: string[]): boolean {
 export function evaluatePracticeScenario(scenario: PracticeScoringScenario, rawSubmission: unknown) {
   assertPracticeScenario(scenario);
   if (!scenario.expertExplanation.trim()) throw new PracticeEvaluationError("INVALID_CONFIGURATION");
-  const { submission, best, matchingJudgments, criterionIds } = scorePinnedStructuredResponse(scenario, rawSubmission);
+  const { submission, best, matchingJudgments, criterionIds, acceptedJudgments } = scorePinnedStructuredResponse(scenario, rawSubmission);
   return {
     scenarioId: scenario.id, scenarioVersion: scenario.version, rubricId: scenario.rubric.id, rubricVersion: scenario.rubric.version,
     demoLabel: "DEMO - SYNTHETIC" as const, certifying: false as const,
@@ -67,6 +67,9 @@ export function evaluatePracticeScenario(scenario: PracticeScoringScenario, rawS
     writtenReviewStatus: submission.writtenJustification?.length ? "AWAITING_PRACTICE_REVIEW" as const : "NOT_PROVIDED" as const,
     breakdown: { evaluationJudgment: { earned: best.judgmentPoints, maximum: 40 }, rubricApplication: { earned: best.rubricPoints, maximum: 30 }, factualVerification: { earned: best.verificationPoints, maximum: 25 } },
     feedback: {
+      // Post-submission practice feedback exposes choice identifiers only, never complete keys or approval records.
+      submittedJudgment: submission.judgment,
+      acceptedJudgments,
       judgmentAccepted: matchingJudgments.length > 0,
       approvedAlternativeUsed: matchingJudgments.length > 0 && best.alternativeExplanation !== null,
       alternativeExplanation: matchingJudgments.length > 0 ? best.alternativeExplanation : null,
@@ -122,5 +125,5 @@ export function scorePinnedStructuredResponse(scenario: Pick<PracticeScoringScen
       score: judgmentPoints + rubricPoints + verificationPoints };
   });
   const best = evaluated.reduce((left, right) => right.score > left.score ? right : left);
-  return { submission, best, matchingJudgments, criterionIds };
+  return { submission, best, matchingJudgments, criterionIds, acceptedJudgments: [...new Set(paths.map(({ key }) => key.judgment))] };
 }
