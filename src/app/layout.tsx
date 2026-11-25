@@ -1,4 +1,4 @@
-import { DemoBadge } from "./components/demo-badge";
+import { AccountBanner } from "./components/account-banner";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -6,7 +6,7 @@ import { optionalPageIdentity } from "../server/auth/page-access";
 import { AuthenticatedNavigation } from "./components/authenticated-navigation";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "RaterReady", description: "Independent AI evaluation training. DEMO - SYNTHETIC accounts only.", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "RaterReady", description: "Independent AI evaluation training. Invite-only closed alpha with labeled synthetic demonstrations.", robots: { index: false, follow: false } };
 
 /** Shared banner/navigation precedes the single main landmark; identity is server-verified, not an authorization boundary. */
 export default async function RootLayout({ children }: { children: ReactNode }) {
@@ -26,10 +26,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </div>
             {user && <AuthenticatedNavigation user={user} />}
             </div>
-            <aside className="demo-notice" aria-label="Synthetic demonstration access">
-              <p className="notice-label"><DemoBadge /></p>
-              <p>Training and reviewer access use synthetic demonstration accounts. Shared pilot credentials may be verified publicly.</p>
-            </aside>
+            <AccountBanner user={user} />
           </header>
           <main id="main-content" tabIndex={-1}>{children}</main>
           <footer className="site-footer"><p>Build judgment. Practice with purpose.</p><p>RaterReady · Free learning, independent evaluation.</p></footer>

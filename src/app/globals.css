@@ -61,7 +61,9 @@
 .brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: .8rem; background: var(--accent); color: #fff; font-size: 1.4rem; letter-spacing: -.06em; box-shadow: var(--shadow-xs); }
 .brand-description { margin-top: .5rem; color: var(--muted); font-size: .9375rem; }
 .demo-notice { margin: 1.25rem 0; padding: 1rem 1.15rem; border: 2px solid #925a0d; border-radius: .75rem; background: #fff4d6; color: #633704; font-size: .9375rem; }
+.account-notice { margin: 1.25rem 0; padding: 1rem 1.15rem; border: 2px solid var(--success); border-radius: .75rem; background: var(--surface); color: var(--ink); font-size: .9375rem; }
 .site-header > .demo-notice { display: grid; gap: .5rem 1rem; align-items: center; }
+.site-header > .account-notice { display: grid; gap: .5rem 1rem; align-items: center; }
 .site-header .notice-label { margin: 0; }
 .notice-label { margin-bottom: .2rem; font-weight: 750; font-size: .875rem; letter-spacing: .06em; }
 .page-card { padding: clamp(1.1rem, 3vw, 2.25rem); border: 1px solid var(--line); border-radius: 1.1rem; background: var(--surface); box-shadow: var(--shadow-sm); }
@@ -113,6 +115,7 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: 
   .navigation-identity > p { flex: 0 1 auto; min-width: 8rem; max-width: 14rem; }
   .authenticated-navigation > nav { grid-column: 1 / -1; }
   .site-header > .demo-notice { grid-template-columns: auto minmax(0, 1fr); }
+  .site-header > .account-notice { grid-template-columns: auto minmax(0, 1fr); }
 }
 @media (max-width: 63.99rem) { .navigation-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 40rem) {

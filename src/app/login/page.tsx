@@ -13,9 +13,9 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const { error } = await searchParams;
   return (
     <section className="page-card" aria-labelledby="sign-in-heading">
-      <p className="eyebrow">Your RaterReady demo</p>
+      <p className="eyebrow">Your RaterReady account</p>
       <h1 id="sign-in-heading">Welcome back.</h1>
-      <p className="page-intro">Sign in to explore your demonstration account.</p>
+      <p className="page-intro">Sign in with the account provided to you.</p>
       <SignInForm hasError={Boolean(error)} />
     </section>
   );

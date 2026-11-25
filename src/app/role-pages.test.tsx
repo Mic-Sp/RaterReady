@@ -21,7 +21,7 @@ vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: a
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound, usePathname: () => "/dashboard" }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
 
-const candidate: AuthIdentity = { id: "demo-marcus", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, demoLabel: "DEMO - SYNTHETIC" };
+const candidate: AuthIdentity = { id: "demo-marcus", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, isSyntheticFixture: true, emailVerifiedAt: "2026-11-20T00:00:00.000Z", demoLabel: "DEMO - SYNTHETIC" };
 const admin: AuthIdentity = { ...candidate, id: "admin-michael", accountCode: "admin-michael", name: "Michael Anthony Sprague", role: "ADMIN_REVIEWER" };
 
 beforeEach(() => {
@@ -92,5 +92,20 @@ describe("protected role-routing shell", () => {
     expect(html).not.toContain('aria-label="Main navigation"');
     expect(html).not.toContain("authenticated-shell");
     expect(html).not.toContain("Sign out");
+  });
+
+  it("separates the live account badge/banner from synthetic scenario content", async () => {
+    const live = { ...candidate, isSyntheticFixture: false, demoLabel: null };
+    mocks.requireSession.mockResolvedValue(live);
+    const html = renderToStaticMarkup(await RootLayout({ children: <p>DEMO - SYNTHETIC scenario fixture</p> }));
+    const navigation = renderToStaticMarkup(<AuthenticatedNavigation user={live} />);
+    expect(navigation).toContain("Closed Alpha");
+    expect(navigation).not.toContain("DEMO - SYNTHETIC");
+    expect(html).toContain('aria-label="Closed alpha account access"');
+    expect(html).toContain("live closed-alpha account");
+    expect(html).toContain("DEMO - SYNTHETIC scenario fixture");
+    expect(html).not.toContain('aria-label="Synthetic demonstration access"');
+    expect(html).not.toContain("signed in with a synthetic demonstration account");
+    expect(html.slice(html.indexOf("<header"), html.indexOf("</header>"))).not.toContain("DEMO - SYNTHETIC");
   });
 });

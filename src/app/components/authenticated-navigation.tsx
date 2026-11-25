@@ -10,7 +10,7 @@ export function AuthenticatedNavigation({ user }: { user: AuthIdentity }) {
       <p><span className="account-label">Signed in as </span><strong><SyntheticText>{user.name}</SyntheticText></strong></p>
       <div className="account-controls">
       <span className="role-badge"><SyntheticText>{user.role === "ADMIN_REVIEWER" ? "Admin reviewer" : "Candidate"}</SyntheticText></span>
-      <DemoBadge />
+      {user.isSyntheticFixture ? <DemoBadge /> : <span className="role-badge">Closed Alpha</span>}
       <form action={submitSignOut}><button type="submit" className="text-button sign-out-button">Sign out</button></form>
       </div>
     </div>

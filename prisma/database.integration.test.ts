@@ -28,6 +28,7 @@ import { authorizeSession } from "../src/server/auth/guards";
 import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLevel, skipDiagnostic, startDiagnostic } from "../src/server/learning/service";
 import { diagnosticScorecardItems } from "../src/lib/diagnostic-scorecard";
 import { recommendWelcomeStartingLevel } from "../src/lib/welcome-check-in";
+import { consumeAuthToken, hashAuthToken, issueAuthToken } from "../src/server/auth/tokens";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -76,7 +77,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     scenarioId = scenario.id;
     rubricId = scenario.rubricId;
     const user = await prisma.user.create({
-      data: { accountCode: `test-${randomUUID()}`, name: "DEMO - SYNTHETIC test candidate", role: "CANDIDATE", candidateProfile: { create: {} } },
+      data: { accountCode: `test-${randomUUID()}`, name: "DEMO - SYNTHETIC test candidate", isSyntheticFixture: true, demoLabel: "DEMO - SYNTHETIC", role: "CANDIDATE", candidateProfile: { create: {} } },
     });
     candidateId = user.id;
     const attempt = await prisma.assessmentAttempt.create({
@@ -106,6 +107,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       await prisma.user.delete({ where: { id } });
     }
     if (candidateId) {
+      await prisma.authToken.deleteMany({ where: { userId: candidateId } });
       await prisma.aiGradingJob.deleteMany({ where: { response: { attempt: { candidateId } } } });
       await prisma.credential.deleteMany({ where: { attempt: { candidateId } } });
       await prisma.reviewCase.deleteMany({ where: { attempt: { candidateId } } });
@@ -156,6 +158,120 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       expect(await prisma.moduleProgress.findUnique({ where: { id: progress.id } })).toEqual(progress);
     } finally {
       await prisma.candidateProfile.update({ where: { userId: marcus.id }, data: { selectedLevel: original.selectedLevel, diagnosticStatus: original.diagnosticStatus, timeMultiplier: original.timeMultiplier } });
+    }
+  });
+
+  it("defaults new accounts to live/unverified without consent and never seeds over non-demo records", async () => {
+    const live = await prisma.user.create({ data: { accountCode: `alpha-${randomUUID()}`, name: "Local account lifecycle fixture", role: "CANDIDATE" } });
+    try {
+      expect(live).toMatchObject({ isSyntheticFixture: false, demoLabel: null, email: null, emailVerifiedAt: null,
+        closedAlphaConsentAcceptedAt: null, closedAlphaConsentVersion: null });
+      await seedSyntheticData(prisma, testPasswords);
+      await seedSyntheticData(prisma, testPasswords);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: live.id } })).toEqual(live);
+      for (const { accountCode } of demoAccounts) {
+        const demo = await prisma.user.findUniqueOrThrow({ where: { accountCode } });
+        expect(demo).toMatchObject({ isSyntheticFixture: true, demoLabel: "DEMO - SYNTHETIC", email: null,
+          closedAlphaConsentAcceptedAt: null, closedAlphaConsentVersion: null });
+        expect(demo.emailVerifiedAt).toBeInstanceOf(Date);
+      }
+      await expect(prisma.user.update({ where: { id: live.id }, data: { closedAlphaConsentAcceptedAt: new Date() } })).rejects.toThrow();
+      await expect(prisma.user.update({ where: { id: live.id }, data: { email: " MixedCase@example.invalid " } })).rejects.toThrow();
+    } finally { await prisma.user.delete({ where: { id: live.id } }); }
+  });
+
+  it("repeated demo seeding preserves verification/session state and refuses a live reserved-code collision", async () => {
+    const demo = await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-elena" } });
+    await seedSyntheticData(prisma, testPasswords);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: demo.id } });
+    expect(after.emailVerifiedAt).toEqual(demo.emailVerifiedAt);
+    expect(after.sessionVersion).toBe(demo.sessionVersion);
+    try {
+      await prisma.user.update({ where: { id: demo.id }, data: { isSyntheticFixture: false } });
+      const live = await prisma.user.findUniqueOrThrow({ where: { id: demo.id } });
+      await expect(seedSyntheticData(prisma, testPasswords)).rejects.toThrow("refuses to overwrite");
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: demo.id } })).toEqual(live);
+    } finally {
+      await prisma.user.update({ where: { id: demo.id }, data: { isSyntheticFixture: true } });
+    }
+  });
+
+  it("authenticates only provisioned, verified/consenting live candidates and revokes stale lifecycle sessions", async () => {
+    const hash = (await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } })).passwordHash;
+    const live = await prisma.user.create({ data: { accountCode: `alpha-${randomUUID()}`, name: "Local live lifecycle fixture", role: "CANDIDATE",
+      email: `alpha-${randomUUID()}@example.invalid`, passwordHash: hash, candidateProfile: { create: {} } } });
+    const login = () => authenticateCredentials(prisma, { accountCode: live.accountCode, password: testPasswords["demo-marcus"] });
+    try {
+      expect(await login()).toBeNull();
+      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: new Date() } });
+      expect(await login()).toBeNull();
+      const consented = await prisma.user.update({ where: { id: live.id }, data: {
+        closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: "closed-alpha-v1" } });
+      const identity = await login();
+      expect(identity).toMatchObject({ id: live.id, role: "CANDIDATE", isSyntheticFixture: false, demoLabel: null,
+        emailVerifiedAt: consented.emailVerifiedAt!.toISOString() });
+      const session = { user: identity, expires: new Date(Date.now() + 60000).toISOString() };
+      expect(await authorizeSession(prisma, session, "CANDIDATE")).toEqual(identity);
+      expect((await getCapstoneReadiness(prisma, live.id)).blueprint?.questionCount).toBe(6);
+      await expect(authorizeSession(prisma, session, "ADMIN_REVIEWER")).rejects.toMatchObject({ status: 403 });
+      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: null } });
+      await expect(authorizeSession(prisma, session)).rejects.toMatchObject({ status: 401 });
+      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: new Date() } });
+      expect(await findActiveSessionUser(prisma, identity)).toBeNull();
+    } finally {
+      await prisma.candidateProfile.delete({ where: { userId: live.id } });
+      await prisma.user.delete({ where: { id: live.id } });
+    }
+  });
+
+  it("stores only unique token hashes, separates purposes and atomically permits exactly one concurrent consumption", async () => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: candidateId } });
+    for (const purpose of ["EMAIL_VERIFICATION", "PASSWORD_RESET"] as const) {
+      const issued = await prisma.$transaction((tx) => issueAuthToken(tx, user.id, purpose));
+      const row = await prisma.authToken.findUniqueOrThrow({ where: { tokenHash: hashAuthToken(issued.rawToken) } });
+      expect(JSON.stringify(row)).not.toContain(issued.rawToken);
+      expect(row).not.toHaveProperty("rawToken");
+      expect(row.expiresAt.getTime() - row.createdAt.getTime()).toBe(purpose === "PASSWORD_RESET" ? 3600000 : 86400000);
+      await expect(prisma.authToken.create({ data: { ...row, id: randomUUID() } })).rejects.toThrow();
+      await expect(prisma.authToken.create({ data: { ...row, id: randomUUID(), tokenHash: "plaintext-secret" } })).rejects.toThrow();
+      expect(await prisma.$transaction((tx) => consumeAuthToken(tx, issued.rawToken, purpose === "PASSWORD_RESET" ? "EMAIL_VERIFICATION" : "PASSWORD_RESET"))).toBeNull();
+      const results = await Promise.all([1, 2].map(() => prisma.$transaction((tx) => consumeAuthToken(tx, issued.rawToken, purpose))));
+      expect(results.filter(Boolean)).toEqual([{ userId: user.id, purpose }]);
+      expect(await prisma.$transaction((tx) => consumeAuthToken(tx, issued.rawToken, purpose))).toBeNull();
+      await expect(prisma.authToken.update({ where: { id: row.id }, data: { consumedAt: null } })).rejects.toThrow();
+      await expect(prisma.authToken.update({ where: { id: row.id }, data: { expiresAt: new Date(row.expiresAt.getTime() + 1) } })).rejects.toThrow();
+    }
+    await prisma.authToken.deleteMany({ where: { userId: candidateId } });
+  });
+
+  it("enforces token lifetime bounds, database expiration, rollback and account revocation", async () => {
+    const now = new Date();
+    const raw = "x".repeat(43);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: candidateId } });
+    const base = { userId: user.id, purpose: "PASSWORD_RESET" as const, tokenHash: hashAuthToken(raw), sessionVersion: user.sessionVersion, createdAt: now };
+    await expect(prisma.authToken.create({ data: { ...base, expiresAt: now } })).rejects.toThrow();
+    await expect(prisma.authToken.create({ data: { ...base, expiresAt: new Date(now.getTime() + 3600001) } })).rejects.toThrow();
+    const expired = await prisma.authToken.create({ data: { ...base, createdAt: new Date(now.getTime() - 3600000), expiresAt: new Date(now.getTime() - 1) } });
+    expect(await prisma.$transaction((tx) => consumeAuthToken(tx, raw, "PASSWORD_RESET"))).toBeNull();
+    await expect(prisma.authToken.update({ where: { id: expired.id }, data: { consumedAt: now } })).rejects.toThrow();
+    expect(await prisma.$transaction((tx) => consumeAuthToken(tx, "y".repeat(43), "PASSWORD_RESET"))).toBeNull();
+    const issued = await prisma.$transaction((tx) => issueAuthToken(tx, user.id, "EMAIL_VERIFICATION"));
+    await expect(prisma.$transaction(async (tx) => {
+      expect(await consumeAuthToken(tx, issued.rawToken, "EMAIL_VERIFICATION")).toEqual({ userId: user.id, purpose: "EMAIL_VERIFICATION" });
+      throw new Error("Rollback workflow");
+    })).rejects.toThrow("Rollback workflow");
+    expect(await prisma.$transaction((tx) => consumeAuthToken(tx, issued.rawToken, "EMAIL_VERIFICATION"))).not.toBeNull();
+    const revoked = await prisma.$transaction((tx) => issueAuthToken(tx, user.id, "PASSWORD_RESET"));
+    await prisma.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
+    expect(await prisma.$transaction((tx) => consumeAuthToken(tx, revoked.rawToken, "PASSWORD_RESET"))).toBeNull();
+    const disabled = await prisma.$transaction((tx) => issueAuthToken(tx, user.id, "PASSWORD_RESET"));
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { accountStatus: "DISABLED" } });
+      expect(await prisma.$transaction((tx) => consumeAuthToken(tx, disabled.rawToken, "PASSWORD_RESET"))).toBeNull();
+      await expect(prisma.$transaction((tx) => issueAuthToken(tx, user.id, "PASSWORD_RESET"))).rejects.toThrow("unavailable");
+    } finally {
+      await prisma.user.update({ where: { id: user.id }, data: { accountStatus: user.accountStatus } });
+      await prisma.authToken.deleteMany({ where: { userId: user.id } });
     }
   });
 
@@ -595,7 +711,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
 
   /** Synthetic service fixture; actual submitted practice, not self-marked progress, satisfies the selected readiness policy. */
   async function capstoneCandidate(ready = true, multiplier = 1) {
-    const user = await prisma.user.create({ data: { accountCode: `test-capstone-${randomUUID()}`, name: "DEMO - SYNTHETIC capstone candidate", role: "CANDIDATE",
+    const user = await prisma.user.create({ data: { accountCode: `test-capstone-${randomUUID()}`, name: "DEMO - SYNTHETIC capstone candidate", isSyntheticFixture: true, demoLabel: "DEMO - SYNTHETIC", role: "CANDIDATE",
       candidateProfile: { create: { timeMultiplier: multiplier } } } });
     capstoneCandidateIds.push(user.id);
     if (ready) for (const fixture of expandedPracticeScenarios) {

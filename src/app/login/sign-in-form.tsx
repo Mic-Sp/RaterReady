@@ -30,7 +30,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
       </div>
       <div className="form-field">
         <label htmlFor="account-code">Account identifier</label>
-        <p id="account-hint" className="field-hint">Use the demo account identifier provided to you.</p>
+        <p id="account-hint" className="field-hint">Use the account identifier provided to you.</p>
         <input ref={account} id="account-code" name="accountCode" type="text" autoComplete="username" autoCapitalize="none"
           spellCheck={false} required maxLength={64} defaultValue={state.accountCode} readOnly={pending}
           aria-invalid={Boolean(state.fieldErrors?.accountCode)}
@@ -39,7 +39,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
       </div>
       <div className="form-field">
         <label htmlFor="password">Password</label>
-        <p id="password-hint" className="field-hint">Use your demo account password (8–128 characters).</p>
+        <p id="password-hint" className="field-hint">Use your account password (8–128 characters).</p>
         <div className="password-control">
           <input ref={password} id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password"
             required minLength={8} maxLength={128} readOnly={pending} aria-invalid={Boolean(state.fieldErrors?.password)}
@@ -52,7 +52,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
         {state.fieldErrors?.password && <p id="password-error" className="field-error"><SyntheticText>{state.fieldErrors.password}</SyntheticText></p>}
       </div>
       <button type="submit" className="primary-button" disabled={pending}><SyntheticText>{pending ? "Signing in…" : "Sign in"}</SyntheticText></button>
-      <p className="form-note">Use only synthetic demonstration data in this demo.</p>
+      <p className="form-note">Access is by invitation only. Synthetic demonstration accounts remain available.</p>
     </form>
   );
 }

@@ -11,10 +11,10 @@ export function createAuthConfig(db: PrismaClient, secret: string): NextAuthConf
     session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
     pages: { signIn: "/login", error: "/login" },
     providers: [Credentials({
-      name: "DEMO - SYNTHETIC",
+      name: "RaterReady",
       credentials: {
-        accountCode: { label: "DEMO - SYNTHETIC account identifier", type: "text" },
-        password: { label: "Demo password", type: "password" },
+        accountCode: { label: "Account identifier", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       authorize: (credentials) => authenticateCredentials(db, credentials),
     })],
@@ -28,7 +28,8 @@ export function createAuthConfig(db: PrismaClient, secret: string): NextAuthConf
         });
         if (!current) return null;
         return { ...token, sub: current.id, name: current.name, role: current.role,
-          accountCode: current.accountCode, sessionVersion: current.sessionVersion, demoLabel: current.demoLabel };
+          accountCode: current.accountCode, sessionVersion: current.sessionVersion, demoLabel: current.demoLabel,
+          isSyntheticFixture: current.isSyntheticFixture, emailVerifiedAt: current.emailVerifiedAt };
       },
       session({ session, token }) {
         // jwt() has just validated this identity; expose a closed field list, never hashes.
@@ -37,7 +38,10 @@ export function createAuthConfig(db: PrismaClient, secret: string): NextAuthConf
         session.user.role = token.role!;
         session.user.accountCode = token.accountCode!;
         session.user.sessionVersion = token.sessionVersion!;
-        session.user.demoLabel = "DEMO - SYNTHETIC";
+        // Account lifecycle flags come from the fresh DB projection, never client session updates.
+        session.user.demoLabel = token.demoLabel ?? null;
+        session.user.isSyntheticFixture = token.isSyntheticFixture!;
+        session.user.emailVerifiedAt = token.emailVerifiedAt ?? null;
         return session;
       },
     },

@@ -22,11 +22,14 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
 
       // Provision missing hashes only. Reruns never reset passwords, roles, revocation or disabled status.
       const passwordHash = existing?.passwordHash ?? await hashPassword(passwords[account.accountCode]);
-      const identity = { name: account.name, role: account.role, isSyntheticFixture: true, demoLabel: DEMO_LABEL };
+      // Seed-only pre-verification never fabricates a live email or closed-alpha consent.
+      const lifecycle = { isSyntheticFixture: true, demoLabel: DEMO_LABEL, emailVerifiedAt: existing?.emailVerifiedAt ?? fixtureDate };
+      const identity = { name: account.name, role: account.role, ...lifecycle };
       const user = await tx.user.upsert({
         where: { accountCode: account.accountCode },
         create: { accountCode: account.accountCode, ...identity, passwordHash },
-        update: existing?.passwordHash ? {} : { passwordHash },
+        update: { ...(existing?.isSyntheticFixture && existing.demoLabel === DEMO_LABEL && existing.emailVerifiedAt ? {} : lifecycle),
+          ...(!existing?.passwordHash ? { passwordHash } : {}) },
       });
 
       if (account.role === Role.CANDIDATE) {

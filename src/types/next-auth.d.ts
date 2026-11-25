@@ -8,7 +8,9 @@ declare module "next-auth" {
     accountCode: string;
     role: Role;
     sessionVersion: number;
-    demoLabel: string;
+    demoLabel: string | null;
+    isSyntheticFixture: boolean;
+    emailVerifiedAt: string | null;
   }
 
   interface Session {
@@ -21,6 +23,8 @@ declare module "@auth/core/jwt" {
     accountCode?: string;
     role?: Role;
     sessionVersion?: number;
-    demoLabel?: string;
+    demoLabel?: string | null;
+    isSyntheticFixture?: boolean;
+    emailVerifiedAt?: string | null;
   }
 }

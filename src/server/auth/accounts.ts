@@ -10,12 +10,15 @@ export type AuthIdentity = {
   accountCode: string;
   role: Role;
   sessionVersion: number;
-  demoLabel: string;
+  isSyntheticFixture: boolean;
+  emailVerifiedAt: string | null;
+  demoLabel: string | null;
 };
 
 const identitySelect = {
   id: true, name: true, accountCode: true, role: true, sessionVersion: true,
-  accountStatus: true, isSyntheticFixture: true,
+  accountStatus: true, isSyntheticFixture: true, email: true, emailVerifiedAt: true,
+  closedAlphaConsentAcceptedAt: true, closedAlphaConsentVersion: true,
 } as const;
 
 const credentialsSchema = z.object({
@@ -29,11 +32,26 @@ const approvedAccounts: Readonly<Record<string, Role>> = {
   "admin-michael": "ADMIN_REVIEWER",
 };
 
-/** Require a seed-approved synthetic identity and its database role; no client-selected roles. */
-function activeIdentity(user: AuthIdentity & { accountStatus: string; isSyntheticFixture: boolean }): AuthIdentity | null {
-  if (user.accountStatus !== "ACTIVE" || !user.isSyntheticFixture
-    || !Object.hasOwn(approvedAccounts, user.accountCode) || approvedAccounts[user.accountCode] !== user.role) return null;
-  return { id: user.id, name: user.name, accountCode: user.accountCode, role: user.role, sessionVersion: user.sessionVersion, demoLabel: "DEMO - SYNTHETIC" };
+/**
+ * Seed accounts retain exact code/role checks. A separately provisioned live candidate must
+ * be verified and have recorded consent; live reviewer access is not enabled by this foundation.
+ * No client field can provision an account, select its role or establish verification/consent.
+ */
+function activeIdentity(user: {
+  id: string; name: string; accountCode: string; role: Role; sessionVersion: number;
+  accountStatus: string; isSyntheticFixture: boolean; email: string | null; emailVerifiedAt: Date | null;
+  closedAlphaConsentAcceptedAt: Date | null; closedAlphaConsentVersion: string | null;
+}): AuthIdentity | null {
+  if (user.accountStatus !== "ACTIVE") return null;
+  const reserved = Object.hasOwn(approvedAccounts, user.accountCode);
+  if (user.isSyntheticFixture) {
+    if (!reserved || approvedAccounts[user.accountCode] !== user.role) return null;
+  } else if (reserved || user.role !== "CANDIDATE" || !user.email || !user.emailVerifiedAt
+    || !user.closedAlphaConsentAcceptedAt || !user.closedAlphaConsentVersion?.trim()) return null;
+  // Derived account labels never reuse a stale database demoLabel on a live identity.
+  return { id: user.id, name: user.name, accountCode: user.accountCode, role: user.role, sessionVersion: user.sessionVersion,
+    isSyntheticFixture: user.isSyntheticFixture, emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+    demoLabel: user.isSyntheticFixture ? "DEMO - SYNTHETIC" : null };
 }
 
 /**
@@ -53,7 +71,7 @@ export async function authenticateCredentials(db: PrismaClient, credentials: unk
   }
   const valid = await verifyPassword(parsed.success ? parsed.data.password : "", user?.passwordHash ?? null);
   if (!parsed.success || !valid || !user) return null;
-  return activeIdentity({ ...user, demoLabel: "DEMO - SYNTHETIC" });
+  return activeIdentity(user);
 }
 
 /**
@@ -66,7 +84,7 @@ export async function findActiveSessionUser(db: PrismaClient, identity: unknown)
   try {
     const user = await db.user.findUnique({ where: { id: parsed.data.id }, select: identitySelect });
     if (!user || user.sessionVersion !== parsed.data.sessionVersion) return null;
-    return activeIdentity({ ...user, demoLabel: "DEMO - SYNTHETIC" });
+    return activeIdentity(user);
   } catch {
     return null;
   }

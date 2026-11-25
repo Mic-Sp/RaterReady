@@ -20,6 +20,12 @@ enum AccountStatus {
   REVOKED
 }
 
+/// Separate purposes prevent an email-verification token from resetting a password.
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 enum LearningLevel {
   FOUNDATIONS
   INTERMEDIATE
@@ -137,23 +143,49 @@ enum PartnershipStatus {
 }
 
 model User {
-  id                 String            @id @default(cuid())
-  /// Stage A Credentials account identifier; not a real candidate registration flow.
-  accountCode        String            @unique
-  name               String
-  role               Role
+  id                           String            @id @default(cuid())
+  /// Credentials identifier; reserved demo codes remain seed-only. No public provisioning route.
+  accountCode                  String            @unique
+  name                         String
+  role                         Role
   /// Nullable only for migrated/unprovisioned accounts; a missing hash can never authenticate.
-  passwordHash       String?
-  accountStatus      AccountStatus     @default(ACTIVE)
+  passwordHash                 String?
+  accountStatus                AccountStatus     @default(ACTIVE)
   /// Bump to revoke all sessions. A migration trigger also bumps on password/status/role changes.
-  sessionVersion     Int               @default(0)
-  isSyntheticFixture Boolean           @default(true)
-  demoLabel          String            @default("DEMO - SYNTHETIC")
-  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
-  candidateProfile   CandidateProfile?
-  ownedReviews       ReviewCase[]      @relation("ReviewOwner")
-  auditEvents        AuditEvent[]
+  sessionVersion               Int               @default(0)
+  /// Account identity only; scenario/attempt fixture markers remain independent.
+  isSyntheticFixture           Boolean           @default(false)
+  demoLabel                    String?
+  /// Optional for seeded demos; live email addresses are normalized before persistence.
+  email                        String?           @unique
+  /// NULL means unverified; demo pre-verification is not real email delivery or consent.
+  emailVerifiedAt              DateTime?         @db.Timestamptz(3)
+  closedAlphaConsentAcceptedAt DateTime?         @db.Timestamptz(3)
+  closedAlphaConsentVersion    String?
+  createdAt                    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                    DateTime          @updatedAt @db.Timestamptz(3)
+  candidateProfile             CandidateProfile?
+  ownedReviews                 ReviewCase[]      @relation("ReviewOwner")
+  auditEvents                  AuditEvent[]
+  authTokens                   AuthToken[]
+}
+
+/// Only SHA-256 digests of 256-bit random secrets are persisted. Never store or log raw tokens.
+/// SQL checks/trigger preserve immutable identity, bounded lifetime and irreversible consumption.
+model AuthToken {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  purpose        AuthTokenPurpose
+  tokenHash      String           @unique @db.Char(64)
+  /// Security snapshot invalidates outstanding tokens on account/password/email changes.
+  sessionVersion Int
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime         @db.Timestamptz(3)
+  consumedAt     DateTime?        @db.Timestamptz(3)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
 }
 
 model CandidateProfile {

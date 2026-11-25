@@ -10,7 +10,7 @@ import type { AuthIdentity } from "../../server/auth/accounts";
 const mocks = vi.hoisted(() => ({ pathname: "/practice/synthetic-scenario", signOut: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname }));
 vi.mock("../actions/session", () => ({ submitSignOut: mocks.signOut }));
-const candidate: AuthIdentity = { id: "demo", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, demoLabel: "DEMO - SYNTHETIC" };
+const candidate: AuthIdentity = { id: "demo", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, isSyntheticFixture: true, emailVerifiedAt: "2026-11-20T00:00:00.000Z", demoLabel: "DEMO - SYNTHETIC" };
 afterEach(cleanup);
 
 describe("shared authenticated navigation", () => {

@@ -48,6 +48,7 @@ beforeAll(async () => {
   initial = await Promise.all(demoAccounts.map(async (account) => ({
     id: account.accountCode, accountCode: account.accountCode, name: account.name, role: account.role,
     passwordHash: await hashPassword(testPasswords[account.accountCode]), accountStatus: "ACTIVE" as const,
+    email: null, emailVerifiedAt: new Date("2026-11-20T00:00:00.000Z"), closedAlphaConsentAcceptedAt: null, closedAlphaConsentVersion: null,
     sessionVersion: 0, demoLabel: "DEMO - SYNTHETIC", isSyntheticFixture: true, createdAt: new Date(), updatedAt: new Date(),
   })));
 });
@@ -120,6 +121,29 @@ describe("Credentials and database-authoritative RBAC", () => {
     state.cookie = result.cookie;
     expect((await requireCandidate()).role).toBe("CANDIDATE");
     await expect(requireAdmin()).rejects.toMatchObject({ status: 403, message: "Forbidden." });
+  });
+
+  it("propagates verified live candidate lifecycle flags through real cookies, sessions and guards", async () => {
+    records.push({ ...initial[0], id: "alpha-candidate", accountCode: "alpha-candidate", name: "Alpha Candidate",
+      isSyntheticFixture: false, email: "alpha@example.invalid", closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: "alpha-v1" });
+    const result = await login("alpha-candidate", testPasswords["demo-marcus"], { isSyntheticFixture: "true", role: "ADMIN_REVIEWER" });
+    const current = await session(result.cookie);
+    expect(current.user).toMatchObject({ isSyntheticFixture: false, emailVerifiedAt: initial[0].emailVerifiedAt!.toISOString(), demoLabel: null, role: "CANDIDATE" });
+    expect(JSON.stringify(current)).not.toMatch(/passwordHash|closedAlphaConsent|alpha@example/);
+    state.cookie = result.cookie;
+    expect(await requireCandidate()).toMatchObject({ accountCode: "alpha-candidate", isSyntheticFixture: false, demoLabel: null });
+    await expect(requireAdmin()).rejects.toMatchObject({ status: 403 });
+    // A current DB verification change defeats even a correctly signed older cookie.
+    records[3].emailVerifiedAt = null;
+    expect(await session(result.cookie)).toBeNull();
+  });
+
+  it.each(["unverified", "no-consent", "live-admin", "unapproved-synthetic"])("fails closed for %s provisioning", async (kind) => {
+    records.push({ ...initial[0], id: "alpha", accountCode: "alpha", isSyntheticFixture: kind === "unapproved-synthetic",
+      email: "alpha@example.invalid", emailVerifiedAt: kind === "unverified" ? null : new Date(),
+      closedAlphaConsentAcceptedAt: kind === "no-consent" ? null : new Date(), closedAlphaConsentVersion: "alpha-v1",
+      role: kind === "live-admin" ? "ADMIN_REVIEWER" : "CANDIDATE" });
+    expect(await session((await login("alpha", testPasswords["demo-marcus"])).cookie)).toBeNull();
   });
 
   it.each(["/admin", "/admin/review/attempt-1", "/api/admin/review", "/%61dmin/review", "/admin%2Freview", "/%2fadmin/review"])("blocks a learner from %s in middleware", async (path) => {

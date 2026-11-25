@@ -1,13 +1,14 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 
-/** Shared lock order: candidate first, then attempt. Auth guards still run before every public entry. */
+/** Shared lock order: candidate first, then attempt. Auth guards run before entry; account identity is independent of synthetic exam content. */
 export async function lockCapstoneCandidate(tx: Prisma.TransactionClient, candidateId: string) {
   const rows = await tx.$queryRaw<{ userId: string }[]>`SELECT "userId" FROM "CandidateProfile" WHERE "userId" = ${candidateId} FOR UPDATE`;
   if (!rows.length) throw new Error("Capstone unavailable.");
   const profile = await tx.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, select: { selectedLevel: true, timeMultiplier: true,
-    user: { select: { role: true, accountStatus: true, isSyntheticFixture: true } } } });
-  if (profile.user.role !== "CANDIDATE" || profile.user.accountStatus !== "ACTIVE" || !profile.user.isSyntheticFixture) throw new Error("Capstone unavailable.");
+    user: { select: { role: true, accountStatus: true } } } });
+  // Live candidates may use labeled synthetic fixtures; scenario/blueprint checks remain authoritative.
+  if (profile.user.role !== "CANDIDATE" || profile.user.accountStatus !== "ACTIVE") throw new Error("Capstone unavailable.");
   return profile;
 }
 

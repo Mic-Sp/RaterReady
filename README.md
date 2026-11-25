@@ -1,6 +1,82 @@
 # RaterReady
 
-Stage A synthetic stakeholder demo — `DEMO - SYNTHETIC`.
+Stage B account foundation, with the Stage A `DEMO - SYNTHETIC` demo preserved.
+
+## Step 13A — Stage B account lifecycle foundation
+
+Stage A remains available alongside the Stage B schema foundation. The audit found
+that `User.isSyntheticFixture` defaulted to true, authentication admitted only three
+seeded codes, and sessions/navigation/banner copy always claimed synthetic access.
+The capstone profile lock also conflated a synthetic exam with a synthetic account.
+There are no public registration or client-selected role-assignment paths; role guards
+re-read PostgreSQL in addition to the default-private proxy policy.
+
+`User.isSyntheticFixture` now defaults to false, while scenario/attempt fixture
+defaults stay unchanged. `demoLabel` is nullable with no default. Optional unique,
+lowercase/trimmed `email`, nullable `emailVerifiedAt`, and paired
+`closedAlphaConsentAcceptedAt` / `closedAlphaConsentVersion` record lifecycle state.
+The timestamp is the verification status source of truth; no duplicate boolean is
+stored. Existing users are preserved by the additive migration. The seed explicitly
+marks/pre-verifies only the three approved synthetic codes using a stable fixture
+timestamp, never fabricates consent, preserves existing verification, passwords,
+status, roles and progress, and refuses reserved-code collisions with live accounts.
+
+`AuthToken` separates `EMAIL_VERIFICATION` and `PASSWORD_RESET`. Internal server-only
+transaction primitives generate 256-bit random bearer secrets and persist only
+SHA-256 hashes. Unique digest, account/purpose and expiration indexes support lookup
+and cleanup. Database checks cap lifetimes at 24 hours for verification and one hour
+for reset. Immutable token identity/expiry, irreversible consumption, database time,
+account locking and a session-version snapshot enforce single use and revocation.
+Future workflow callers must consume and apply their account change in the same
+transaction; rollback restores usability. No token issuance/consumption endpoint,
+email delivery, registration, verification or reset UI is included in this step.
+
+Sessions expose only database-verified `isSyntheticFixture`, an ISO/null
+`emailVerifiedAt` and a derived nullable `demoLabel`, alongside the existing minimal
+identity. Seeded account code/role checks remain exact. Separately provisioned live
+candidates need an active account, password, email verification and recorded consent;
+this does not create an invitation/provisioning flow or enable live reviewer access.
+Email, verification and consent changes revoke old sessions and outstanding tokens.
+The account header/banner uses amber `DEMO - SYNTHETIC` for demo accounts and
+`Closed Alpha` for live accounts. Synthetic practice/exam/credential labels remain
+independent. The capstone profile lock checks active candidate status, leaving
+synthetic blueprint/scenario validation and all scoring/review rules intact.
+
+Verification includes token hashing/input boundaries, real Auth.js cookies and RBAC,
+seed preservation/collision protection, lifecycle defaults/constraints, concurrent
+single-use consumption, expiry, rollback, revocation, account rendering, and a
+disposable live-account browser fixture. Existing candidate/admin browser flows,
+synthetic scenario labels, mobile reflow and WCAG contrast checks remain covered.
+
+Apply this additive migration and seed using the configured `.env` (no reset):
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+Use separate disposable **local** `raterready_test*` databases for integration and
+browser verification. With this workspace's local test cluster running:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13a' npm test
+LD_LIBRARY_PATH='/tmp/portfolio-preview-browser/libs/usr/lib/x86_64-linux-gnu' PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/home/micsp/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13a_browser' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+The library/executable overrides use pre-existing Chromium assets in this workspace;
+on a machine with Playwright's matching browser/dependencies installed, omit them.
+Preview at `http://127.0.0.1:3000`. Sign in with each configured demo account and
+check the amber badge, synthetic notice, role navigation and sign-out. Recheck
+onboarding/level switching, practice saves, qualification-exam autosave/final submit,
+rubric-first owner review, results/appeals, credential sharing/verification and
+opportunities. Check keyboard focus and 320px/200% reflow. A separately provisioned
+verified/consenting live candidate must show Closed Alpha in the header and retain
+scenario badges; unverified/unconsented accounts and candidate-to-admin access fail
+closed. The automated live fixture is removed after its browser test.
 
 Steps 1–7C contain the Next.js App Router shell, strict TypeScript, Tailwind CSS,
 server environment validation, a hot-reload-safe Prisma singleton, the PostgreSQL
