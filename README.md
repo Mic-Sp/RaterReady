@@ -2,6 +2,106 @@
 
 Stage B account foundation, with the Stage A `DEMO - SYNTHETIC` demo preserved.
 
+## Step 13C-2 — Verification, recovery and timed-exam eligibility
+
+All five public auth cards (`/login`, `/register`, `/verify-email`,
+`/forgot-password`, `/reset-password`) now center at up to 44rem on desktop,
+with sequential 320px/200% text reflow. Sign-in links clearly to password recovery.
+The unverified live-account banner and exam readiness page have a working
+**Send / resend verification link** action. Synthetic accounts/scenarios keep their
+`DEMO - SYNTHETIC` labels; live navigation continues to show `Closed Alpha`.
+
+The existing Step 13A schema supplies all storage; no new migration or seed change
+is needed. Verification links last 24 hours; reset links last one hour. Only SHA-256
+hashes of random 256-bit secrets enter PostgreSQL. Purpose, database-clock expiry,
+unconsumed state, active live Candidate status and account security version are
+checked before use. Consumption, account mutation and immutable audit append share
+one transaction; a failure rolls everything back. Concurrent use succeeds once.
+Verification and password changes revoke older sessions/links through the existing
+security-version trigger. Sign in again afterward; resetting a password does not
+verify email. Reset reuses the same 8–128 uppercase/lowercase/number/symbol policy
+and salted scrypt hashing as registration.
+
+Set `AUTH_APP_ORIGIN` (or `AUTH_URL`) to the trusted application origin. Production
+requires one; development defaults to `http://127.0.0.1:3000`. Request Host/Origin
+headers never select auth-link destinations. Link secrets use URL fragments, which
+are excluded from HTTP requests and referrers; the form clears the fragment from
+history and submits the code only by POST. GET/prefetch never consumes a token.
+Without JavaScript, paste the 43-character code into the labeled code field.
+
+`AUTH_EMAIL_MODE=auto` defaults to domain-free preview when neither provider
+setting is present. As approved for this closed alpha, verification previews belong
+to the signed-in candidate; reset previews are visible only to the signed-in target
+or a freshly authorized `admin-michael` session. For signed-out testers who forgot
+their password, Michael signs in, opens `/forgot-password`, enters the tester's
+email and privately provides that one-time preview link. Anonymous or other-account
+requests get the same generic response for existing and unknown emails, with no
+preview or recovery capability. Preview verification exercises the alpha workflow;
+it is explicitly **not proof of inbox ownership**. Audit records retain its channel.
+Server preview logs contain the path and an opaque audit reference with
+`#token=[REDACTED]`; they never contain the usable link, recipient or provider key.
+
+For actual outbound delivery, configure `RESEND_API_KEY` and a verified sender email
+in `AUTH_EMAIL_FROM`, with `AUTH_EMAIL_MODE=auto` or `email`. The native-fetch adapter
+uses the [Resend send-email API](https://resend.com/docs/api-reference/emails/send-email)
+without another dependency. Partial/invalid configuration fails closed; provider
+failures do not expose previews. Delivery runs through Next.js `after` so provider
+latency does not distinguish known from unknown public reset requests. This is
+best-effort alpha delivery, without a durable retry queue; immutable delivery
+success/failure events support owner troubleshooting. No outbound mail is needed
+for preview mode, and automated tests never send real mail. Explicit
+`AUTH_EMAIL_MODE=preview` keeps preview mode when provider keys exist.
+
+Request and consumption operations have separate PostgreSQL-backed HMAC budgets:
+five per subject and thirty globally per operation per 15 minutes, before KDF work.
+No raw email, token or spoofable client IP is stored in budget keys. Public reset
+responses remain generic for nonexistent, inactive, synthetic and ineligible
+accounts and storage/delivery failures. Budget outages fail closed.
+
+A live unverified candidate cannot allocate a new timed Generalist Qualification
+Exam attempt, even with completed G1–G6 practice and a forged start POST. The service
+holds a coherent account lock through allocation. Welcome, onboarding, dashboard,
+untimed practice and any already active attempt remain accessible. Synthetic demo
+accounts stay pre-verified. Existing readiness, review, scoring, capacity and
+non-endorsement rules still apply after verification.
+
+New registrations record terms `closed-alpha-privacy-non-endorsement-v2`, which now
+disclose verification/recovery, the exam gate and authorized preview boundaries.
+Existing versioned consent records are preserved. Tests cover real database expiry,
+single-use concurrency, atomic audit rollback, old-session revocation, authorized
+previews, generic public resets, provider configuration/failure, rate limiting,
+exam gating and all five auth screens with WCAG/desktop/mobile/text-zoom checks.
+
+Verify against this workspace's disposable local PostgreSQL databases:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13a' npm test
+LD_LIBRARY_PATH='/tmp/portfolio-preview-browser/libs/usr/lib/x86_64-linux-gnu' PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/home/micsp/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13b_browser' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+The local PostgreSQL cluster must be running. Omit the Chromium overrides on machines
+with Playwright's browser/dependencies installed normally. Never point the test
+variables at Neon/main data. For a focused browser run, append
+`-- tests/browser/account-link-flows.spec.ts` to the browser command.
+
+Manual review at `http://127.0.0.1:3000`:
+
+1. Inspect `/login` and `/register` at desktop width, keyboard-only and 320px/200%.
+2. Register a new live account; expect welcome, `Closed Alpha`, and pending notice.
+   Learning and practice remain open, while `/capstone` explains verification.
+3. Send a verification link from the banner, open the authorized alpha preview and
+   confirm that opening alone changes nothing. Submit verification, sign in again,
+   and check readiness (practice coverage is still required). Reusing the link fails.
+4. Request recovery anonymously for existing/unknown emails: both responses match.
+   Generate an own-account or Michael-authorized preview, use it while signed out,
+   check password guidance, then sign in with the new password. Old passwords,
+   sessions and used links fail. Verification status stays unchanged by recovery.
+5. Sign in as all three seeded demos; check amber account/scenario badges and core
+   candidate/admin flows, G1–G6 and independence disclosures.
+
 ## Step 13C-1 — Sign-up CTA and automatic welcome handoff
 
 The sign-in screen promotes **Create a candidate account** in a high-contrast card

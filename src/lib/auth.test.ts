@@ -207,11 +207,11 @@ describe("Credentials and database-authoritative RBAC", () => {
     expect(mutation?.status).toBe(401);
   });
 
-  it.each(["/learner", "/dashboard", "/welcome", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route"])("requires authentication for %s", async (path) => {
+  it.each(["/learner", "/dashboard", "/welcome", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route", "/verify-email/private", "/forgot-password/private", "/reset-password/private"])("requires authentication for %s", async (path) => {
     expect((await protectedRequest(path))?.status).toBe(401);
   });
 
-  it.each(["/", "/login", "/register", "/verify/demo-slug", "/api/auth/csrf"])("keeps %s public without a database lookup", async (path) => {
+  it.each(["/", "/login", "/register", "/verify-email", "/forgot-password", "/reset-password", "/verify/demo-slug", "/api/auth/csrf"])("keeps %s public without a database lookup", async (path) => {
     expect((await protectedRequest(path))?.headers.get("x-middleware-next")).toBe("1");
     expect(state.findUnique).not.toHaveBeenCalled();
   });

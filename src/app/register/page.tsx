@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Create a candidate account | RaterRe
 export default async function RegistrationPage() {
   const user = await optionalPageIdentity();
   if (user) redirect(roleLandingPath(user.role));
-  return <section className="page-card registration-page" aria-labelledby="registration-heading">
+  return <section className="page-card registration-page public-auth-page" aria-labelledby="registration-heading">
     <p className="eyebrow">RaterReady · Closed Alpha</p>
     <h1 id="registration-heading">Create your candidate account</h1>
     <p className="page-intro">Learn at your own pace. RaterReady is free for individual learners and reentry/workforce development partners. You can begin learning while email verification is pending.</p>

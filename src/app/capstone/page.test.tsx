@@ -11,6 +11,7 @@ vi.mock("../../server/capstone/service", () => ({ getCapstoneReadiness: mocks.re
 vi.mock("./actions", () => ({ resumeCapstoneAction: vi.fn() }));
 vi.mock("./start-form", () => ({ CapstoneStartForm: () => <p>START_FORM_SENTINEL</p> }));
 vi.mock("./server-status-refresh", () => ({ ServerStatusRefresh: () => null }));
+vi.mock("../components/account-link-forms", () => ({ VerificationRequestForm: () => <button>Send / resend verification link</button> }));
 vi.mock("../credentials/actions", () => ({ updateCredentialSharingAction: vi.fn() }));
 vi.mock("../appeals/actions", () => ({ submitAppealAction: vi.fn() }));
 const base: CapstoneReadiness = { kind: "MISSING_PRACTICE", serverNow: "2026-11-20T12:00:00.000Z", timeMultiplier: 1.5,
@@ -21,6 +22,14 @@ const base: CapstoneReadiness = { kind: "MISSING_PRACTICE", serverNow: "2026-11-
 beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ id: "guarded-candidate" }); mocks.readiness.mockResolvedValue(base); });
 
 describe("Generalist Qualification Exam readiness page", () => {
+  it("explains email verification without gating learning and withholds the timed start form", async () => {
+    mocks.readiness.mockResolvedValue({ ...base, kind: "EMAIL_UNVERIFIED" });
+    const html = renderToStaticMarkup(await CapstoneReadinessPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain("Email verification required");
+    expect(html).toContain("Send / resend verification link");
+    expect(html).toContain("untimed practice remain available");
+    expect(html).not.toContain("START_FORM_SENTINEL");
+  });
   it("checks the exact page role before any readiness lookup", async () => {
     mocks.guard.mockRejectedValue(new Error("Forbidden"));
     await expect(CapstoneReadinessPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("Forbidden");

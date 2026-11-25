@@ -25,7 +25,7 @@ export function capstoneCooldownUntil(attempts: { status: string; passed: boolea
   return latest > serverNow.getTime() ? new Date(latest) : null;
 }
 
-export type CapstoneReadinessKind = "READY" | "ACTIVE" | "MISSING_PRACTICE" | "COOLDOWN" | "AWAITING_REVIEW" | "ALREADY_PASSED" | "CAPACITY" | "UNAVAILABLE";
+export type CapstoneReadinessKind = "READY" | "ACTIVE" | "MISSING_PRACTICE" | "COOLDOWN" | "AWAITING_REVIEW" | "ALREADY_PASSED" | "CAPACITY" | "UNAVAILABLE" | "EMAIL_UNVERIFIED";
 
 /** Explicit readiness precedence preserves active attempts; practice is participation, never a substitute passing score. */
 export function decideCapstoneReadiness(input: { active: boolean; pendingReview: boolean; passed: boolean; cooldown: boolean; missingPractice: boolean; remainingForms: number }): CapstoneReadinessKind {

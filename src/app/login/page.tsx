@@ -14,7 +14,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   if (user) redirect(roleLandingPath(user.role));
   const { error, notice } = await searchParams;
   return (
-    <section className="page-card" aria-labelledby="sign-in-heading">
+    <section className="page-card public-auth-page" aria-labelledby="sign-in-heading">
       <p className="eyebrow">Your RaterReady account</p>
       <h1 id="sign-in-heading">Welcome back.</h1>
       {notice === "registration-sign-in" && <p className="registration-sign-in-notice" role="status" aria-label="Registration sign-in notice">{REGISTRATION_SIGN_IN_NOTICE}</p>}
@@ -25,6 +25,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
       </section>
       <p className="page-intro">Sign in with your email address or demonstration account identifier.</p>
       <SignInForm hasError={Boolean(error)} />
+      <p className="form-note"><Link href="/forgot-password">Forgot your password?</Link></p>
     </section>
   );
 }

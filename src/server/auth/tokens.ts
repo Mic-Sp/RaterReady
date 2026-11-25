@@ -13,7 +13,7 @@ export function hashAuthToken(rawToken: string): string {
 }
 
 /**
- * Internal storage primitive, not a Server Action. Call inside a transaction after the future
+ * Internal storage primitive, not a Server Action. Call inside a transaction after the
  * workflow's authorization/rate-limit checks. Returns the secret once for delivery; only its
  * hash reaches PostgreSQL. Database time and a user lock bind lifetime/security version.
  */
@@ -32,7 +32,7 @@ export async function issueAuthToken(tx: Prisma.TransactionClient, userId: strin
 
 /**
  * Consume once using PostgreSQL time, exact purpose and the current account security version.
- * Call within the SAME transaction as the future verification/password change: rollback must
+ * Call within the SAME transaction as the verification/password change: rollback must
  * restore token usability if that change fails. All invalid/replayed/expired inputs return null.
  */
 export async function consumeAuthToken(tx: Prisma.TransactionClient, rawToken: string, purpose: AuthTokenPurpose) {

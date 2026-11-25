@@ -43,6 +43,7 @@ export type CapstoneReadiness = {
 export class CapstonePolicyError extends Error {
   constructor(public readonly reason: CapstoneReadinessKind | "ACKNOWLEDGMENT" | "STALE_POLICY") {
     super(reason === "ACKNOWLEDGMENT" ? "Read and acknowledge the Independent-Work Policy before starting."
+      : reason === "EMAIL_UNVERIFIED" ? "Verify your email before starting a timed Generalist Qualification Exam. Learning and untimed practice remain available."
       : reason === "STALE_POLICY" ? "The capstone policy changed. Reload the readiness screen and read the current policy."
       : "A new capstone cannot start in the current readiness state. Review the server-confirmed status below.");
     this.name = "CapstonePolicyError";
@@ -121,6 +122,9 @@ async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string
       if (active?.capstoneBlueprintId) view.attempt = publicAttempt(active, blueprint, now);
     } catch { view.kind = "UNAVAILABLE"; view.blueprint = null; view.attempt = null; }
   }
+  // Verification gates NEW live timed attempts only. Existing timers remain resumable;
+  // synthetic demo accounts keep their pre-verified behavior and all other policies remain pinned.
+  if (!active && !profile.user.isSyntheticFixture && !profile.user.emailVerifiedAt) view.kind = "EMAIL_UNVERIFIED";
   return { view, blueprint, available, profile };
 }
 
@@ -142,6 +146,7 @@ export async function startCapstoneAttempt(db: PrismaClient, candidateId: string
   const outcome = await db.$transaction(async (tx) => {
     const state = await loadLockedState(tx, candidateId);
     const { view, blueprint } = state;
+    if (view.kind === "EMAIL_UNVERIFIED") return { view, error: "EMAIL_UNVERIFIED" as const };
     if (!blueprint || !view.blueprint || parsed.data.blueprintId !== blueprint.id || parsed.data.blueprintVersion !== blueprint.version
       || parsed.data.scoringPolicyVersion !== blueprint.scoringPolicy.version || parsed.data.independentWorkPolicyVersion !== blueprint.independentWorkPolicyVersion) {
       return { view, error: "STALE_POLICY" as const };

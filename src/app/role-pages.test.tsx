@@ -23,6 +23,7 @@ vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: a
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound, usePathname: () => "/dashboard" }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
 vi.mock("./register/registration-form", () => ({ RegistrationForm: () => null }));
+vi.mock("./components/account-link-forms", () => ({ VerificationRequestForm: () => <button>Send / resend verification link</button> }));
 
 const candidate: AuthIdentity = { id: "demo-marcus", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, isSyntheticFixture: true, emailVerifiedAt: "2026-11-20T00:00:00.000Z", demoLabel: "DEMO - SYNTHETIC" };
 const admin: AuthIdentity = { ...candidate, id: "admin-michael", accountCode: "admin-michael", name: "Michael Anthony Sprague", role: "ADMIN_REVIEWER" };

@@ -49,6 +49,6 @@ describe("candidate registration contract", () => {
 
   it("discloses minimal storage, forbidden sensitive disclosures, independence and no employer certification", () => {
     const terms = CLOSED_ALPHA_TERMS.join(" ");
-    for (const phrase of ["government IDs", "third-party credentials", "justice-involvement", "medical", "independent", "outside employers", "G1–G6", "not an external industry standard", "DEMO - SYNTHETIC", "password recovery are not available yet"]) expect(terms).toContain(phrase);
+    for (const phrase of ["government IDs", "third-party credentials", "justice-involvement", "medical", "independent", "outside employers", "G1–G6", "not an external industry standard", "DEMO - SYNTHETIC", "single-use links", "does not prove access to an email inbox"]) expect(terms).toContain(phrase);
   });
 });

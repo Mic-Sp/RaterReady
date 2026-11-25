@@ -37,7 +37,14 @@
 }
 
 .app-shell { width: min(100% - 2.5rem, 31rem); margin: 0 auto; padding: 1.75rem 0 2rem; overflow-wrap: anywhere; }
-/* Authenticated catalogs/dashboard/admin use max-w-6xl (72rem); public sign-in stays compact. */
+/* Auth cards use a centered 44rem desktop shell; other public pages retain their existing width. */
+.app-shell:not(.authenticated-shell):has(.public-auth-page) { width: min(100% - 2.5rem, 44rem); }
+.public-auth-page { width: 100%; max-width: 44rem; margin-inline: auto; }
+.auth-link-form { margin-top: 1.25rem; }
+.auth-link-preview { margin-top: 1rem; padding: 1rem; border: 2px solid var(--accent); border-radius: .65rem; background: var(--surface-indigo); }
+.auth-link-preview h2 { font-size: 1.15rem; font-weight: 700; }
+.auth-link-preview p, .auth-link-preview a { margin-top: .75rem; }
+.auth-link-preview a { display: block; overflow-wrap: anywhere; }
 .authenticated-shell { width: min(100% - 2.5rem, 72rem); }
 /* Brand, account and tabs follow DOM/visual order. Every link stays visible as
    desktop rows stack on narrow screens, without a hidden-menu prerequisite. */

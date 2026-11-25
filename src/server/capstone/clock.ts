@@ -5,8 +5,11 @@ import type { Prisma } from "@prisma/client";
 export async function lockCapstoneCandidate(tx: Prisma.TransactionClient, candidateId: string) {
   const rows = await tx.$queryRaw<{ userId: string }[]>`SELECT "userId" FROM "CandidateProfile" WHERE "userId" = ${candidateId} FOR UPDATE`;
   if (!rows.length) throw new Error("Capstone unavailable.");
+  // Hold a coherent account snapshot through readiness/start: email/status changes wait until
+  // the attempt transaction commits. Token flows lock User but never CandidateProfile.
+  await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${candidateId} FOR SHARE`;
   const profile = await tx.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, select: { selectedLevel: true, timeMultiplier: true,
-    user: { select: { role: true, accountStatus: true } } } });
+    user: { select: { role: true, accountStatus: true, isSyntheticFixture: true, emailVerifiedAt: true } } } });
   // Live candidates may use labeled synthetic fixtures; scenario/blueprint checks remain authoritative.
   if (profile.user.role !== "CANDIDATE" || profile.user.accountStatus !== "ACTIVE") throw new Error("Capstone unavailable.");
   return profile;

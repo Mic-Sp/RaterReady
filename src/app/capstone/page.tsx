@@ -10,11 +10,13 @@ import { ServerStatusRefresh } from "./server-status-refresh";
 import { resumeCapstoneAction } from "./actions";
 import { FinalizedResult } from "./finalized-result";
 import { StatusBadge } from "../components/status-badge";
+import { VerificationRequestForm } from "../components/account-link-forms";
 
 export const metadata: Metadata = { title: "Generalist Qualification Exam readiness | RaterReady" };
 const messages = {
   READY: "Eligible to start", ACTIVE: "Active Generalist Qualification Exam attempt", MISSING_PRACTICE: "Generalist practice still needed", COOLDOWN: "Retake cooldown active",
   AWAITING_REVIEW: "Awaiting owner review", ALREADY_PASSED: "Generalist Qualification Exam already passed", CAPACITY: "No fresh Generalist Qualification Exam form available", UNAVAILABLE: "Generalist Qualification Exam configuration unavailable",
+  EMAIL_UNVERIFIED: "Email verification required",
 };
 
 /** Format database timestamps in an explicit timezone; device clock/timezone cannot alter the displayed server record. */
@@ -36,6 +38,11 @@ export default async function CapstoneReadinessPage({ searchParams }: { searchPa
       <p>Starting reserves a fresh six-slot form and begins its deadline. Use Resume active attempt to enter the exam. Coaching and expert explanations are disabled; responses lock at final submission or expiry.</p></aside>
     {notice && Object.hasOwn(notices, notice) && <p role="status" className="success-note"><SyntheticText>{notices[notice]}</SyntheticText></p>}
     {view.latestFinalized && <FinalizedResult result={view.latestFinalized} compact />}
+    {view.kind === "EMAIL_UNVERIFIED" && <section className="learning-section readiness-summary-card" aria-label="Generalist Qualification Exam email verification">
+      <h2>Verify your email before starting a timed exam</h2>
+      <p>Your live account needs verified email status before a new Generalist Qualification Exam attempt can start. Welcome, onboarding, the dashboard and untimed practice remain available.</p>
+      <VerificationRequestForm /><Link href="/verify-email" className="inline-link">Manage email verification</Link>
+    </section>}
     <section className="learning-section readiness-summary-card" aria-labelledby="eligibility-heading">
       {/* Announce a changed lock/eligibility state without reading a fresh timestamp every 15 seconds. */}
       <div aria-live="polite" aria-atomic="true"><h2 id="eligibility-heading"><SyntheticText>{messages[view.kind]}</SyntheticText></h2></div>

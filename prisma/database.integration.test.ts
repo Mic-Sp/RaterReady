@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -31,7 +31,9 @@ import { recommendWelcomeStartingLevel } from "../src/lib/welcome-check-in";
 import { consumeAuthToken, hashAuthToken, issueAuthToken } from "../src/server/auth/tokens";
 import { registerCandidate } from "../src/server/auth/registration";
 import { completeRegistrationHandoff } from "../src/server/auth/registration-handoff";
-import { consumeRegistrationBudget, REGISTRATION_EMAIL_LIMIT, REGISTRATION_GLOBAL_LIMIT } from "../src/server/auth/registration-rate-limit";
+import { completeAccountLink, lookupAuthLink, requestAccountLink } from "../src/server/auth/account-lifecycle";
+import type { AuthDeliveryRuntime } from "../src/server/auth/email-delivery";
+import { consumeLifecycleBudget, consumeRegistrationBudget, REGISTRATION_EMAIL_LIMIT, REGISTRATION_GLOBAL_LIMIT } from "../src/server/auth/registration-rate-limit";
 import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "../src/lib/registration";
 
 vi.mock("server-only", () => ({}));
@@ -361,6 +363,163 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       // Only disposable limiter records are aged; no application account/assessment is reset.
       await prisma.registrationRateLimit.updateMany({ data: { windowStartedAt: new Date(Date.now() - 3600000), expiresAt: new Date(Date.now() - 1) } });
       expect(await consumeRegistrationBudget(prisma, "fresh-address@example.invalid", namespace)).toBe(true);
+    });
+  });
+
+  describe("verification, password recovery and live timed-exam gate", () => {
+    const secret = () => `local-lifecycle-test-secret-${randomUUID()}`;
+    const preview = (): AuthDeliveryRuntime => ({ mode: "preview", origin: "https://raterready.example", defer: vi.fn(), send: vi.fn(), logPreview: vi.fn() });
+    async function liveCandidate() {
+      const email = `lifecycle-${randomUUID()}@example.invalid`;
+      await registerCandidate(prisma, { email, password: "River9!x", consent: "accepted", consentVersion: CLOSED_ALPHA_TERMS_VERSION }, secret());
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      const viewer = await authenticateCredentials(prisma, { accountCode: email, password: "River9!x" });
+      if (!viewer) throw new Error("Local lifecycle fixture could not sign in.");
+      return { email, user, viewer };
+    }
+    const code = (result: Awaited<ReturnType<typeof requestAccountLink>>) => new URL(result.preview!.url).hash.slice(7);
+
+    it("issues an own-account preview, stores only a hash, verifies once and revokes stale sessions", async () => {
+      const { user, viewer } = await liveCandidate();
+      const runtime = preview();
+      const result = await requestAccountLink(prisma, viewer, "EMAIL_VERIFICATION", null, secret(), runtime);
+      expect(result.preview?.purpose).toBe("EMAIL_VERIFICATION");
+      const raw = code(result);
+      const row = await prisma.authToken.findUniqueOrThrow({ where: { tokenHash: hashAuthToken(raw) } });
+      expect(JSON.stringify(row)).not.toContain(raw);
+      expect(await lookupAuthLink(prisma, raw, "EMAIL_VERIFICATION")).toMatchObject({ userId: user.id });
+      expect(await lookupAuthLink(prisma, raw, "PASSWORD_RESET")).toBeNull();
+      expect(await completeAccountLink(prisma, "EMAIL_VERIFICATION", raw, null, secret(), viewer)).toMatchObject({ ok: true, userId: user.id });
+      const verified = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+      expect(verified.emailVerifiedAt).toBeInstanceOf(Date);
+      expect(verified.sessionVersion).toBe(user.sessionVersion + 1);
+      expect(await findActiveSessionUser(prisma, viewer)).toBeNull();
+      expect(await completeAccountLink(prisma, "EMAIL_VERIFICATION", raw, null, secret())).toMatchObject({ ok: false });
+      const audit = await prisma.auditEvent.findUniqueOrThrow({ where: { eventKey: `auth-link:${row.id}:consumed` } });
+      expect(audit.metadataJson).toMatchObject({ channel: "preview", purpose: "EMAIL_VERIFICATION" });
+      expect(JSON.stringify(audit)).not.toContain(raw);
+      await expect(prisma.auditEvent.update({ where: { id: audit.id }, data: { action: "changed" } })).rejects.toThrow(/append-only/);
+    });
+
+    it("does not expose reset links/existence publicly or to another candidate; the fresh sole owner can preview", async () => {
+      const { email, user } = await liveCandidate();
+      const other = await liveCandidate();
+      const runtime = preview();
+      const known = await requestAccountLink(prisma, null, "PASSWORD_RESET", email, secret(), runtime);
+      expect(await requestAccountLink(prisma, null, "PASSWORD_RESET", `unknown-${randomUUID()}@example.invalid`, secret(), runtime)).toEqual(known);
+      expect(await requestAccountLink(prisma, other.viewer, "PASSWORD_RESET", email, secret(), runtime)).toEqual(known);
+      expect(known.preview).toBeUndefined();
+      expect(await prisma.authToken.count({ where: { userId: user.id } })).toBe(0);
+      const owner = await prisma.user.findUniqueOrThrow({ where: { accountCode: "admin-michael" } });
+      const identity = (await findActiveSessionUser(prisma, owner))!;
+      const authorized = await requestAccountLink(prisma, identity, "PASSWORD_RESET", email, secret(), runtime);
+      expect(authorized.preview?.purpose).toBe("PASSWORD_RESET");
+      const stale = await requestAccountLink(prisma, { ...identity, sessionVersion: identity.sessionVersion + 999 }, "PASSWORD_RESET", email, secret(), runtime);
+      expect(stale).toEqual(known);
+    });
+
+    it("resets once under the 8-character composition policy, revokes old links/cookies and never implicitly verifies email", async () => {
+      const { email, user, viewer } = await liveCandidate();
+      const runtime = preview();
+      const verification = await requestAccountLink(prisma, viewer, "EMAIL_VERIFICATION", null, secret(), runtime);
+      const reset = await requestAccountLink(prisma, viewer, "PASSWORD_RESET", email, secret(), runtime);
+      const raw = code(reset);
+      expect(await completeAccountLink(prisma, "PASSWORD_RESET", raw, "lowercase9!", secret())).toMatchObject({ ok: false, fieldError: "Include at least one uppercase letter." });
+      expect((await prisma.authToken.findUniqueOrThrow({ where: { tokenHash: hashAuthToken(raw) } })).consumedAt).toBeNull();
+      expect(await completeAccountLink(prisma, "PASSWORD_RESET", raw, "Birch7!y", secret())).toMatchObject({ ok: true });
+      expect(await authenticateCredentials(prisma, { accountCode: email, password: "River9!x" })).toBeNull();
+      expect(await authenticateCredentials(prisma, { accountCode: email, password: "Birch7!y" })).toMatchObject({ id: user.id, emailVerifiedAt: null });
+      expect(await findActiveSessionUser(prisma, viewer)).toBeNull();
+      expect(await lookupAuthLink(prisma, code(verification), "EMAIL_VERIFICATION")).toBeNull();
+      expect(await completeAccountLink(prisma, "PASSWORD_RESET", raw, "Other8!z", secret())).toMatchObject({ ok: false });
+    });
+
+    it("allows exactly one concurrent verification consumption and rejects expiration", async () => {
+      const { user, viewer } = await liveCandidate();
+      const result = await requestAccountLink(prisma, viewer, "EMAIL_VERIFICATION", null, secret(), preview());
+      const outcomes = await Promise.all([1, 2].map(() => completeAccountLink(prisma, "EMAIL_VERIFICATION", code(result), null, secret())));
+      expect(outcomes.filter(({ ok }) => ok)).toHaveLength(1);
+      const current = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+      const raw = randomBytes(32).toString("base64url");
+      await prisma.authToken.create({ data: { userId: user.id, purpose: "PASSWORD_RESET", tokenHash: hashAuthToken(raw), sessionVersion: current.sessionVersion,
+        createdAt: new Date(Date.now() - 7200000), expiresAt: new Date(Date.now() - 3600001) } });
+      expect(await completeAccountLink(prisma, "PASSWORD_RESET", raw, "Birch7!y", secret())).toMatchObject({ ok: false });
+    });
+
+    it("defers email delivery and returns identical public reset responses on unknown accounts or provider failure", async () => {
+      const { email, user } = await liveCandidate();
+      const tasks: Array<() => Promise<void>> = [];
+      const runtime: AuthDeliveryRuntime = { ...preview(), mode: "email", defer: (work) => tasks.push(work), send: vi.fn().mockRejectedValue(new Error("private provider details")) };
+      const known = await requestAccountLink(prisma, null, "PASSWORD_RESET", email, secret(), runtime);
+      const unknown = await requestAccountLink(prisma, null, "PASSWORD_RESET", `unknown-${randomUUID()}@example.invalid`, secret(), runtime);
+      expect(known).toEqual(unknown);
+      expect(known.preview).toBeUndefined();
+      expect(runtime.send).not.toHaveBeenCalled();
+      expect(tasks).toHaveLength(1);
+      await tasks[0]();
+      expect(await prisma.auditEvent.count({ where: { targetId: user.id, action: "AUTH_EMAIL_DELIVERY_FAILED" } })).toBe(1);
+      expect(JSON.stringify(known)).not.toContain("private provider details");
+    });
+
+    it("rate-limits reset requests without leaking account existence", async () => {
+      const namespace = secret(); const email = `rate-${randomUUID()}@example.invalid`;
+      for (let i = 0; i < 5; i += 1) expect((await requestAccountLink(prisma, null, "PASSWORD_RESET", email, namespace, preview())).status).toBe("received");
+      expect((await requestAccountLink(prisma, null, "PASSWORD_RESET", email, namespace, preview())).status).toBe("limited");
+    });
+
+    it("does not block another lifecycle operation on locked expired budget cleanup", async () => {
+      const keyHash = randomBytes(32).toString("hex");
+      await prisma.registrationRateLimit.create({ data: { keyHash, attemptCount: 1,
+        windowStartedAt: new Date(Date.now() - 3600000), expiresAt: new Date(Date.now() - 1) } });
+      let release!: () => void; let acquired!: () => void;
+      const hold = new Promise<void>((resolve) => { release = resolve; });
+      const locked = new Promise<void>((resolve) => { acquired = resolve; });
+      const transaction = prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "keyHash" FROM "RegistrationRateLimit" WHERE "keyHash" = ${keyHash} FOR UPDATE`;
+        acquired(); await hold;
+      }, { timeout: 10000 });
+      const namespace = secret();
+      try {
+        await Promise.race([locked, transaction]);
+        expect(await consumeLifecycleBudget(prisma, "request:PASSWORD_RESET", "cleanup@example.invalid", namespace)).toBe(true);
+        expect(await prisma.registrationRateLimit.findUnique({ where: { keyHash } })).not.toBeNull();
+      } finally { release(); await transaction; }
+      expect(await consumeLifecycleBudget(prisma, "request:PASSWORD_RESET", "cleanup@example.invalid", namespace)).toBe(true);
+      expect(await prisma.registrationRateLimit.findUnique({ where: { keyHash } })).toBeNull();
+    }, 15000);
+
+    it("rolls back token consumption and account mutation when the immutable completion audit fails", async () => {
+      const { email, user, viewer } = await liveCandidate();
+      const reset = await requestAccountLink(prisma, viewer, "PASSWORD_RESET", email, secret(), preview());
+      const failing = new Proxy(prisma, { get(target, key) {
+        if (key !== "$transaction") return Reflect.get(target, key);
+        return (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) => prisma.$transaction((tx) => callback(new Proxy(tx, { get(client, field) {
+          if (field === "auditEvent") return new Proxy(client.auditEvent, { get(delegate, method) {
+            if (method === "create") return async () => { throw new Error("Simulated immutable audit outage"); };
+            return Reflect.get(delegate, method);
+          } });
+          return Reflect.get(client, field);
+        } })));
+      } });
+      expect(await completeAccountLink(failing, "PASSWORD_RESET", code(reset), "Birch7!y", secret())).toMatchObject({ ok: false });
+      expect((await prisma.authToken.findUniqueOrThrow({ where: { tokenHash: hashAuthToken(code(reset)) } })).consumedAt).toBeNull();
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toEqual(user);
+    });
+
+    it("blocks a fully ready unverified live candidate at the service boundary, then permits start after verification", async () => {
+      const id = await capstoneCandidate(true);
+      await prisma.user.update({ where: { id }, data: { isSyntheticFixture: false, demoLabel: null, email: `gate-${randomUUID()}@example.invalid`, emailVerifiedAt: null } });
+      const blocked = await getCapstoneReadiness(prisma, id);
+      expect(blocked.kind).toBe("EMAIL_UNVERIFIED");
+      expect(blocked.missingPractice).toHaveLength(0);
+      const b = blocked.blueprint!;
+      const input = { acknowledged: true, blueprintId: b.id, blueprintVersion: b.version, scoringPolicyVersion: b.scoringPolicy.version, independentWorkPolicyVersion: b.independentWorkPolicyVersion };
+      await expect(startCapstoneAttempt(prisma, id, input)).rejects.toMatchObject({ reason: "EMAIL_UNVERIFIED" });
+      expect(await prisma.assessmentAttempt.count({ where: { candidateId: id, mode: "CAPSTONE" } })).toBe(0);
+      const issued = await prisma.$transaction((tx) => issueAuthToken(tx, id, "EMAIL_VERIFICATION"));
+      expect(await completeAccountLink(prisma, "EMAIL_VERIFICATION", issued.rawToken, null, secret())).toMatchObject({ ok: true });
+      expect((await getCapstoneReadiness(prisma, id)).kind).toBe("READY");
+      expect((await startCapstoneAttempt(prisma, id, input)).kind).toBe("ACTIVE");
     });
   });
 

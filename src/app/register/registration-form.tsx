@@ -77,7 +77,7 @@ export function RegistrationForm() {
       <input id="registration-website" name="website" type="text" tabIndex={-1} autoComplete="off" /></div>
     <fieldset className="registration-terms" aria-describedby="registration-consent-hint">
       <legend>Closed-Alpha Privacy &amp; Non-Endorsement Terms</legend>
-      <p className="field-hint">Version 1 · November 24, 2026</p>
+      <p className="field-hint">Version 2 · November 25, 2026</p>
       <ul>{CLOSED_ALPHA_TERMS.map((term) => <li key={term}><SyntheticText>{term}</SyntheticText></li>)}</ul>
       <input type="hidden" name="consentVersion" value={CLOSED_ALPHA_TERMS_VERSION} />
       <p id="registration-consent-hint" className="field-hint">Acceptance is required to create an account. We record the terms version and acceptance time.</p>

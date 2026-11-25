@@ -35,7 +35,8 @@ const approvedAccounts: Readonly<Record<string, Role>> = {
 
 /**
  * Seed accounts retain exact code/role checks. Active live candidates with recorded consent
- * may learn while verification is pending. An exam verification gate is deferred to Step 13C.
+ * may learn while verification is pending. The timed-exam service independently gates new
+ * live attempts on verification; sign-in never grants exam eligibility by itself.
  * Sign-in fields cannot provision an account, select its role or establish verification/consent.
  */
 function activeIdentity(user: {
