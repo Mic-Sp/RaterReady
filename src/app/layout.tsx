@@ -17,12 +17,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <div className={`app-shell${user ? " authenticated-shell max-w-6xl" : ""}`}>
           <header className="site-header">
+            <div className="navigation-chrome"><div className="brand-lockup">
             <Link href="/" className="brand" aria-label="RaterReady home">
               <span className="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" focusable="false"><path d="M7 18V6h5a4 4 0 0 1 0 8H7m5 0 5 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
               RaterReady
             </Link>
             <p className="brand-description">Independent AI evaluation training</p>
+            </div>
             {user && <AuthenticatedNavigation user={user} />}
+            </div>
             <aside className="demo-notice" aria-label="Synthetic demonstration access">
               <p className="notice-label"><DemoBadge /></p>
               <p>Training and reviewer access use synthetic demonstration accounts. Shared pilot credentials may be verified publicly.</p>

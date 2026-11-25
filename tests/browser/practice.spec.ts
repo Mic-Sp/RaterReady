@@ -36,9 +36,10 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await page.getByLabel("Competency", { exact: true }).selectOption("G6");
     await page.getByLabel("Scenario difficulty", { exact: true }).selectOption("ADVANCED");
     await page.getByRole("button", { name: "Apply filters" }).click();
-    await expect(page.getByRole("link", { name: /G6 Evaluation Justification & Calibration/ })).toBeVisible();
+    const catalogCard = page.getByRole("article", { name: "Calibrate a judgment with evidence", exact: true });
+    await expect(catalogCard.getByRole("heading", { name: "Calibrate a judgment with evidence", exact: true })).toBeVisible();
     await accessible(page);
-    await page.getByRole("link", { name: /G6 Evaluation Justification & Calibration/ }).click();
+    await catalogCard.getByRole("link", { name: "Open scenario", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Your independent evaluation" })).toBeVisible();
     await expectSourceFirst(page, "Supplied verification evidence", "Pinned evaluation rubric");
     const initialHtml = await page.content();

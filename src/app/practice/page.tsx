@@ -9,6 +9,8 @@ import { competencySchema, learningLevelSchema } from "../../server/learning/ser
 import { generalistPracticeCompetencies } from "../../lib/generalist-competencies";
 import { learningLevels } from "../../lib/learning-content";
 import { EvaluationReference } from "../components/evaluation-reference";
+import { LearningCard } from "../components/learning-card";
+import { catalogHeading, competencySummaries } from "../../lib/catalog-presentation";
 
 export const metadata: Metadata = { title: "Generalist practice scenarios | RaterReady" };
 
@@ -33,10 +35,11 @@ export default async function PracticeBrowserPage({ searchParams }: { searchPara
       </select></div><button className="secondary-button" type="submit">Apply filters</button><Link href="/practice" className="inline-link">Clear filters</Link>
     </form>
     {!scenarios.length && <p role="status">No practice scenarios match these filters. Try another level or view all scenarios.</p>}
-    <ul className="practice-catalog">{scenarios.map((scenario) => <li key={scenario.id}>
-      <h2><Link href={`/practice/${scenario.id}`}><SyntheticText rebrand>{scenario.title}</SyntheticText></Link></h2>
-      <p><SyntheticText>{scenario.competencies.join(", ")}</SyntheticText> · <SyntheticText rebrand>{learningLevels.find((item) => item.code === scenario.difficulty)!.title}</SyntheticText> · scenario version {scenario.version}</p>
-      <Link className="inline-link" href={`/practice/${scenario.id}`}>Open practice scenario</Link>
+    <ul className="practice-catalog learning-card-grid" role="list">{scenarios.map((scenario) => <li key={scenario.id}>
+      <LearningCard headingId={`scenario-${scenario.id}`} title={catalogHeading(scenario.title)} href={`/practice/${scenario.id}`}
+        metadata={<><DemoBadge /><span className="competency-tag">{scenario.competencies.join(", ")} · {learningLevels.find((item) => item.code === scenario.difficulty)!.title}</span></>}
+        summary={<p>{competencySummaries[scenario.competencies[0]] ?? "Compare two simulated responses using the supplied evidence and rubric."}</p>}
+        detail={`Scenario version ${scenario.version} · Untimed practice`} />
     </li>)}</ul><EvaluationReference /><Link href="/dashboard" className="inline-link">Return to dashboard</Link>
   </section>;
 }

@@ -71,7 +71,7 @@ test("Technical Preview reuses accessible practice scoring with approved ties an
     await expect(page.locator(".practice-catalog > li")).toHaveCount(5);
     await expect(page.getByRole("complementary", { name: "Technical Preview · non-credentialing" })).toContainText("do not grant a Technical credential or alter Generalist Qualification Exam eligibility");
     await accessible(page);
-    await page.getByRole("link", { name: /Rank technical solutions: accept an equivalent tie/ }).click();
+    await page.getByRole("article", { name: "Rank technical solutions: accept an equivalent tie", exact: true }).getByRole("link", { name: "Open scenario", exact: true }).click();
     await expect(page.locator("pre code")).toHaveCount(2);
     await expectSourceFirst(page, "Supplied verification evidence", "Pinned evaluation rubric");
     await expect(page.getByRole("complementary", { name: "Technical Preview · non-credentialing" })).toContainText("does not execute code");

@@ -1,4 +1,4 @@
-import { SyntheticText } from "../components/demo-badge";
+import { DemoBadge, SyntheticText } from "../components/demo-badge";
 import Link from "next/link";
 import type { AuthIdentity } from "../../server/auth/accounts";
 import type { getLearningSnapshot } from "../../server/learning/service";
@@ -12,6 +12,9 @@ import type { CapstoneReadiness } from "../../server/capstone/service";
 import { FinalizedResult } from "../capstone/finalized-result";
 import type { CandidateCredential } from "../../lib/credential-content";
 import { CandidateCredentials } from "../components/candidate-credentials";
+import { LearningCard } from "../components/learning-card";
+import { competencySummaries } from "../../lib/catalog-presentation";
+import type { Competency } from "@prisma/client";
 
 /** Server-rendered learning progress uses independent persisted lesson rows, never diagnostic scores. */
 export function LearningDashboard({ user, profile, notice, readiness, credentials = [], opportunities }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string; readiness?: CapstoneReadiness; credentials?: CandidateCredential[]; opportunities?: { unlocked: boolean } }) {
@@ -21,7 +24,7 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
   const practiceAreas = new Set(profile.practiceProgress.map((item) => item.competency));
   const nextPractice = competencies.find((item) => !practiceAreas.has(item.code))?.code ?? "G1";
   const notices: Record<string, string> = { "level-saved": "Learning level saved. All completed lessons remain saved.", "lesson-saved": "Lesson completion saved. This is learning progress, not a certification result.", "diagnostic-skipped": "Skills check skipped. Your learning level and completed lessons are unchanged." };
-  return <section className="page-card learning-page" aria-labelledby="landing-heading">
+  return <section className="page-card learning-page learning-dashboard" aria-labelledby="landing-heading">
     <p className="eyebrow">Generalist learning</p><h1 id="landing-heading">Your candidate dashboard</h1>
     <p className="page-intro">Welcome, <SyntheticText>{user.name}</SyntheticText>. Keep building independent evaluation judgment at your own pace.</p>
     <p>G1–G6 below are RaterReady’s internal Generalist competency identifiers.</p>
@@ -30,18 +33,22 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
     {/* Desktop pairs summary cards in DOM order; full-width curriculum grids reflow sequentially on mobile. */}
     <div className="dashboard-grid">
     <section className="learning-section dashboard-wide" aria-labelledby="practice-progress-heading"><h2 id="practice-progress-heading">Generalist practice progress</h2>
-      <p>{practiceAreas.size} of 6 competency areas practiced</p><progress max={6} value={practiceAreas.size} aria-label="Competency areas with submitted practice" />
+      <p className="progress-metric">{practiceAreas.size} of 6 competency areas practiced</p><progress max={6} value={practiceAreas.size} aria-label="Competency areas with submitted practice" />
       <p>Practice completion records submissions, not mastery, passing status or Generalist Qualification Exam readiness. All scenarios remain open for unlimited retries.</p>
       {profile.practiceDrafts[0] && <p><Link href={`/practice/${profile.practiceDrafts[0].scenarioId}`} className="inline-link">Resume saved draft: <SyntheticText rebrand>{profile.practiceDrafts[0].scenario.title}</SyntheticText></Link></p>}
       <Link href={`/practice?competency=${nextPractice}`} className="primary-button button-link">Resume practice: <SyntheticText>{nextPractice}</SyntheticText></Link>
       <Link href="/practice" className="inline-link">Browse all Generalist practice scenarios</Link>
-      <ol className="curriculum-list">{Object.entries(generalistPracticeCompetencies).map(([code, title]) => {
+      <ul className="competency-grid learning-card-grid" role="list">{Object.entries(generalistPracticeCompetencies).map(([code, title]) => {
         const records = profile.practiceProgress.filter((item) => item.competency === code);
-        return <li key={code}><h3><Link href={`/practice?competency=${code}`}><SyntheticText>{code}</SyntheticText> · <SyntheticText rebrand>{title}</SyntheticText></Link></h3><p><SyntheticText>{records.length ? `${records.reduce((sum, item) => sum + item.submissionCount, 0)} practice submission(s)` : "No practice submitted yet"}</SyntheticText></p></li>;
-      })}</ol>
+        return <li key={code}><LearningCard headingId={`practice-area-${code}`} headingLevel={3} title={title}
+          metadata={<><DemoBadge /><span className="competency-tag">{code} · All levels</span></>}
+          summary={<p>{competencySummaries[code as Competency]}</p>}
+          detail={records.length ? `${records.reduce((sum, item) => sum + item.submissionCount, 0)} practice submission(s)` : "No practice submitted yet"}
+          href={`/practice?competency=${code}`} action={`Practice ${code}`} /></li>;
+      })}</ul>
     </section>
     <section className="learning-section" aria-labelledby="progress-heading"><h2 id="progress-heading">Your learning progress</h2>
-      <p><strong><SyntheticText rebrand>{level.title}</SyntheticText></strong> · {completed.length} of 6 lessons marked complete</p>
+      <p className="progress-metric"><strong><SyntheticText rebrand>{level.title}</SyntheticText></strong> · {completed.length} of 6 lessons marked complete</p>
       <progress max={6} value={completed.length} aria-label="Lessons marked complete at the current level" />
       <p>Completion records reflect lessons you mark complete. They are not graded practice results, a Generalist Qualification Exam readiness decision, or a credential.</p>
       <Link href={`/learn/${resume}?level=${profile.selectedLevel}`} className="primary-button button-link"><SyntheticText>{completed.length === 6 ? `Review ${resume}` : `Resume learning: ${resume}`}</SyntheticText></Link>
@@ -57,9 +64,11 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
     </section>
     <section className="learning-section dashboard-wide" aria-labelledby="curriculum-heading"><h2 id="curriculum-heading">Six-module curriculum</h2>
       <p>G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Follow the sequence or revisit any lesson.</p>
-      <ol className="curriculum-list">{competencies.map((item) => <li key={item.code}><h3><Link href={`/learn/${item.code}?level=${profile.selectedLevel}`}><SyntheticText>{item.code}</SyntheticText> · <SyntheticText rebrand>{item.title}</SyntheticText></Link></h3>
-        <p><SyntheticText>{completed.some((entry) => entry.competency === item.code) ? "Complete at this level" : "Not yet marked complete at this level"}</SyntheticText></p>
-        <p className="field-hint">Completed at: <SyntheticText rebrand>{profile.moduleProgress.filter((entry) => entry.competency === item.code).map((entry) => learningLevels.find((l) => l.code === entry.level)!.title).join(", ") || "No levels yet"}</SyntheticText></p>
+      <ol className="curriculum-list learning-card-grid" role="list">{competencies.map((item) => <li key={item.code}>
+        <LearningCard headingId={`lesson-${item.code}`} headingLevel={3} title={item.title} href={`/learn/${item.code}?level=${profile.selectedLevel}`} action={`Open ${item.code} lesson`}
+          metadata={<span className="competency-tag">{item.code} · {level.title}</span>}
+          summary={<><p>{completed.some((entry) => entry.competency === item.code) ? "Complete at this level" : "Not yet marked complete at this level"}</p>
+            <p className="field-hint">Completed at: {profile.moduleProgress.filter((entry) => entry.competency === item.code).map((entry) => learningLevels.find((l) => l.code === entry.level)!.title).join(", ") || "No levels yet"}</p></>} />
       </li>)}</ol>
     </section>
     <section className="learning-section" aria-labelledby="diagnostic-status-heading"><h2 id="diagnostic-status-heading">Optional skills diagnostic</h2>

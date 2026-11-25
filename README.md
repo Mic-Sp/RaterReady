@@ -1243,3 +1243,56 @@ Manual checks at `http://127.0.0.1:3000`:
    Skills Check handoff; the check-in must never grant a credential or exam result.
 5. Use Tab, arrow keys, Space and Enter; inspect mobile at 320px and 200% zoom/text.
    Check clear focus, readable disclosures and no horizontal scrolling or clipping.
+
+## Step 12A — Global design system and card hierarchy
+
+The shared shell now uses slate text/canvas surfaces, indigo actions and active
+tabs, emerald progress accents, consistent card radii/spacing and small elevation
+tokens. Body text stays readable with tabular numerals for metrics, scores and
+timers. Token tests calculate unrounded WCAG contrast: normal text is at least
+4.5:1 on each named light surface; control borders and focus rings are at least
+3:1. The lighter `--line` token separates decorative regions only. Interactive
+controls retain stronger boundaries and three-pixel offset keyboard focus rings.
+Amber `DEMO - SYNTHETIC` marker colors and all disclosures remain intact.
+
+Brand and account controls share the desktop header row, followed by active
+route tabs. At narrower widths they stack with all destinations visible and no
+menu prerequisite. Identity/role, synthetic status and sign-out remain in DOM
+order, with no horizontal navigation scroller or clipped labels.
+
+`LearningCard` provides the shared metadata → plain heading → summary → footer
+pattern for `/practice`, `/technical-preview` and dashboard practice/lesson cards.
+Catalog-only title cleanup removes the leading marker/known competency prefix
+from the display heading; metadata retains the marker and tags. It never changes
+stored titles or evaluation content. Every card has one CTA, with heading context
+available to assistive technology. Progress, level controls and rubric-reference
+regions have separate surfaces and balanced padding. Server business logic,
+schema, grading, keys, routes and non-certifying boundaries are unchanged.
+
+Unit tests cover contrast, plain headings, synthetic metadata, escaped content
+and contextual CTA destinations. Browser checks measure desktop header/card
+geometry, exercise Open scenario with the keyboard, inspect card boundaries and
+focus rings, and run WCAG checks at 1440px, 1024px, 720px (1440px at 200% layout
+zoom), and 320px with normal and 200% text sizing across dashboard, catalogs,
+welcome and onboarding. Existing functional/security checks remain in place;
+catalog locators now target a named card's Open scenario action.
+
+Use the standard verification/preview commands above. For the additional visual
+browser checks, use the same disposable local test database:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser -- tests/browser/design-system.spec.ts
+```
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. Sign in as a candidate, then as a reviewer. Check brand/account alignment,
+   active route tabs, role/synthetic pills and the single Sign out control.
+2. Browse Practice and Technical Preview. Check separate metadata, clean headings,
+   short summaries and footer CTAs; follow a card to its existing workspace.
+3. Check dashboard competency/lesson cards, progress values, starting-level
+   controls and the distinct Understanding Rubrics & Evaluation Criteria panel.
+4. Revisit Welcome and onboarding; confirm readable hierarchy, balanced cards,
+   freely selectable levels and visible advisory/non-certifying disclosures.
+5. Use Tab/Enter and inspect at 320px and 200% zoom/text. All navigation/actions
+   should remain visible with clear focus and no clipped text or horizontal scroll.
