@@ -10,6 +10,7 @@ import { AuthenticatedNavigation } from "./components/authenticated-navigation";
 import type { AuthIdentity } from "../server/auth/accounts";
 import RootLayout from "./layout";
 import RegistrationPage from "./register/page";
+import { REGISTRATION_SIGN_IN_NOTICE } from "./login/form-state";
 
 const mocks = vi.hoisted(() => ({ requireSession: vi.fn(), requireCandidate: vi.fn(), requireAdmin: vi.fn(), signOut: vi.fn(), redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -46,6 +47,19 @@ describe("protected role-routing shell", () => {
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ error: "private account details" }) })) ).not.toContain("private account details");
     expect(renderToStaticMarkup(await RegistrationPage())).toContain('href="/login"');
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({}) }))).toContain('href="/register"');
+  });
+
+  it("promotes the new-learner CTA before sign-in and shows only the allowlisted session fallback notice", async () => {
+    mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
+    const html = renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ notice: "registration-sign-in" }) }));
+    expect(html).toContain('aria-labelledby="registration-cta-heading"');
+    expect(html).toContain('class="primary-button button-link"');
+    expect(html).toContain(REGISTRATION_SIGN_IN_NOTICE);
+    expect(html).toContain('role="status"');
+    expect(html.indexOf("registration-cta-heading")).toBeLessThan(html.indexOf("Sign in with your email address"));
+    const unknown = renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ notice: "private-provider-error" }) }));
+    expect(unknown).not.toContain(REGISTRATION_SIGN_IN_NOTICE);
+    expect(unknown).not.toContain("private-provider-error");
   });
 
   it("calls the exact page guard and withholds content from an unauthorized role", async () => {

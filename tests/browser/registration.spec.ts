@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { CLOSED_ALPHA_TERMS_VERSION, PASSWORD_GUIDANCE, REGISTRATION_LIMITED, REGISTRATION_RECEIVED } from "../../src/lib/registration";
 import { expectSyntheticBadges } from "./presentation";
+import { REGISTRATION_SIGN_IN_NOTICE } from "../../src/app/login/form-state";
 
 const password = "River9!x";
 /** Real public form only; no test registration endpoint or credentials in URLs. */
@@ -25,7 +26,11 @@ test("eight-character password registration, versioned consent and unverified le
   const email = `register-${randomUUID()}@example.invalid`;
   try {
     await page.goto("/login");
-    await page.getByRole("link", { name: "Create a candidate account", exact: true }).click();
+    const cta = page.getByRole("region", { name: "New to RaterReady?" });
+    await expect(cta.getByRole("link", { name: "Create a candidate account", exact: true })).toBeVisible();
+    expect((await cta.boundingBox())!.y).toBeLessThan((await page.getByRole("form", { name: "Sign in to RaterReady" }).boundingBox())!.y);
+    await cta.getByRole("link", { name: "Create a candidate account", exact: true }).focus();
+    await page.keyboard.press("Enter");
     await expect(page).toHaveURL("/register");
     await expect(page.getByRole("heading", { name: "Create your candidate account" })).toBeVisible();
     await expect(page.getByRole("checkbox")).not.toBeChecked();
@@ -56,20 +61,22 @@ test("eight-character password registration, versioned consent and unverified le
     await page.keyboard.press("Space");
     await page.getByRole("button", { name: "Create candidate account" }).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
-    await expect(page.getByRole("status")).toBeFocused();
+    await expect(page).toHaveURL("/welcome");
     const user = await db.user.findUniqueOrThrow({ where: { email } });
     expect(user).toMatchObject({ role: "CANDIDATE", isSyntheticFixture: false, emailVerifiedAt: null, closedAlphaConsentVersion: CLOSED_ALPHA_TERMS_VERSION });
     expect(await db.auditEvent.count({ where: { actorUserId: user.id } })).toBe(2);
-    await page.getByRole("link", { name: "Continue to sign in" }).click();
-    await page.getByLabel("Account identifier", { exact: true }).fill(email);
-    await page.getByLabel("Password", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page).toHaveURL("/onboarding");
+    const session = await (await page.request.get("/api/auth/session")).json();
+    expect(session.user).toMatchObject({ id: user.id, role: "CANDIDATE", isSyntheticFixture: false, emailVerifiedAt: null });
+    expect(await page.context().cookies()).toEqual(expect.arrayContaining([expect.objectContaining({ name: "authjs.session-token", httpOnly: true })]));
     await expect(page.getByLabel("Closed alpha account access")).toContainText("Email verification pending");
     await expect(page.locator("header [data-synthetic-badge]")).toHaveCount(0);
-    await page.getByRole("link", { name: "Try the welcome check-in" }).click();
-    await expect(page).toHaveURL("/welcome");
+    await expect(page.locator(".account-controls")).toContainText("Closed Alpha");
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     await expect(page.locator(".eyebrow")).toContainText("Closed Alpha");
     await page.getByRole("button", { name: "Choose Foundations", exact: true }).click();
     await expect(page).toHaveURL("/dashboard?notice=level-saved");
@@ -83,6 +90,13 @@ test("eight-character password registration, versioned consent and unverified le
     await page.goto("/dashboard");
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL("/login");
+    // A repeat with the existing password follows the same authenticated handoff without
+    // creating another account, replacing credentials, or resetting completed onboarding.
+    await fillRegistration(page, email);
+    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await expect(page).toHaveURL("/welcome");
+    expect(await db.auditEvent.count({ where: { actorUserId: user.id } })).toBe(2);
+    expect((await db.candidateProfile.findUniqueOrThrow({ where: { userId: user.id } })).onboardingCompletedAt).not.toBeNull();
   } finally { await disableFixture(db, email); await db.$disconnect(); }
 });
 
@@ -146,22 +160,26 @@ test("server validation, required consent, authority tampering and the honeypot 
     await page.getByRole("button", { name: "Create candidate account" }).click();
     await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
     expect(await db.user.findUnique({ where: { email } })).toBeNull();
+    expect(await (await page.request.get("/api/auth/session")).json()).toBeNull();
   } finally { await db.$disconnect(); }
 });
 
-test("duplicate emails receive the same acknowledgment and repeated submissions hit the shared server limit", async ({ page }) => {
+test("duplicate emails with the wrong password get a generic sign-in fallback and retain their original account", async ({ page }) => {
   test.setTimeout(90000);
   const db = new PrismaClient({ datasourceUrl: process.env.TEST_DATABASE_URL });
   const email = `duplicate-${randomUUID()}@example.invalid`;
   try {
     await fillRegistration(page, email);
     await page.getByRole("button", { name: "Create candidate account" }).click();
-    await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
+    await expect(page).toHaveURL("/welcome");
     const original = await db.user.findUniqueOrThrow({ where: { email } });
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL("/login");
     for (let count = 2; count <= 5; count += 1) {
       await fillRegistration(page, email.toUpperCase(), "Birch7!y");
       await page.getByRole("button", { name: "Create candidate account" }).click();
-      await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
+      await expect(page).toHaveURL("/login?notice=registration-sign-in");
+      await expect(page.getByRole("status", { name: "Registration sign-in notice" })).toHaveText(REGISTRATION_SIGN_IN_NOTICE);
     }
     expect(await db.user.findUniqueOrThrow({ where: { email } })).toEqual(original);
     expect(await db.auditEvent.count({ where: { actorUserId: original.id } })).toBe(2);
@@ -180,7 +198,10 @@ test("registration works as a native form before JavaScript hydration", async ({
   try {
     await fillRegistration(page, email);
     await page.getByRole("button", { name: "Create candidate account" }).click();
-    await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
-    expect(await db.user.findUnique({ where: { email } })).not.toBeNull();
+    await expect(page).toHaveURL("/welcome");
+    await expect(page.locator(".account-controls")).toContainText("Closed Alpha");
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+    const user = await db.user.findUniqueOrThrow({ where: { email } });
+    expect((await (await page.request.get("/api/auth/session")).json()).user.id).toBe(user.id);
   } finally { await disableFixture(db, email); await db.$disconnect(); await context.close(); }
 });

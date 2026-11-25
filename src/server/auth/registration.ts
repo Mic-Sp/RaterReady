@@ -26,8 +26,8 @@ export async function registerCandidate(db: PrismaClient, input: unknown, rateLi
         consent: fields.consent?.[0] ?? fields.consentVersion?.[0],
       } };
     }
-    // Exactly one fixed-cost password hash for new AND duplicate emails. No existence probe,
-    // automatic sign-in, account mutation or different public response reveals the insert result.
+    // Exactly one fixed-cost password hash for new AND duplicate emails. This storage boundary
+    // returns the same acknowledgment; the separate handoff authenticates credentials for both.
     const passwordHash = await hashPassword(parsed.data.password);
     try {
       await db.$transaction(async (tx) => {

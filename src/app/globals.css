@@ -71,6 +71,9 @@
 h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: -.035em; font-weight: 750; overflow-wrap: anywhere; }
 .page-intro { margin-top: .9rem; color: var(--muted); }
 .sign-in-form { margin-top: 1.4rem; }
+.registration-cta { display: grid; gap: .8rem; margin-top: 1.25rem; padding: 1.15rem; border: 2px solid var(--accent); border-radius: .8rem; background: var(--surface-indigo); overflow-wrap: anywhere; }
+.registration-cta h2 { font-size: 1.25rem; font-weight: 700; }
+.registration-sign-in-notice { margin-top: 1.25rem; padding: 1rem; border: 2px solid var(--accent); border-radius: .65rem; background: var(--surface-indigo); }
 .registration-form, .registration-received { margin-top: 1.4rem; }
 .registration-page { overflow-wrap: anywhere; }
 .registration-terms { min-width: 0; margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; }

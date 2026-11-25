@@ -30,6 +30,7 @@ import { diagnosticScorecardItems } from "../src/lib/diagnostic-scorecard";
 import { recommendWelcomeStartingLevel } from "../src/lib/welcome-check-in";
 import { consumeAuthToken, hashAuthToken, issueAuthToken } from "../src/server/auth/tokens";
 import { registerCandidate } from "../src/server/auth/registration";
+import { completeRegistrationHandoff } from "../src/server/auth/registration-handoff";
 import { consumeRegistrationBudget, REGISTRATION_EMAIL_LIMIT, REGISTRATION_GLOBAL_LIMIT } from "../src/server/auth/registration-rate-limit";
 import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "../src/lib/registration";
 
@@ -251,11 +252,27 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       expect(await prisma.authToken.count({ where: { userId: user.id } })).toBe(0);
       const identity = await authenticateCredentials(prisma, { accountCode: ` ${input.email.toUpperCase()} `, password });
       expect(identity).toMatchObject({ id: user.id, emailVerifiedAt: null, isSyntheticFixture: false, role: "CANDIDATE" });
+      const handoff = await completeRegistrationHandoff(prisma, input, result, async (credentials) => {
+        expect(await authenticateCredentials(prisma, credentials)).toMatchObject({ id: user.id, role: "CANDIDATE", isSyntheticFixture: false, emailVerifiedAt: null });
+        return "http://localhost/welcome";
+      });
+      expect(handoff).toBe("welcome");
       await expect(authorizeSession(prisma, { user: identity, expires: new Date(Date.now() + 60000).toISOString() }, "ADMIN_REVIEWER")).rejects.toMatchObject({ status: 403 });
       const beforeSeed = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
       await seedSyntheticData(prisma, testPasswords);
       expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toEqual(beforeSeed);
       // Append-only audit actors remain intact in the disposable test database.
+      await prisma.user.update({ where: { id: user.id }, data: { accountStatus: "DISABLED" } });
+    });
+
+    it("preserves the committed account and audit evidence when session creation fails so manual sign-in can recover", async () => {
+      const input = payload();
+      const result = await registerCandidate(prisma, input, secret());
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: input.email } });
+      expect(await completeRegistrationHandoff(prisma, input, result, async () => { throw new Error("Simulated cookie creation failure"); })).toBe("sign-in");
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toEqual(user);
+      expect(await prisma.auditEvent.count({ where: { actorUserId: user.id } })).toBe(2);
+      expect(await authenticateCredentials(prisma, { accountCode: input.email, password: input.password })).toMatchObject({ id: user.id, isSyntheticFixture: false });
       await prisma.user.update({ where: { id: user.id }, data: { accountStatus: "DISABLED" } });
     });
 

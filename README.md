@@ -2,6 +2,54 @@
 
 Stage B account foundation, with the Stage A `DEMO - SYNTHETIC` demo preserved.
 
+## Step 13C-1 — Sign-up CTA and automatic welcome handoff
+
+The sign-in screen promotes **Create a candidate account** in a high-contrast card
+before the sign-in form. It keeps native link behavior, visible keyboard focus and
+sequential 320px/200% reflow. The CTA and session-fallback notice are tested with WCAG
+contrast checks; all demo, G1–G6 and independence disclosures remain intact.
+
+After registration commits its account/profile/consent audit transaction, the Server
+Action authenticates through the existing Auth.js Credentials provider with
+`redirect: false` and a fixed `/welcome` destination. Auth.js verifies the password,
+rechecks database permissions/status/version and creates its encrypted HttpOnly cookie
+before the action redirects. A fresh `/welcome` request independently authorizes the
+candidate and renders the live `Closed Alpha` header and verification-pending notice.
+This works before JavaScript hydration as well as through the hydrated form.
+
+The server-only handoff revalidates the payload so filled honeypots cannot establish
+sessions despite receiving a generic acknowledgment. Invalid/limited/failed
+registrations do not attempt authentication. It resolves only live candidate identity
+from PostgreSQL and never trusts submitted role, account code, verification or redirect
+fields. New accounts and eligible repeats follow the same credential check. A repeat
+needs the existing password; it never changes password, consent, status or progress.
+Successful authentication is observable as a session, while failures use generic
+wording without claiming whether an email already existed or an account was created.
+
+The action also confirms a nonempty Auth.js session cookie (including secure/chunked
+cookies), since a rejected JWT callback can resolve without issuing a session.
+Session/lookup failures, absent session cookies or unexpected Auth.js destinations redirect to
+`/login?notice=registration-sign-in` with a clear, allowlisted notice and working sign-in
+form. The committed account and immutable audit evidence remain intact for manual
+sign-in. Passwords, email addresses, IDs and provider errors never enter redirect URLs
+or returned action state. Redirects stay outside the error handler so Next.js redirect
+control-flow is not swallowed. No new schema, email delivery/recovery routes or
+verified-email exam gate is part of this step.
+
+Unit/integration checks exercise the action ordering, generic fallback, honeypot and
+role boundaries, real encrypted cookie exchange, preserved account/audit state after
+session failure and candidate-only welcome access. Browser checks cover the CTA,
+automatic live welcome arrival, correct-password repeats, wrong-password fallback,
+native forms, synthetic badge separation, keyboard navigation and 320px/200% reflow.
+
+Use the Step 13B verification and preview commands below. Manually open `/login`, follow
+the prominent CTA, register a new email and accept the terms. Expect immediate
+`/welcome` arrival without re-entering credentials, `Closed Alpha` in navigation and
+the pending-verification notice. Reload and revisit to confirm the session persists;
+choose any starting level to reach the dashboard. Check the three seeded demo logins,
+keyboard focus and mobile/text zoom. The generic fallback can be inspected at
+`/login?notice=registration-sign-in` while signed out.
+
 ## Step 13B — Candidate registration and closed-alpha consent
 
 `/register` is a public candidate-only page linked from sign-in, with a return link.
@@ -35,10 +83,11 @@ invalid and duplicate requests. Expired keys are pruned in bounded batches. Limi
 outages fail closed. The intentionally conservative shared global budget suits the
 small closed alpha; exhausting it temporarily limits all new registrations.
 
-New and duplicate emails receive the same acknowledgment, with one KDF each. There
-is no automatic login, existence probe, password replacement, or duplicate-account
-consent/status mutation. The acknowledgment offers sign-in and project-owner access
-help without claiming that a verification email was sent. Live candidates sign in
+The storage boundary returns the same acknowledgment for new and duplicate emails,
+with one KDF each. Step 13C-1 adds the credential-verified automatic session handoff
+described above; there is no password replacement or duplicate-account consent/status
+mutation. Generic failure copy offers sign-in and project-owner access help without
+claiming that a verification email was sent. Live candidates can also sign in
 with normalized email (demo identifiers still work), may learn while unverified,
 and see `Closed Alpha` plus a calm verification-pending notice. The welcome check-in
 also distinguishes live identity from demo identity; synthetic scenarios retain
@@ -70,11 +119,12 @@ audit evidence are disabled rather than deleted in the disposable local database
 Browser setup clears only the disposable local database's registration budgets
 between runs, keeping reruns independent while rate limits remain enabled in tests.
 At `http://127.0.0.1:3000`, register a new email, inspect field/consent errors, accept
-the terms, then sign in with email/password. Check onboarding, welcome, a free level
+the terms, then confirm automatic welcome arrival. Check onboarding, welcome, a free level
 choice, dashboard and untimed practice. Check the Closed Alpha/pending notice,
 synthetic scenario badges, candidate-to-admin denial, and all three seeded demo
 sign-ins/badges. Check keyboard focus and 320px/200% reflow. Re-register an existing
-email: the acknowledgment stays the same and the original password still applies.
+email: the original password still applies; matching credentials reach welcome and
+incorrect credentials receive the generic sign-in fallback.
 
 ## Step 13A — Stage B account lifecycle foundation
 

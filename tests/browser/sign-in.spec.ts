@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PrismaClient } from "@prisma/client";
 import { testPasswords } from "../../prisma/test-helpers";
 import { expectSyntheticBadges } from "./presentation";
+import { REGISTRATION_SIGN_IN_NOTICE } from "../../src/app/login/form-state";
 
 /** Real form entry and keyboard submission; credentials are local synthetic fixtures only. */
 async function signIn(page: Page, accountCode: keyof typeof testPasswords) {
@@ -31,6 +32,8 @@ test("public sign-in semantics, keyboard controls, mobile reflow and WCAG checks
   await page.keyboard.press("Enter");
   await expect(page.locator("main")).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Create a candidate account", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("Account identifier", { exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Password", { exact: true })).toBeFocused();
@@ -49,6 +52,24 @@ test("public sign-in semantics, keyboard controls, mobile reflow and WCAG checks
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await checkAccessibility(page);
+});
+
+test("prominent registration CTA and generic session fallback remain accessible at 320px and 200% text", async ({ page }) => {
+  await page.goto("/login?notice=registration-sign-in");
+  await expect(page.getByRole("status", { name: "Registration sign-in notice" })).toHaveText(REGISTRATION_SIGN_IN_NOTICE);
+  const cta = page.getByRole("region", { name: "New to RaterReady?" });
+  await expect(cta.getByRole("link", { name: "Create a candidate account", exact: true })).toHaveClass(/primary-button/);
+  expect((await cta.boundingBox())!.y).toBeLessThan((await page.getByRole("form", { name: "Sign in to RaterReady" }).boundingBox())!.y);
+  await cta.getByRole("link").focus();
+  expect(await cta.getByRole("link").evaluate((link) => getComputedStyle(link).outlineWidth)).toBe("3px");
+  await checkAccessibility(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await checkAccessibility(page);
+  await cta.getByRole("link").focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/register");
 });
 
 for (const [accountCode, destination, name, heading] of [

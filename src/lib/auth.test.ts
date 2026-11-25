@@ -1,6 +1,6 @@
 import { NextRequest, type NextFetchEvent } from "next/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { User } from "@prisma/client";
+import type { PrismaClient, User } from "@prisma/client";
 import { demoAccounts } from "../../prisma/fixtures";
 import { testPasswords } from "../../prisma/test-helpers";
 import { readDemoPasswords } from "../../prisma/demo-passwords";
@@ -15,6 +15,8 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers({ cookie: stat
 import { handlers, requireAdmin, requireCandidate, requireSession } from "./auth";
 import { proxy } from "../proxy";
 import { AuthorizationError } from "../server/auth/guards";
+import { completeRegistrationHandoff } from "../server/auth/registration-handoff";
+import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "./registration";
 
 let records: User[];
 let initial: User[];
@@ -66,6 +68,25 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("Credentials and database-authoritative RBAC", () => {
+  it("establishes a real encrypted HttpOnly session for the welcome handoff and retains candidate-only access", async () => {
+    const input = { email: "new-alpha@example.invalid", password: "River9!x", consent: "accepted", consentVersion: CLOSED_ALPHA_TERMS_VERSION };
+    records.push({ ...initial[0], id: "new-alpha", accountCode: "candidate-new-alpha", email: input.email, passwordHash: await hashPassword(input.password),
+      isSyntheticFixture: false, emailVerifiedAt: null, closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: CLOSED_ALPHA_TERMS_VERSION });
+    const db = { user: { findUnique: state.findUnique } } as unknown as PrismaClient;
+    const destination = await completeRegistrationHandoff(db, input, { status: "received", message: REGISTRATION_RECEIVED }, async (credentials) => {
+      const response = await login(credentials.accountCode, credentials.password, { callbackUrl: "http://localhost/welcome" });
+      expect(response.response.headers.getSetCookie().some((cookie) => cookie.startsWith("authjs.session-token=") && cookie.includes("HttpOnly"))).toBe(true);
+      state.cookie = response.cookie;
+      expect(state.cookie).not.toContain(input.password);
+      return response.body.url;
+    });
+    expect(destination).toBe("welcome");
+    expect((await session(state.cookie)).user).toMatchObject({ id: "new-alpha", role: "CANDIDATE", isSyntheticFixture: false, demoLabel: null, emailVerifiedAt: null });
+    expect((await protectedRequest("/welcome", state.cookie))?.headers.get("x-middleware-next")).toBe("1");
+    expect((await requireCandidate()).id).toBe("new-alpha");
+    await expect(requireAdmin()).rejects.toMatchObject({ status: 403 });
+  });
+
   it.each([8, 128])("accepts a %i-character password from seed validation through authentication", async (length) => {
     const password = "x".repeat(length);
     const passwords = readDemoPasswords({
