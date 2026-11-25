@@ -1296,3 +1296,69 @@ Manual checks at `http://127.0.0.1:3000`:
    freely selectable levels and visible advisory/non-certifying disclosures.
 5. Use Tab/Enter and inspect at 320px and 200% zoom/text. All navigation/actions
    should remain visible with clear focus and no clipped text or horizontal scroll.
+
+## Step 12B — Surface depth, readiness, workspaces and verification
+
+The cool-slate `#eef2f6` canvas and nested containers now separate crisp white
+cards with layered small/medium elevation and decorative top/left highlights.
+Scenario/action cards lift slightly on hover or emphasize keyboard focus;
+reduced-motion preferences disable movement/transitions. Grid children and
+metadata can shrink/wrap at intermediate widths. Text/control contrast tokens
+retain their tested AA bounds; synthetic amber styling remains distinct.
+
+Qualification Exam readiness keeps the same server DTO and eligibility actions,
+but groups G1–G6 coverage, pinned 40/30/25/5-point weights, the finalized 85%
+passing standard, timing settings and cooldown into labeled cards/grids.
+The threshold bar is decorative, explicitly not a candidate score. The separate
+Independent-Work Policy card retains the required acknowledgment/start action.
+
+`WorkspaceBar` is a named sticky landmark in Generalist Practice, Technical
+Preview and the active Qualification Exam. Its compact title/status/reference
+controls remain anchored; the full H1 and detailed authoritative save region
+remain in the page. A resize observer measures the wrapping bar for scroll
+padding, and later keyboard controls are revealed below it. Small fixed gutters
+preserve width at mobile text zoom. Quick reference uses a native disclosure,
+Escape/close focus return, and closes when keyboard focus leaves. Practice can
+open its existing learning guide; the exam exposes only its pinned criterion
+labels and independent-work reminder, never coaching or expected answers.
+The exam's compact save mirror reuses server-confirmed status and adds no live
+announcement; the original single live save region remains authoritative.
+
+Reviewer KPI/queue/appeal cards now have elevation and text status badges.
+Independent rubric cards and Stage 2 judge-comparison surfaces are distinct;
+the latter still render only from the server-unlocked projection. Public
+verification uses a certificate surface with structured evidence-only metadata,
+the full synthetic/preliminary pilot label, internal G1–G6 and independence
+disclosures. Unknown, unshared, suspended and revoked credentials retain the
+same generic unavailable view. No server/domain, schema, scoring or seed changes
+are required.
+
+Unit checks cover native reference focus/cleanup, readiness values, certificate
+metadata and generic unavailable output. Browser coverage adds intermediate
+grid widths, card overflow inspection, hover/reduced motion, sticky keyboard
+focus at 320px/200% text, exam save mirrors and coaching suppression. Existing
+review/credential browser flows also verify stage boundaries, certificate rows,
+consent withdrawal and identical unavailable states.
+
+Use the standard verification and preview commands above. Focused checks use
+the same disposable local test database:
+
+```sh
+TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/raterready_test' npm run test:browser -- tests/browser/surface-depth.spec.ts tests/browser/capstone-workspace.spec.ts
+```
+
+Manual checks at `http://127.0.0.1:3000`:
+
+1. Compare the slate canvas with white cards. Check hover depth and keyboard
+   focus, then inspect scenario grids at 1024px, 900px, 768px and 640px.
+2. Open Qualification Exam readiness. Check coverage pills, pinned scoring and
+   timing/cooldown cards, the 85% standard and Independent-Work Policy.
+3. Scroll long Practice, Technical Preview and exam workspaces. Check the sticky
+   title/status, slot/timer/save display and Quick reference with Enter/Escape.
+   In exam mode, confirm coaching stays unavailable and Save now/autosave show
+   server-confirmed timestamps. Tab to later fields; focus must remain visible.
+4. As the owner, inspect `/admin` KPI/queue/appeal cards and both reviewer stages.
+   AI comparison must stay absent until independent scores are saved.
+5. Open a shared demo credential's verification URL. Check structured metadata,
+   pilot/independence disclosures and 320px/200% text reflow. Withdraw sharing;
+   the URL must return the same unavailable view as an unknown code.

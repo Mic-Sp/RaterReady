@@ -14,6 +14,8 @@ import { FinalizedResult } from "../finalized-result";
 import { CapstoneSaveStatus } from "./save-status";
 import { WorkspaceSection } from "../../components/workspace-section";
 import { qualificationRubricLabel } from "../../../lib/assessment-presentation";
+import { WorkspaceBar } from "../../components/workspace-bar";
+import { StatusBadge } from "../../components/status-badge";
 
 /** Explicit server UTC timestamps are read-only evidence of saves/deadlines, never computed client save claims. */
 function timestamp(value: string) { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "long", timeZone: "UTC" }).format(new Date(value)); }
@@ -92,8 +94,12 @@ export function CapstoneExam({ initial }: { initial: CapstoneWorkspace }) {
   </article>;
 
   return <article className="page-card learning-page capstone-exam" aria-labelledby="exam-heading">
-    <div className="exam-timer-bar"><strong>Qualification Exam Mode — Coaching Disabled</strong>
-      <span role="timer" aria-live="off" aria-label="Estimated time remaining, synchronized with server"><SyntheticText>{duration(remaining)}</SyntheticText></span></div>
+    <WorkspaceBar title="Your Generalist Qualification Exam" metadata={<><span className="competency-tag">Slot {active + 1} of 6 · {slot?.competency}</span><StatusBadge>Coaching disabled</StatusBadge></>}
+      status={<><span role="timer" aria-live="off" className="workspace-timer" aria-label="Estimated time remaining, synchronized with server"><SyntheticText>{duration(remaining)}</SyntheticText></span><CapstoneSaveStatus session={session} compact /></>}
+      reference={<><p>Coaching stays disabled in this exam.</p><p>{qualificationRubricLabel(slot.rubric.code)} · version {slot.rubric.version}</p>
+        <ul>{slot.rubric.criteria.map((criterion) => <li key={criterion.id}><SyntheticText>{criterion.label}</SyntheticText></li>)}</ul>
+        <p>Use the acknowledged Independent-Work Policy. No external generative AI assistance. Ordinary research notes remain temporary.</p></>} />
+    <p className="eyebrow">Qualification Exam Mode — Coaching Disabled</p>
     <p className="eyebrow"><DemoBadge /> · Timed Generalist Qualification Exam</p><h1 id="exam-heading">Your Generalist Qualification Exam</h1>
     <p>Attempt reference: <span data-testid="capstone-attempt-id"><SyntheticText>{session.current.id}</SyntheticText></span></p>
     <p>Fixed server deadline: <time dateTime={session.current.expiresAt}><SyntheticText>{timestamp(session.current.expiresAt)}</SyntheticText></time>. The countdown is an estimate; the server enforces expiry on every request.</p>

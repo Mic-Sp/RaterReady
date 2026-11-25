@@ -48,6 +48,14 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     for (const row of rows) expect(initialHtml).not.toContain(row.scenario.expertExplanation);
     await expect(page.getByText("Qualification Exam Mode — Coaching Disabled", { exact: true })).toBeVisible();
     await expect(page.getByRole("timer")).toBeVisible();
+    const workspaceBar = page.getByRole("region", { name: "Evaluation workspace status", exact: true });
+    await expect(workspaceBar).toHaveCSS("position", "sticky");
+    const quickReference = workspaceBar.locator("summary");
+    await quickReference.focus(); await page.keyboard.press("Enter");
+    await expect(workspaceBar.locator("details")).toHaveAttribute("open", "");
+    await expect(workspaceBar).toContainText("Coaching stays disabled");
+    await page.keyboard.press("Escape");
+    await expect(quickReference).toBeFocused();
     await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Qualification Exam", exact: true })).toHaveAttribute("aria-current", "location");
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
     await expect(page.getByText("Seven-Step Independent Evaluation Method", { exact: false })).toHaveCount(0);
@@ -64,6 +72,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     const saveStatus = page.getByRole("status", { name: "Qualification Exam save status" });
     await expect(saveStatus).toHaveAttribute("data-save-state", "saved");
     await expect(saveStatus).toContainText(/Saved to server at \d{2}:\d{2}:\d{2} UTC/);
+    await expect(workspaceBar.locator('[data-save-state="saved"]')).toContainText(/Saved to server at \d{2}:\d{2}:\d{2} UTC/);
     await expect(page.getByRole("form", { name: "Slot 1 evaluation", exact: true }).locator('[data-save-state="saved"]')).toContainText("Saved to server at");
     const confirmed = await db.submissionResponse.findUniqueOrThrow({ where: { attemptId_position: { attemptId: attempt.id, position: 1 } } });
     await expect(saveStatus.locator("time").first()).toHaveAttribute("dateTime", confirmed.savedAt.toISOString());
@@ -106,6 +115,10 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     const a = await page.getByRole("region", { name: "Response A", exact: true }).boundingBox();
     const b = await page.getByRole("region", { name: "Response B", exact: true }).boundingBox();
     expect(b!.y).toBeGreaterThan(a!.y + a!.height); await accessible(page);
+    const mobileControl = page.getByRole("radio").first();
+    await mobileControl.focus();
+    expect((await mobileControl.boundingBox())!.y).toBeGreaterThanOrEqual((await workspaceBar.boundingBox())!.y + (await workspaceBar.boundingBox())!.height);
+    expect((await workspaceBar.boundingBox())!.height).toBeLessThan(600);
     await page.evaluate(() => { document.documentElement.style.fontSize = ""; }); await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: test.info().outputPath("capstone-workspace.png"), fullPage: true });
     await page.getByRole("button", { name: "Review final submission", exact: true }).click();

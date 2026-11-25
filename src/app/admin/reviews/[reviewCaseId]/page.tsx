@@ -27,7 +27,7 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ rev
   const unlocked = view.stage === "ADJUDICATION" ? view : null;
   const completed = unlocked?.status === "FINALIZED";
   const finalScores = completed ? validateOwnerScores(unlocked.finalScores, view.prompts.map((p) => p.responseId)) : null;
-  return <article className="page-card learning-page reviewer-layout reviewer-workspace" aria-labelledby="review-heading">
+  return <article className={`page-card learning-page reviewer-layout reviewer-workspace review-stage-${unlocked ? "comparison" : "independent"}`} aria-labelledby="review-heading">
     <nav aria-label="Reviewer navigation"><Link href="/admin" className="inline-link">Return to reviewer console</Link></nav>
     <p className="eyebrow"><DemoBadge /> · Owner adjudication</p>
     <h1 id="review-heading"><SyntheticText>{completed ? "Finalized owner review" : unlocked ? "Stage 2: AI vote comparison & final disposition" : "Stage 1: Independent rubric evaluation"}</SyntheticText></h1>
@@ -43,11 +43,11 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ rev
       const comparison = unlocked?.votes.find((v) => v.responseId === prompt.responseId);
       const preliminary = unlocked?.preliminaryScores.responses.find((s) => s.responseId === prompt.responseId);
       const final = finalScores?.responses.find((s) => s.responseId === prompt.responseId);
-      return <section className="learning-section" aria-labelledby={`prompt-${prompt.position}`} key={prompt.responseId}>
+      return <section className="learning-section review-prompt-card" aria-labelledby={`prompt-${prompt.position}`} key={prompt.responseId}>
         <h2 id={`prompt-${prompt.position}`}>Written prompt · slot {prompt.position}</h2>
         <h3>Task prompt</h3><p><SyntheticText rebrand>{prompt.scenario.prompt}</SyntheticText></p>
         <ResponseComparison responseA={prompt.scenario.responseA} responseB={prompt.scenario.responseB} idPrefix={`review-${prompt.position}`} />
-        <section className="learning-section" aria-labelledby={`rubric-${prompt.position}`}><h3 id={`rubric-${prompt.position}`}>Frozen written rubric · version {prompt.scenario.rubric.version}</h3>
+        <section className="learning-section independent-rubric-card" aria-labelledby={`rubric-${prompt.position}`}><h3 id={`rubric-${prompt.position}`}>Frozen written rubric · version {prompt.scenario.rubric.version}</h3>
           <p><SyntheticText rebrand>{evaluation.description}</SyntheticText></p><p>Evaluation criteria: <SyntheticText>{evaluation.criteria.map((criterion) => criterion.label).join(" · ")}</SyntheticText></p>
           <dl className="rubric-list"><dt>Rubric alignment (0–2)</dt><dd><SyntheticText rebrand>{rubric.alignment.description}</SyntheticText></dd>
             <dt>Evidence & reasoning (0–2)</dt><dd><SyntheticText rebrand>{rubric.evidence.description}</SyntheticText></dd><dt>Clarity (0–1)</dt><dd><SyntheticText rebrand>{rubric.clarity.description}</SyntheticText></dd></dl>
@@ -55,7 +55,8 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ rev
         </section>
         <h3>Candidate written justification</h3><p><SyntheticText rebrand>{prompt.writtenPrompt}</SyntheticText></p>
         <blockquote className="candidate-justification"><SyntheticText rebrand>{prompt.writtenJustification || "No written justification was submitted."}</SyntheticText></blockquote>
-        {comparison && preliminary && <section aria-labelledby={`comparison-${prompt.position}`}>
+        {/* Stage 2 surfaces exist only for the server-unlocked projection; styling never substitutes for the rubric-first boundary. */}
+        {comparison && preliminary && <section className="judge-comparison-card" aria-labelledby={`comparison-${prompt.position}`}>
           <h3 id={`comparison-${prompt.position}`}>Criterion comparison · slot {prompt.position}</h3>
           <p><SyntheticText>{comparison.agreement === true ? "Judges agree on every criterion." : comparison.agreement === false ? "Judge disagreement: criterion scores differ." : "Judge comparison unavailable: a vote is missing or a provider fallback requires owner evaluation."}</SyntheticText></p>
           <div className="judge-grid"><section className="response-panel" aria-labelledby={`owner-${prompt.position}`}><h3 id={`owner-${prompt.position}`}>Owner preliminary scores</h3>

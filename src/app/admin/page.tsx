@@ -12,6 +12,7 @@ import { listAdminAppeals } from "../../server/appeals/service";
 import { listAdminOpportunities } from "../../server/opportunities/service";
 import { OpportunityControls } from "./opportunity-controls";
 import { opportunityLinkLabels } from "../../lib/opportunity-content";
+import { StatusBadge } from "../components/status-badge";
 
 export const metadata: Metadata = { title: "Admin reviewer console | RaterReady" };
 
@@ -38,20 +39,21 @@ export default async function AdminConsolePage() {
       { id: "history", title: "Finalized review history", rows: view.history, total: m.finalizedCount }]).map(({ id, title, rows, total }) =>
       <section className="learning-section" aria-labelledby={`${id}-heading`} key={id}><h2 id={`${id}-heading`}><SyntheticText rebrand>{title}</SyntheticText></h2>
         <p>Showing {rows.length} of {total} <SyntheticText>{id === "pending" ? "pending" : "finalized"}</SyntheticText> reviews.</p>
+        <StatusBadge tone={id === "pending" ? "pending" : "success"}>{total} {id === "pending" ? "pending reviews" : "finalized reviews"}</StatusBadge>
         {id === "pending" && <p>Each submitted attempt requires a pilot audit. Detailed routing reasons remain locked until independent scores are saved.</p>}
         {rows.length === 0 ? <p><SyntheticText>{id === "pending" ? "No submitted Generalist Qualification Exam attempts are awaiting owner review." : "No reviews have been finalized yet."}</SyntheticText></p> :
           <ul className="practice-catalog">{rows.map((row) => <li key={row.reviewCaseId}>
             <h3><SyntheticText>{row.candidateName}</SyntheticText> · <DemoBadge /></h3><p>Attempt reference: <SyntheticText>{row.attemptId}</SyntheticText></p>
             <p>Submitted: <time dateTime={row.submittedAt}><SyntheticText>{reviewTimestamp(row.submittedAt)}</SyntheticText></time></p>
-            <p>Review reason: <SyntheticText>{reviewReasonLabels[row.reason]}</SyntheticText></p><p>Status: <SyntheticText>{row.status === "FINALIZED" ? "Finalized" : row.independentScoresSaved ? "Independent scores saved" : "Independent evaluation needed"}</SyntheticText></p>
+            <p>Review reason: <SyntheticText>{reviewReasonLabels[row.reason]}</SyntheticText></p><p>Status: <StatusBadge tone={row.status === "FINALIZED" || row.independentScoresSaved ? "success" : "pending"}>{row.status === "FINALIZED" ? "Finalized" : row.independentScoresSaved ? "Independent scores saved" : "Independent evaluation needed"}</StatusBadge></p>
             {row.finalizedAt && <p>Finalized: <time dateTime={row.finalizedAt}><SyntheticText>{reviewTimestamp(row.finalizedAt)}</SyntheticText></time></p>}
             <Link href={`/admin/reviews/${row.reviewCaseId}`} className="inline-link"><SyntheticText>{id === "pending" ? "Adjudicate" : "View finalized review"}</SyntheticText> <SyntheticText>{row.attemptId}</SyntheticText></Link>
           </li>)}</ul>}
       </section>)}
     <section className="learning-section" aria-labelledby="admin-appeals-heading"><h2 id="admin-appeals-heading">Grading appeals</h2>
       {([{ title: "Pending appeals", rows: appeals.pending }, { title: "Resolved appeal history", rows: appeals.resolved }]).map(({ title, rows }) => <section key={title} aria-label={title}>
-        <h3><SyntheticText rebrand>{title}</SyntheticText></h3>{!rows.length ? <p>No <SyntheticText rebrand>{title.toLowerCase()}</SyntheticText>.</p> : <ul className="practice-catalog">{rows.map((a) => <li key={a.reference}>
-          <p><SyntheticText>{a.candidateName}</SyntheticText> · Attempt <SyntheticText>{a.attemptId}</SyntheticText></p><p>Status: <SyntheticText>{a.status}</SyntheticText><SyntheticText>{a.disposition && ` · ${a.disposition}`}</SyntheticText></p>
+        <h3><SyntheticText rebrand>{title}</SyntheticText></h3><StatusBadge tone={title === "Pending appeals" ? "pending" : "neutral"}>{rows.length} {title === "Pending appeals" ? "pending appeals shown" : "resolved appeals shown"}</StatusBadge>{!rows.length ? <p>No <SyntheticText rebrand>{title.toLowerCase()}</SyntheticText>.</p> : <ul className="practice-catalog">{rows.map((a) => <li key={a.reference}>
+          <p><SyntheticText>{a.candidateName}</SyntheticText> · Attempt <SyntheticText>{a.attemptId}</SyntheticText></p><p>Status: <StatusBadge tone={a.status === "OPEN" ? "pending" : "success"}>{a.status}</StatusBadge><SyntheticText>{a.disposition && ` · ${a.disposition}`}</SyntheticText></p>
           <p>Submitted: <SyntheticText>{reviewTimestamp(a.submittedAt)}</SyntheticText></p><Link href={`/admin/appeals/${a.reference}`} className="inline-link">Inspect appeal <SyntheticText>{a.reference}</SyntheticText></Link>
         </li>)}</ul>}
       </section>)}

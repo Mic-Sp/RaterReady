@@ -12,6 +12,9 @@ import { TechnicalPreviewNotice } from "../components/technical-preview-notice";
 import { ResponseComparison } from "../components/response-comparison";
 import { WorkspaceSection } from "../components/workspace-section";
 import type { PracticeFormState } from "./form-state";
+import { WorkspaceBar } from "../components/workspace-bar";
+import { StatusBadge } from "../components/status-badge";
+import { catalogHeading } from "../../lib/catalog-presentation";
 
 type WorkspaceData = Awaited<ReturnType<typeof loadPracticeWorkspace>>;
 
@@ -54,6 +57,13 @@ export function PracticeWorkspace({ scenario, draft, result: savedResult }: Work
   }, [state, showResults]);
 
   return <article className="page-card learning-page practice-workspace" aria-labelledby="workspace-heading">
+    <WorkspaceBar title={catalogHeading(scenario.title)} metadata={<><DemoBadge /><span className="competency-tag">{scenario.competencies.map((item) => item.code).join(" · ")} · Untimed</span></>}
+      status={<StatusBadge tone={state.savedAt && !dirty && !pending && !state.error ? "success" : "neutral"}>{pending ? "Saving to server…" : showResults ? "Results locked" : state.error ? "Save needs attention" : dirty ? "Unsaved changes" : state.savedAt ? "Draft saved to server" : "No draft saved"}</StatusBadge>}
+      reference={<><p>Pinned rubric version {scenario.rubric.version}. Read the supplied evidence before judging either response.</p>
+        <button type="button" className="secondary-button" onClick={() => {
+          const reference = document.getElementById("workspace-learning-reference") as HTMLDetailsElement | null;
+          if (reference) { reference.open = true; reference.querySelector("summary")?.focus(); reference.scrollIntoView({ block: "start" }); }
+        }}>Open learning reference</button></>} />
     <p className="eyebrow"><DemoBadge /> · unlimited, untimed practice</p><h1 id="workspace-heading"><SyntheticText rebrand>{scenario.title}</SyntheticText></h1>
     {technical && <TechnicalPreviewNotice />}
     <p className="page-intro"><SyntheticText rebrand>{scenario.competencyDisclosure}</SyntheticText></p>
@@ -62,7 +72,7 @@ export function PracticeWorkspace({ scenario, draft, result: savedResult }: Work
     <WorkspaceSection headingId="task-heading" title="Task prompt" kind="task"><p><SyntheticText rebrand>{scenario.prompt}</SyntheticText></p></WorkspaceSection>
     <WorkspaceSection headingId="evidence-heading" title="Supplied verification evidence" kind="evidence">
       <ul>{scenario.evidence.map((source) => <li key={source.id}><strong><SyntheticText>{source.id}</SyntheticText></strong><p><SyntheticText rebrand>{source.text}</SyntheticText></p></li>)}</ul>
-      <EvaluationReference includeRubricGuide />
+      <EvaluationReference includeRubricGuide id="workspace-learning-reference" />
     </WorkspaceSection>
     <WorkspaceSection headingId="rubric-heading" title="Pinned evaluation rubric" kind="rubric">
       <p><SyntheticText>{scenario.rubric.code}</SyntheticText> · version {scenario.rubric.version}</p>

@@ -34,4 +34,17 @@ describe("Generalist Qualification Exam readiness page", () => {
     mocks.readiness.mockResolvedValue({ ...base, kind: "READY" });
     expect(renderToStaticMarkup(await CapstoneReadinessPage({ searchParams: Promise.resolve({}) }))).toContain("START_FORM_SENTINEL");
   });
+  it("groups server-derived scoring, timing and coverage into cards without inventing eligibility", async () => {
+    mocks.readiness.mockResolvedValue({ ...base, practiced: ["G1"], missingPractice: ["G2", "G3", "G4", "G5", "G6"] });
+    const html = renderToStaticMarkup(await CapstoneReadinessPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain('class="blueprint-grid"');
+    expect(html).toContain('class="timing-grid"');
+    expect(html).toContain('class="readiness-coverage"');
+    expect(html.match(/Practice submitted/g)).toHaveLength(1);
+    expect(html.match(/Practice still needed/g)).toHaveLength(5);
+    for (const points of [40, 30, 25, 5]) expect(html).toContain(`<dd>${points} <span>points</span></dd>`);
+    expect(html).toContain("85% passing standard");
+    expect(html).toContain("No active cooldown");
+    expect(html).not.toContain("START_FORM_SENTINEL");
+  });
 });

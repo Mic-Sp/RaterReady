@@ -7,7 +7,7 @@
   --ink: #172033;
   --muted: #475569;
   --surface: #ffffff;
-  --canvas: #f5f7fc;
+  --canvas: #eef2f6;
   --surface-muted: #f1f5f9;
   --surface-indigo: #eef2ff;
   --surface-emerald: #edf8f3;
@@ -19,7 +19,8 @@
   --focus: #4338ca;
   --error: #9c2332;
   --shadow-xs: 0 1px 2px #1720330d;
-  --shadow-sm: 0 2px 4px #17203308, 0 8px 20px #17203305;
+  --shadow-sm: 0 1px 3px #17203314, 0 6px 14px #1720330f;
+  --shadow-md: 0 2px 6px #1720331a, 0 14px 28px #17203317;
   --radius-card: .9rem;
   --space-card: clamp(1rem, 2.4vw, 1.5rem);
 }
@@ -262,6 +263,94 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
 .learning-card-detail { color: var(--muted); font-size: .875rem; }
 .learning-card-footer { margin-top: auto; padding-top: .85rem; border-top: 1px solid var(--line); }
 .learning-card-footer .button-link { margin: 0; text-decoration: none; }
+
+/* Cool-slate containers and white primary surfaces provide true separation. Outer
+   top/left highlights are decorative; controls still use the >=3:1 --border token. */
+.learning-dashboard, .qualification-readiness, .reviewer-layout, .welcome-page,
+.learning-page:has(> .learning-card-grid), .learning-page:has(> .welcome-entry) { background: var(--canvas); }
+.page-card, .learning-card, .level-option, .readiness-summary-card, .operations-grid > div,
+.review-prompt-card, .certificate-available { box-shadow: inset 1px 1px 0 #ffffffcc, var(--shadow-sm); }
+.page-card, .learning-card, .level-option { border-top-color: #c0ccdb; border-left-color: #c0ccdb; }
+.practice-catalog > li, .operations-grid > div { background: var(--surface); box-shadow: var(--shadow-sm); }
+.practice-catalog > li:has(> .learning-card) { background: transparent; box-shadow: none; }
+.learning-card-grid > *, .practice-catalog > *, .operations-grid > *, .judge-grid > *, .blueprint-grid > *, .timing-grid > * { min-width: 0; }
+.learning-card-meta > *, .workspace-bar-meta > * { min-width: 0; max-width: 100%; }
+.learning-card, .level-option, .practice-catalog > li:has(> .inline-link) { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+.learning-card:focus-within, .level-option:focus-within { border-color: var(--accent); box-shadow: var(--shadow-md); }
+@media (hover: hover) {
+  .learning-card:hover, .level-option:hover, .practice-catalog > li:has(> .inline-link):hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow-md); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-card, .level-option, .practice-catalog > li:has(> .inline-link) { transition: none; transform: none; }
+  .learning-card:hover, .level-option:hover, .practice-catalog > li:has(> .inline-link):hover { transform: none; }
+}
+
+.status-badge { display: inline-flex; max-width: 100%; align-items: center; padding: .25rem .6rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: .8125rem; font-weight: 700; line-height: 1.5; }
+.status-success { color: var(--success); border-color: var(--success); background: var(--surface-emerald); }
+.status-pending { color: var(--accent-hover); border-color: var(--accent); background: var(--surface-indigo); }
+.readiness-summary-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.readiness-coverage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding: 0 !important; list-style: none !important; margin: 1rem 0; }
+.learning-page .readiness-coverage > li { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface-muted); }
+.coverage-link { display: flex; align-items: flex-start; gap: .6rem; min-height: 2.75rem; margin-bottom: .65rem; text-underline-offset: .2rem; }
+.coverage-link > span { min-width: 0; }
+.coverage-link .competency-tag { flex-shrink: 0; }
+.blueprint-grid, .timing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
+.blueprint-grid > div, .timing-grid > div { padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface-muted); }
+.blueprint-grid dt, .timing-grid dt, .certificate-metadata dt { color: var(--muted); font-size: .875rem; font-weight: 700; }
+.blueprint-grid dd { margin-top: .5rem; font-size: 2rem; font-weight: 750; line-height: 1.25; color: var(--accent-hover); }
+.blueprint-grid dd span { font-size: .875rem; font-weight: 400; color: var(--muted); }
+.passing-standard { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--success); border-radius: .65rem; background: var(--surface-emerald); }
+.passing-standard > strong { color: var(--success); font-size: 1.2rem; }
+.threshold-track { height: .65rem; overflow: hidden; margin: .75rem 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.threshold-track > span { display: block; height: 100%; background: var(--success); }
+.independent-policy-card { border-left: 4px solid var(--accent); }
+
+/* A measured sticky landmark supplies scroll padding and reveals focused controls.
+   Only the toolbar mirror is compact; the full page H1 and authoritative save region stay available. */
+html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-height, 12rem); }
+.workspace-status-bar { position: sticky; top: .5rem; z-index: 10; display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, auto) auto; align-items: center; gap: .75rem; padding: .75rem; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: .8rem; background: var(--surface); box-shadow: var(--shadow-md); margin-bottom: 1.25rem; }
+.workspace-status-bar > *, .workspace-bar-meta, .workspace-bar-status { min-width: 0; }
+.workspace-bar-title { font-size: .875rem; font-weight: 750; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.workspace-bar-meta, .workspace-bar-status { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.workspace-bar-meta { margin-top: .4rem; }
+.workspace-bar-status { justify-content: flex-end; }
+.workspace-timer { padding: .2rem .5rem; border-radius: .4rem; background: var(--surface-indigo); color: var(--accent-hover); font-size: 1.125rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.workspace-status-bar .capstone-save-status { max-width: 19rem; margin: 0; padding: .4rem .6rem; border-width: 2px; }
+.workspace-status-bar .capstone-save-status .save-confirmation { font-size: .8125rem; line-height: 1.4; }
+.workspace-quick-reference > summary { cursor: pointer; min-height: 2.75rem; padding: .45rem .65rem; border: 1px solid var(--border); border-radius: .5rem; color: var(--accent-hover); font-size: .875rem; font-weight: 700; }
+.workspace-reference-content { position: absolute; top: calc(100% + .5rem); right: 0; width: min(40rem, 100%); max-height: 45vh; overflow-y: auto; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); box-shadow: var(--shadow-md); }
+.workspace-reference-content > p, .workspace-reference-content > button { margin-top: .75rem; }
+.workspace-reference-content > :first-child { margin-top: 0; }
+.workspace-reference-content .text-button { display: block; }
+.practice-workspace [tabindex="-1"], .capstone-exam [tabindex="-1"] { scroll-margin-top: var(--workspace-sticky-height, 12rem); }
+
+.operations-grid > div { padding: 1.25rem; border-top: 3px solid var(--accent); }
+.operations-grid dd { color: var(--accent-hover); font-variant-numeric: tabular-nums; }
+.review-prompt-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.independent-rubric-card, .judge-comparison-card { margin-top: 1.25rem; padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
+.judge-comparison-card { border-top: 3px solid var(--accent); background: var(--surface-indigo); }
+.verification-certificate { position: relative; border-top: 5px solid var(--accent); }
+.certificate-available { background: var(--surface); }
+.verification-certificate .eyebrow { color: var(--accent-hover); }
+.certificate-metadata { margin: 1.25rem 0; }
+.certificate-metadata > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: .5rem 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
+.certificate-metadata dd { min-width: 0; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 64rem) {
+  .readiness-coverage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .blueprint-grid, .timing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 48rem) {
+  .workspace-status-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .workspace-bar-context { grid-column: 1 / -1; }
+  .workspace-bar-status { justify-content: flex-start; }
+}
+@media (max-width: 30rem) {
+  .readiness-coverage, .blueprint-grid, .timing-grid, .certificate-metadata > div { grid-template-columns: minmax(0, 1fr); }
+  .workspace-status-bar { padding: .5rem; gap: .5rem; }
+  .workspace-bar-meta .demo-badge { font-size: .75rem; }
+  .workspace-bar-status { grid-column: 1 / -1; }
+  .workspace-quick-reference { grid-column: 1 / -1; }
+}
 @media (min-width: 48rem) { .learning-page .learning-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 64rem) { .learning-page .competency-grid, .learning-page .curriculum-list.learning-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .practice-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 1rem; align-items: end; margin-top: 1.5rem; }
@@ -299,7 +388,7 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
 .exam-slot { margin-top: 1.5rem; scroll-margin-top: 9rem; }
 /* Reviewer landmarks follow DOM order; comparisons and criterion controls reflow without horizontal scrolling. */
 .operations-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
-.operations-grid > div { padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; }
+.operations-grid > div { min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: .65rem; }
 .operations-grid dt { color: var(--muted); }
 .operations-grid dd { font-size: 1.8rem; font-weight: 700; }
 .judge-grid, .criterion-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
@@ -327,4 +416,14 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
 @media (max-width: 760px) {
   .practice-columns, .practice-filters { grid-template-columns: minmax(0, 1fr); }
   .practice-buttons { flex-direction: column; }
+}
+/* At mobile text zoom, fixed small gutters preserve reading width instead of
+   multiplying nested rem padding. All text still scales, and full titles remain in H1. */
+@media (max-width: 480px) {
+  body:has(.practice-workspace, .capstone-exam) .app-shell { width: calc(100% - 24px); }
+  .practice-workspace, .capstone-exam { padding: 12px; }
+  .workspace-status-bar { padding: 8px; gap: 8px; }
+  .workspace-bar-meta, .workspace-bar-status { gap: 6px; }
+  .workspace-bar-meta .competency-tag, .workspace-bar-meta .status-badge, .workspace-bar-status .status-badge { font-size: .75rem; }
+  .workspace-quick-reference > summary { padding: 8px; font-size: .75rem; }
 }

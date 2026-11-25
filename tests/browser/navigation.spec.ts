@@ -109,6 +109,8 @@ test("reviewer header offers only the console, wide metrics, mobile reflow and s
   await expect(page.getByRole("banner")).toContainText("Michael Anthony Sprague");
   expect((await page.locator(".app-shell").boundingBox())!.width).toBe(1152);
   const metrics = page.locator(".operations-grid > div");
+  expect(await metrics.evaluateAll((elements) => elements.every((element) => getComputedStyle(element).boxShadow !== "none" && getComputedStyle(element).borderTopWidth === "3px"))).toBe(true);
+  await expect(page.getByText(/^\d+ pending reviews$/)).toHaveClass(/status-badge/);
   expect((await metrics.nth(0).boundingBox())!.y).toBe((await metrics.nth(3).boundingBox())!.y);
   await accessible(page);
   await page.screenshot({ path: test.info().outputPath("admin-desktop.png"), fullPage: true });

@@ -63,6 +63,8 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await accessible(page);
       await page.getByRole("link", { name: `Adjudicate ${fixture.attempt.id}`, exact: true }).click();
       await expect(page.getByRole("heading", { name: "Stage 1: Independent rubric evaluation", exact: true })).toBeVisible();
+      await expect(page.locator(".independent-rubric-card")).toHaveCount(3);
+      await expect(page.locator(".judge-comparison-card")).toHaveCount(0);
       await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Reviewer Console", exact: true })).toHaveAttribute("aria-current", "location");
       await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
       await page.goto(`${path}?stage=ADJUDICATION`);
@@ -93,6 +95,8 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       const save = page.getByRole("button", { name: "Save independent scores and unlock AI votes", exact: true });
       await save.focus(); await page.keyboard.press("Enter");
       await expect(page.getByRole("heading", { name: "Stage 2: AI vote comparison & final disposition", exact: true })).toBeVisible();
+      await expect(page.locator(".judge-comparison-card")).toHaveCount(3);
+      expect(await page.locator(".judge-comparison-card").first().evaluate((card) => getComputedStyle(card).backgroundColor)).toBe("rgb(238, 242, 255)");
       await page.reload();
       await expect(page.getByRole("heading", { name: /^Judge [12] · slot/ })).toHaveCount(6);
       await expect(page.getByText("Owner preliminary scores", { exact: true })).toHaveCount(3);
@@ -165,12 +169,21 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
           await verification.goto(verifyPath);
           await expect(verification.getByRole("heading", { name: "Verified Generalist Qualification Exam evidence", exact: true })).toBeVisible();
           await expect(verification.getByText("DEMO - SYNTHETIC / PRELIMINARY PILOT CREDENTIAL", { exact: true })).toBeVisible();
+          await expect(verification.locator(".certificate-metadata > div")).toHaveCount(6);
+          await expect(verification.locator(".verification-certificate")).toHaveCSS("border-top-width", "5px");
           await expect(verification.getByText(/not an external industry standard/)).toBeVisible();
           await expect(verification.getByText(/unproctored browser-based assessment/)).toBeVisible();
           await expect(verification.getByText(/third-party AI lab or platform endorsement, proctored identity verification, or guaranteed employment/)).toBeVisible();
           const publicHtml = await verification.content();
           for (const hidden of ["Marcus Vance", "Michael Anthony Sprague", fixture.attempt.id, credential.id, "answerKeyJson", "rationale", "candidateId"]) expect(publicHtml).not.toContain(hidden);
           await accessible(verification);
+          for (const width of [1024, 900, 768, 640]) {
+            await verification.setViewportSize({ width, height: 900 });
+            expect(await verification.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+            await accessible(verification);
+          }
+          await verification.setViewportSize({ width: 1280, height: 900 });
+          await verification.locator(".verification-certificate").screenshot({ path: test.info().outputPath("public-pilot-certificate.png") });
           await verification.setViewportSize({ width: 320, height: 740 }); await verification.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
           expect(await verification.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await accessible(verification);
           await candidate.getByRole("button", { name: "Disable public verification", exact: true }).click();
