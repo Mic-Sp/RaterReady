@@ -14,7 +14,7 @@ test("a provisioned live candidate has Closed Alpha account labels and separate 
     candidateProfile: { create: { onboardingCompletedAt: new Date() } } } });
   try {
     await page.goto("/login");
-    await expect(page.getByRole("link", { name: /register|sign up|create account/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Create a candidate account", exact: true })).toHaveAttribute("href", "/register");
     await page.getByLabel("Account identifier", { exact: true }).fill(live.accountCode);
     await page.getByLabel("Password", { exact: true }).fill(testPasswords["demo-marcus"]);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

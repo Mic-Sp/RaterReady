@@ -59,8 +59,8 @@ beforeEach(() => {
   state.cookie = "";
   records = initial.map((record) => ({ ...record }));
   state.findUnique.mockReset();
-  state.findUnique.mockImplementation(async ({ where }: { where: { id?: string; accountCode?: string } }) =>
-    records.find((record) => where.id ? record.id === where.id : record.accountCode === where.accountCode) ?? null);
+  state.findUnique.mockImplementation(async ({ where }: { where: { id?: string; accountCode?: string; email?: string } }) =>
+    records.find((record) => where.id ? record.id === where.id : where.email ? record.email === where.email : record.accountCode === where.accountCode) ?? null);
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -135,12 +135,26 @@ describe("Credentials and database-authoritative RBAC", () => {
     await expect(requireAdmin()).rejects.toMatchObject({ status: 403 });
     // A current DB verification change defeats even a correctly signed older cookie.
     records[3].emailVerifiedAt = null;
+    records[3].sessionVersion += 1; // Mirror the database's lifecycle revocation trigger.
     expect(await session(result.cookie)).toBeNull();
   });
 
-  it.each(["unverified", "no-consent", "live-admin", "unapproved-synthetic"])("fails closed for %s provisioning", async (kind) => {
+  it("accepts normalized email sign-in while verification is pending without granting admin authority", async () => {
+    records.push({ ...initial[0], id: "pending", accountCode: "candidate-generated", email: "alpha@example.invalid", emailVerifiedAt: null,
+      isSyntheticFixture: false, closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: "alpha-v1" });
+    const result = await login(" ALPHA@EXAMPLE.INVALID ", testPasswords["demo-marcus"]);
+    expect((await session(result.cookie)).user).toMatchObject({ id: "pending", isSyntheticFixture: false, emailVerifiedAt: null, demoLabel: null });
+    state.cookie = result.cookie;
+    expect((await requireCandidate()).emailVerifiedAt).toBeNull();
+    await expect(requireAdmin()).rejects.toMatchObject({ status: 403 });
+    for (const path of ["/welcome", "/onboarding", "/dashboard", "/practice"]) {
+      expect((await protectedRequest(path, result.cookie))?.headers.get("x-middleware-next")).toBe("1");
+    }
+  });
+
+  it.each(["no-consent", "live-admin", "unapproved-synthetic"])("fails closed for %s provisioning", async (kind) => {
     records.push({ ...initial[0], id: "alpha", accountCode: "alpha", isSyntheticFixture: kind === "unapproved-synthetic",
-      email: "alpha@example.invalid", emailVerifiedAt: kind === "unverified" ? null : new Date(),
+      email: "alpha@example.invalid", emailVerifiedAt: null,
       closedAlphaConsentAcceptedAt: kind === "no-consent" ? null : new Date(), closedAlphaConsentVersion: "alpha-v1",
       role: kind === "live-admin" ? "ADMIN_REVIEWER" : "CANDIDATE" });
     expect(await session((await login("alpha", testPasswords["demo-marcus"])).cookie)).toBeNull();
@@ -176,7 +190,7 @@ describe("Credentials and database-authoritative RBAC", () => {
     expect((await protectedRequest(path))?.status).toBe(401);
   });
 
-  it.each(["/", "/login", "/verify/demo-slug", "/api/auth/csrf"])("keeps %s public without a database lookup", async (path) => {
+  it.each(["/", "/login", "/register", "/verify/demo-slug", "/api/auth/csrf"])("keeps %s public without a database lookup", async (path) => {
     expect((await protectedRequest(path))?.headers.get("x-middleware-next")).toBe("1");
     expect(state.findUnique).not.toHaveBeenCalled();
   });

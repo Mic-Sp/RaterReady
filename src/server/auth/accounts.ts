@@ -2,6 +2,7 @@ import "server-only";
 import type { PrismaClient, Role } from "@prisma/client";
 import { z } from "zod";
 import { verifyPassword } from "./passwords";
+import { normalizeEmail } from "../../lib/registration";
 
 /** Minimal identity returned to Auth.js/guards. No password hashes or learner data. */
 export type AuthIdentity = {
@@ -22,7 +23,7 @@ const identitySelect = {
 } as const;
 
 const credentialsSchema = z.object({
-  accountCode: z.string().trim().min(1).max(64),
+  accountCode: z.string().trim().min(1).max(254),
   password: z.string().min(8).max(128),
 });
 const sessionIdentitySchema = z.object({ id: z.string().min(1), sessionVersion: z.number().int().nonnegative() });
@@ -33,9 +34,9 @@ const approvedAccounts: Readonly<Record<string, Role>> = {
 };
 
 /**
- * Seed accounts retain exact code/role checks. A separately provisioned live candidate must
- * be verified and have recorded consent; live reviewer access is not enabled by this foundation.
- * No client field can provision an account, select its role or establish verification/consent.
+ * Seed accounts retain exact code/role checks. Active live candidates with recorded consent
+ * may learn while verification is pending. An exam verification gate is deferred to Step 13C.
+ * Sign-in fields cannot provision an account, select its role or establish verification/consent.
  */
 function activeIdentity(user: {
   id: string; name: string; accountCode: string; role: Role; sessionVersion: number;
@@ -46,7 +47,7 @@ function activeIdentity(user: {
   const reserved = Object.hasOwn(approvedAccounts, user.accountCode);
   if (user.isSyntheticFixture) {
     if (!reserved || approvedAccounts[user.accountCode] !== user.role) return null;
-  } else if (reserved || user.role !== "CANDIDATE" || !user.email || !user.emailVerifiedAt
+  } else if (reserved || user.role !== "CANDIDATE" || !user.email
     || !user.closedAlphaConsentAcceptedAt || !user.closedAlphaConsentVersion?.trim()) return null;
   // Derived account labels never reuse a stale database demoLabel on a live identity.
   return { id: user.id, name: user.name, accountCode: user.accountCode, role: user.role, sessionVersion: user.sessionVersion,
@@ -63,7 +64,10 @@ export async function authenticateCredentials(db: PrismaClient, credentials: unk
   let user = null;
   try {
     user = await db.user.findUnique({
-      where: { accountCode: parsed.success ? parsed.data.accountCode : "__invalid_credentials__" },
+      // Live sign-in uses normalized email; existing demo/provisioned codes remain compatible.
+      where: parsed.success && parsed.data.accountCode.includes("@")
+        ? { email: normalizeEmail(parsed.data.accountCode) }
+        : { accountCode: parsed.success ? parsed.data.accountCode : "__invalid_credentials__" },
       select: { ...identitySelect, passwordHash: true },
     });
   } catch {

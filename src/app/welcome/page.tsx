@@ -13,7 +13,7 @@ export default async function WelcomePage() {
   const user = await requirePageRole("CANDIDATE");
   const profile = await getLearningSnapshot(prisma, user.id);
   return <section className="page-card learning-page welcome-page" aria-labelledby="welcome-heading">
-    <p className="eyebrow"><DemoBadge /> · Your starting point</p>
+    <p className="eyebrow">{user.isSyntheticFixture ? <DemoBadge /> : <span className="role-badge">Closed Alpha</span>} · Your starting point</p>
     <h1 id="welcome-heading">Welcome to RaterReady!</h1>
     <p className="page-intro">It’s completely okay if some of these terms are new to you. There are no wrong answers here. We’re getting a quick sense of your starting point so we can suggest a comfortable place to begin.</p>
     <p>This is a friendly check-in about what feels familiar, not a test. You can skip it at any point, choose any level and revisit whenever you like.</p>

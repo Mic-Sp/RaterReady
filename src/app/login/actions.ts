@@ -6,7 +6,7 @@ import { signIn } from "../../lib/auth";
 import { SIGN_IN_FAILURE, type SignInState } from "./form-state";
 
 const formSchema = z.object({
-  accountCode: z.string().trim().min(1, "Enter your account identifier.").max(64, "Use 64 characters or fewer."),
+  accountCode: z.string().trim().min(1, "Enter your account identifier.").max(254, "Use 254 characters or fewer."),
   password: z.string().min(8, "Use 8 to 128 characters.").max(128, "Use 8 to 128 characters."),
 });
 
@@ -19,7 +19,7 @@ export async function submitSignIn(previous: SignInState, formData: FormData): P
   const attempt = previous.attempt + 1;
   if (!parsed.success) {
     const errors = parsed.error.flatten().fieldErrors;
-    return { attempt, accountCode: typeof formData.get("accountCode") === "string" ? String(formData.get("accountCode")).slice(0, 64) : "",
+    return { attempt, accountCode: typeof formData.get("accountCode") === "string" ? String(formData.get("accountCode")).slice(0, 254) : "",
       error: "Check the fields below and try again.",
       fieldErrors: { accountCode: errors.accountCode?.[0], password: errors.password?.[0] } };
   }

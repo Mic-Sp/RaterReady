@@ -12,6 +12,9 @@ export default async function setupBrowserDatabase(): Promise<void> {
   const prisma = new PrismaClient({ datasourceUrl: url });
   try {
     await seedSyntheticData(prisma, testPasswords);
+    // Only the config-validated disposable local DB is touched. Start each browser run with
+    // fresh abuse budgets; limits remain fully enabled during registration scenarios.
+    await prisma.registrationRateLimit.deleteMany();
   } finally {
     await prisma.$disconnect();
   }

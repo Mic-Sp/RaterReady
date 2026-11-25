@@ -30,9 +30,9 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
       </div>
       <div className="form-field">
         <label htmlFor="account-code">Account identifier</label>
-        <p id="account-hint" className="field-hint">Use the account identifier provided to you.</p>
+        <p id="account-hint" className="field-hint">Use your email address, or the demonstration account identifier provided to you.</p>
         <input ref={account} id="account-code" name="accountCode" type="text" autoComplete="username" autoCapitalize="none"
-          spellCheck={false} required maxLength={64} defaultValue={state.accountCode} readOnly={pending}
+          spellCheck={false} required maxLength={254} defaultValue={state.accountCode} readOnly={pending}
           aria-invalid={Boolean(state.fieldErrors?.accountCode)}
           aria-describedby={`account-hint${state.fieldErrors?.accountCode ? " account-error" : ""}`} />
         {state.fieldErrors?.accountCode && <p id="account-error" className="field-error"><SyntheticText>{state.fieldErrors.accountCode}</SyntheticText></p>}
@@ -52,7 +52,7 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
         {state.fieldErrors?.password && <p id="password-error" className="field-error"><SyntheticText>{state.fieldErrors.password}</SyntheticText></p>}
       </div>
       <button type="submit" className="primary-button" disabled={pending}><SyntheticText>{pending ? "Signing in…" : "Sign in"}</SyntheticText></button>
-      <p className="form-note">Access is by invitation only. Synthetic demonstration accounts remain available.</p>
+      <p className="form-note">RaterReady is in Closed Alpha. Synthetic demonstration accounts remain available.</p>
     </form>
   );
 }

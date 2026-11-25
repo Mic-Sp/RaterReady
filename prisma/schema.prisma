@@ -144,7 +144,7 @@ enum PartnershipStatus {
 
 model User {
   id                           String            @id @default(cuid())
-  /// Credentials identifier; reserved demo codes remain seed-only. No public provisioning route.
+  /// Server-generated identifier for live registration; reserved demo codes remain seed-only.
   accountCode                  String            @unique
   name                         String
   role                         Role
@@ -185,6 +185,16 @@ model AuthToken {
   consumedAt     DateTime?        @db.Timestamptz(3)
 
   @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+/// Shared across server instances; keyed HMACs contain no raw emails, IPs or submitted credentials.
+model RegistrationRateLimit {
+  keyHash         String   @id @db.Char(64)
+  attemptCount    Int
+  windowStartedAt DateTime @db.Timestamptz(3)
+  expiresAt       DateTime @db.Timestamptz(3)
+
   @@index([expiresAt])
 }
 

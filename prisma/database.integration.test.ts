@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoAccounts, practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
@@ -29,6 +29,9 @@ import { completeLesson, getLearningSnapshot, saveDiagnostic, selectLearningLeve
 import { diagnosticScorecardItems } from "../src/lib/diagnostic-scorecard";
 import { recommendWelcomeStartingLevel } from "../src/lib/welcome-check-in";
 import { consumeAuthToken, hashAuthToken, issueAuthToken } from "../src/server/auth/tokens";
+import { registerCandidate } from "../src/server/auth/registration";
+import { consumeRegistrationBudget, REGISTRATION_EMAIL_LIMIT, REGISTRATION_GLOBAL_LIMIT } from "../src/server/auth/registration-rate-limit";
+import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "../src/lib/registration";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -196,32 +199,152 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     }
   });
 
-  it("authenticates only provisioned, verified/consenting live candidates and revokes stale lifecycle sessions", async () => {
+  it("authenticates consenting live candidates while verification is pending and revokes stale lifecycle sessions", async () => {
     const hash = (await prisma.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } })).passwordHash;
     const live = await prisma.user.create({ data: { accountCode: `alpha-${randomUUID()}`, name: "Local live lifecycle fixture", role: "CANDIDATE",
       email: `alpha-${randomUUID()}@example.invalid`, passwordHash: hash, candidateProfile: { create: {} } } });
     const login = () => authenticateCredentials(prisma, { accountCode: live.accountCode, password: testPasswords["demo-marcus"] });
     try {
       expect(await login()).toBeNull();
-      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: new Date() } });
-      expect(await login()).toBeNull();
       const consented = await prisma.user.update({ where: { id: live.id }, data: {
         closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: "closed-alpha-v1" } });
       const identity = await login();
       expect(identity).toMatchObject({ id: live.id, role: "CANDIDATE", isSyntheticFixture: false, demoLabel: null,
-        emailVerifiedAt: consented.emailVerifiedAt!.toISOString() });
+        emailVerifiedAt: consented.emailVerifiedAt });
       const session = { user: identity, expires: new Date(Date.now() + 60000).toISOString() };
       expect(await authorizeSession(prisma, session, "CANDIDATE")).toEqual(identity);
       expect((await getCapstoneReadiness(prisma, live.id)).blueprint?.questionCount).toBe(6);
       await expect(authorizeSession(prisma, session, "ADMIN_REVIEWER")).rejects.toMatchObject({ status: 403 });
-      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: null } });
-      await expect(authorizeSession(prisma, session)).rejects.toMatchObject({ status: 401 });
       await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: new Date() } });
+      await expect(authorizeSession(prisma, session)).rejects.toMatchObject({ status: 401 });
+      await prisma.user.update({ where: { id: live.id }, data: { emailVerifiedAt: null } });
       expect(await findActiveSessionUser(prisma, identity)).toBeNull();
     } finally {
       await prisma.candidateProfile.delete({ where: { userId: live.id } });
       await prisma.user.delete({ where: { id: live.id } });
     }
+  });
+
+  describe("self-serve candidate registration", () => {
+    const password = "River9!x";
+    const payload = () => ({ email: `register-${randomUUID()}@example.invalid`, password, displayName: "", website: "",
+      consent: "accepted", consentVersion: CLOSED_ALPHA_TERMS_VERSION });
+    const secret = () => `local-registration-only-secret-${randomUUID()}`;
+
+    it("registers and authenticates an eight-character composed password with immutable versioned consent evidence", async () => {
+      const input = payload();
+      const result = await registerCandidate(prisma, { ...input, email: ` ${input.email.toUpperCase()} ` }, secret());
+      expect(result).toEqual({ status: "received", message: REGISTRATION_RECEIVED });
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: input.email }, include: { candidateProfile: true } });
+      expect(user).toMatchObject({ role: "CANDIDATE", isSyntheticFixture: false, demoLabel: null, emailVerifiedAt: null,
+        name: "RaterReady learner", closedAlphaConsentVersion: CLOSED_ALPHA_TERMS_VERSION });
+      expect(user.accountCode).toMatch(/^candidate-/);
+      expect(user.candidateProfile?.selectedLevel).toBe("FOUNDATIONS");
+      expect(await verifyPassword(password, user.passwordHash)).toBe(true);
+      const events = await prisma.auditEvent.findMany({ where: { actorUserId: user.id } });
+      expect(events.map(({ action }) => action).sort()).toEqual(["CLOSED_ALPHA_CONSENT_ACCEPTED", "LIVE_CANDIDATE_REGISTERED"]);
+      const consent = events.find(({ action }) => action === "CLOSED_ALPHA_CONSENT_ACCEPTED")!;
+      expect(consent.metadataJson).toMatchObject({ termsVersion: CLOSED_ALPHA_TERMS_VERSION, acceptedAt: user.closedAlphaConsentAcceptedAt!.toISOString() });
+      expect(JSON.stringify(events)).not.toContain(input.email);
+      expect(JSON.stringify(events)).not.toContain(password);
+      await expect(prisma.auditEvent.update({ where: { id: consent.id }, data: { action: "changed" } })).rejects.toThrow(/append-only/);
+      expect(await prisma.authToken.count({ where: { userId: user.id } })).toBe(0);
+      const identity = await authenticateCredentials(prisma, { accountCode: ` ${input.email.toUpperCase()} `, password });
+      expect(identity).toMatchObject({ id: user.id, emailVerifiedAt: null, isSyntheticFixture: false, role: "CANDIDATE" });
+      await expect(authorizeSession(prisma, { user: identity, expires: new Date(Date.now() + 60000).toISOString() }, "ADMIN_REVIEWER")).rejects.toMatchObject({ status: 403 });
+      const beforeSeed = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+      await seedSyntheticData(prisma, testPasswords);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toEqual(beforeSeed);
+      // Append-only audit actors remain intact in the disposable test database.
+      await prisma.user.update({ where: { id: user.id }, data: { accountStatus: "DISABLED" } });
+    });
+
+    it.each([
+      ["Riv9!xy", "Use at least 8 characters."],
+      [`R9!${"x".repeat(126)}`, "Use 128 characters or fewer."],
+      ["river9!x", "Include at least one uppercase letter."],
+      ["RIVER9!X", "Include at least one lowercase letter."],
+      ["River!!x", "Include at least one number."],
+      ["River99x", "Include at least one symbol (such as ! or @)."],
+      ["River9 x", "Include at least one symbol (such as ! or @)."],
+      ["Password1!", "Choose a less predictable password."],
+      ["P@ssw0rd", "Choose a less predictable password."],
+    ])("rejects an invalid/common registration password before creating an account: %s", async (password, message) => {
+      const input = { ...payload(), password };
+      const result = await registerCandidate(prisma, input, secret());
+      expect(result.status).toBe("invalid");
+      expect(result.fieldErrors?.password).toBe(message);
+      expect(await prisma.user.findUnique({ where: { email: input.email } })).toBeNull();
+    });
+
+    it("returns identical acknowledgments for duplicate emails and preserves disabled status, password and consent", async () => {
+      const input = payload(); const namespace = secret();
+      const first = await registerCandidate(prisma, input, namespace);
+      const user = await prisma.user.update({ where: { email: input.email }, data: { accountStatus: "DISABLED" } });
+      const auditsBefore = await prisma.auditEvent.count({ where: { actorUserId: user.id } });
+      const duplicate = await registerCandidate(prisma, { ...input, email: input.email.toUpperCase(), password: "Birch7!y", displayName: "Changed" }, namespace);
+      expect(duplicate).toEqual(first);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toEqual(user);
+      expect(await prisma.auditEvent.count({ where: { actorUserId: user.id } })).toBe(auditsBefore);
+    });
+
+    it("creates only one account/audit pair under concurrent duplicate registration", async () => {
+      const input = payload(); const namespace = secret();
+      const results = await Promise.all([1, 2].map(() => registerCandidate(prisma, input, namespace)));
+      expect(results).toEqual([{ status: "received", message: REGISTRATION_RECEIVED }, { status: "received", message: REGISTRATION_RECEIVED }]);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email: input.email } });
+      expect(await prisma.auditEvent.count({ where: { actorUserId: user.id } })).toBe(2);
+      await prisma.user.update({ where: { id: user.id }, data: { accountStatus: "DISABLED" } });
+    });
+
+    it("rolls back the account and profile if recording consent evidence fails", async () => {
+      const input = payload();
+      const failingDb = { $transaction: (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) => prisma.$transaction((tx) => callback(new Proxy(tx, {
+        get(target, key) {
+          if (key === "auditEvent") return { createMany: async () => { throw new Error("Simulated consent audit outage"); } };
+          return Reflect.get(target, key);
+        },
+      }))) } as unknown as PrismaClient;
+      expect((await registerCandidate(failingDb, input, secret())).status).toBe("unavailable");
+      expect(await prisma.user.findUnique({ where: { email: input.email } })).toBeNull();
+    });
+
+    it("rejects escalation, weak/invalid input and missing/stale consent; silently discards honeypots", async () => {
+      const input = payload(); const namespace = secret();
+      for (const override of [{ role: "ADMIN_REVIEWER" }, { consent: "" }, { consentVersion: "outdated" }, { password: "short" }, { email: "invalid-email" }]) {
+        expect((await registerCandidate(prisma, { ...input, ...override }, namespace)).status).toBe("invalid");
+      }
+      expect(await registerCandidate(prisma, { ...input, website: "bot.example.invalid" }, namespace)).toEqual({ status: "received", message: REGISTRATION_RECEIVED });
+      expect(await prisma.user.findUnique({ where: { email: input.email } })).toBeNull();
+    });
+
+    it("enforces the per-email limit across concurrent requests and separate database clients", async () => {
+      const input = payload(); const namespace = secret();
+      const outcomes = await Promise.all(Array.from({ length: 12 }, (_, index) => consumeRegistrationBudget(prisma, index % 2 ? ` ${input.email.toUpperCase()} ` : input.email, namespace)));
+      expect(outcomes.filter(Boolean)).toHaveLength(REGISTRATION_EMAIL_LIMIT);
+      const otherInstance = new PrismaClient({ datasourceUrl: testUrl });
+      try { expect(await consumeRegistrationBudget(otherInstance, input.email, namespace)).toBe(false); }
+      finally { await otherInstance.$disconnect(); }
+      const response = await registerCandidate(prisma, input, namespace);
+      expect(response.status).toBe("limited");
+      expect(await prisma.user.findUnique({ where: { email: input.email } })).toBeNull();
+      const rows = await prisma.registrationRateLimit.findMany();
+      expect(rows.every(({ keyHash }) => /^[a-f0-9]{64}$/.test(keyHash))).toBe(true);
+      expect(JSON.stringify(rows)).not.toContain(input.email);
+    });
+
+    it("bounds email rotation globally and reopens expired windows using database time", async () => {
+      const namespace = secret();
+      for (let i = 0; i < REGISTRATION_GLOBAL_LIMIT; i += 1) {
+        expect(await consumeRegistrationBudget(prisma, `rotate-${i}@example.invalid`, namespace)).toBe(true);
+      }
+      expect(await consumeRegistrationBudget(prisma, "fresh-address@example.invalid", namespace)).toBe(false);
+      const blocked = await registerCandidate(prisma, payload(), namespace);
+      expect(blocked.status).toBe("limited");
+      // Only disposable limiter records are aged; no application account/assessment is reset.
+      await prisma.registrationRateLimit.updateMany({ data: { windowStartedAt: new Date(Date.now() - 3600000), expiresAt: new Date(Date.now() - 1) } });
+      expect(await consumeRegistrationBudget(prisma, "fresh-address@example.invalid", namespace)).toBe(true);
+    });
   });
 
   it("stores only unique token hashes, separates purposes and atomically permits exactly one concurrent consumption", async () => {

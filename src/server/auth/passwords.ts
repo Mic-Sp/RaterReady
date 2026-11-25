@@ -18,10 +18,10 @@ function deriveKey(password: string, salt: Buffer): Promise<Buffer> {
   });
 }
 
-/** Hash a seed-provisioned password with a fresh 128-bit salt; never persist plaintext. Node-only. */
+/** Hash a validated live/demo password with a fresh 128-bit salt; registration enforces its stronger policy separately. Node-only. */
 export async function hashPassword(password: string): Promise<string> {
   if (password.length < 8 || password.length > 128) {
-    throw new Error("Demo passwords must contain 8 to 128 characters.");
+    throw new Error("Passwords must contain 8 to 128 characters.");
   }
   const salt = randomBytes(16);
   const key = await deriveKey(password, salt);

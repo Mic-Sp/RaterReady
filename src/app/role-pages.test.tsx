@@ -9,6 +9,7 @@ import { submitSignOut } from "./actions/session";
 import { AuthenticatedNavigation } from "./components/authenticated-navigation";
 import type { AuthIdentity } from "../server/auth/accounts";
 import RootLayout from "./layout";
+import RegistrationPage from "./register/page";
 
 const mocks = vi.hoisted(() => ({ requireSession: vi.fn(), requireCandidate: vi.fn(), requireAdmin: vi.fn(), signOut: vi.fn(), redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -20,6 +21,7 @@ vi.mock("../server/credentials/service", () => ({ listCandidateCredentials: asyn
 vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: async () => ({ unlocked: false, listings: [] }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound, usePathname: () => "/dashboard" }));
 vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
+vi.mock("./register/registration-form", () => ({ RegistrationForm: () => null }));
 
 const candidate: AuthIdentity = { id: "demo-marcus", accountCode: "demo-marcus", name: "Marcus Vance", role: "CANDIDATE", sessionVersion: 0, isSyntheticFixture: true, emailVerifiedAt: "2026-11-20T00:00:00.000Z", demoLabel: "DEMO - SYNTHETIC" };
 const admin: AuthIdentity = { ...candidate, id: "admin-michael", accountCode: "admin-michael", name: "Michael Anthony Sprague", role: "ADMIN_REVIEWER" };
@@ -35,12 +37,15 @@ describe("protected role-routing shell", () => {
     mocks.requireSession.mockResolvedValue(identity);
     await expect(HomePage()).rejects.toThrow(`REDIRECT:${destination}`);
     await expect(SignInPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(`REDIRECT:${destination}`);
+    await expect(RegistrationPage()).rejects.toThrow(`REDIRECT:${destination}`);
   });
 
   it("routes anonymous entry to sign-in and renders the public form", async () => {
     mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
     await expect(HomePage()).rejects.toThrow("REDIRECT:/login");
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ error: "private account details" }) })) ).not.toContain("private account details");
+    expect(renderToStaticMarkup(await RegistrationPage())).toContain('href="/login"');
+    expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({}) }))).toContain('href="/register"');
   });
 
   it("calls the exact page guard and withholds content from an unauthorized role", async () => {
@@ -107,5 +112,14 @@ describe("protected role-routing shell", () => {
     expect(html).not.toContain('aria-label="Synthetic demonstration access"');
     expect(html).not.toContain("signed in with a synthetic demonstration account");
     expect(html.slice(html.indexOf("<header"), html.indexOf("</header>"))).not.toContain("DEMO - SYNTHETIC");
+  });
+
+  it("shows verification pending only for unverified live accounts without an intrusive alert", async () => {
+    mocks.requireSession.mockResolvedValue({ ...candidate, isSyntheticFixture: false, emailVerifiedAt: null, demoLabel: null });
+    const html = renderToStaticMarkup(await RootLayout({ children: <p>Learning</p> }));
+    expect(html).toContain("Email verification pending");
+    expect(html).not.toContain('role="alert"');
+    mocks.requireSession.mockResolvedValue(candidate);
+    expect(renderToStaticMarkup(await RootLayout({ children: <p>Learning</p> }))).not.toContain("Email verification pending");
   });
 });

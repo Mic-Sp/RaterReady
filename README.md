@@ -2,6 +2,80 @@
 
 Stage B account foundation, with the Stage A `DEMO - SYNTHETIC` demo preserved.
 
+## Step 13B — Candidate registration and closed-alpha consent
+
+`/register` is a public candidate-only page linked from sign-in, with a return link.
+It works as a native form before hydration and provides associated field errors,
+polite status/focus, a keyboard password toggle, explicit unchecked consent and
+320px/200% text reflow. Display name is optional; a nickname or the default
+“RaterReady learner” avoids requiring a legal name. Terms version
+`closed-alpha-privacy-non-endorsement-v1` explains account/activity storage, prohibited
+sensitive disclosures/government IDs/third-party credentials, free access,
+independence, internal G1–G6 identifiers and no outside-employer certification or
+guaranteed employment. Meaningful terms changes require a new pinned version.
+
+Registration normalizes only email whitespace/case, preserving dots and plus aliases.
+New passwords need 8–128 characters with at least one uppercase letter, one lowercase
+letter, one number and one symbol. Whitespace does not count as a symbol; common and
+predictable passwords are still rejected. Field-specific guidance explains missing
+requirements. The existing salted asynchronous scrypt implementation is
+reused; demo password compatibility is preserved. Strict service validation rejects
+submitted authority fields. The server generates the account code and fixes
+`CANDIDATE`, `ACTIVE`, non-synthetic identity, null verification and a server/database
+consent timestamp. User/profile and `LIVE_CANDIDATE_REGISTERED` /
+`CLOSED_ALPHA_CONSENT_ACCEPTED` audit events commit atomically; audit metadata contains
+no raw email, display name or password. Audit failures roll back the account.
+
+A hidden, AT/keyboard-excluded honeypot silently discards filled submissions without
+storing their contents or doing password work. PostgreSQL `RegistrationRateLimit`
+provides atomic, cross-instance budgets before validation/KDF: five attempts per
+normalized email and thirty globally per 15-minute window. HMAC keys use `AUTH_SECRET`;
+no raw emails/IPs or client-selected IP headers enter the limiter. Counts include
+invalid and duplicate requests. Expired keys are pruned in bounded batches. Limiter
+outages fail closed. The intentionally conservative shared global budget suits the
+small closed alpha; exhausting it temporarily limits all new registrations.
+
+New and duplicate emails receive the same acknowledgment, with one KDF each. There
+is no automatic login, existence probe, password replacement, or duplicate-account
+consent/status mutation. The acknowledgment offers sign-in and project-owner access
+help without claiming that a verification email was sent. Live candidates sign in
+with normalized email (demo identifiers still work), may learn while unverified,
+and see `Closed Alpha` plus a calm verification-pending notice. The welcome check-in
+also distinguishes live identity from demo identity; synthetic scenarios retain
+their own amber badges. Session/status revocation and admin boundaries remain intact.
+
+No email delivery, verification/reset routes, new tokens, or verified-email exam gate
+are implemented here. Registration is intentionally enabled by the Stage B request;
+the older Stage A-only self-registration restriction does not apply to this step.
+
+The additive migration only adds shared registration-budget storage. Apply it with
+`npx prisma generate` and `npx prisma migrate deploy`; no seed change/reset is needed.
+Tests cover validation/consent/authority tampering, real cookies, atomic audits and
+rollback, concurrent duplicates and limits across clients, expiry, seed preservation,
+honeypots, anti-enumeration, learning handoff and browser accessibility/native forms.
+
+With this workspace's disposable local PostgreSQL cluster running:
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13a' npm test
+LD_LIBRARY_PATH='/tmp/portfolio-preview-browser/libs/usr/lib/x86_64-linux-gnu' PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/home/micsp/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test13b_browser' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+The Chromium overrides reuse this workspace's installed assets; omit them on machines
+with Playwright's matching browser/dependencies. Browser fixtures with append-only
+audit evidence are disabled rather than deleted in the disposable local database.
+Browser setup clears only the disposable local database's registration budgets
+between runs, keeping reruns independent while rate limits remain enabled in tests.
+At `http://127.0.0.1:3000`, register a new email, inspect field/consent errors, accept
+the terms, then sign in with email/password. Check onboarding, welcome, a free level
+choice, dashboard and untimed practice. Check the Closed Alpha/pending notice,
+synthetic scenario badges, candidate-to-admin denial, and all three seeded demo
+sign-ins/badges. Check keyboard focus and 320px/200% reflow. Re-register an existing
+email: the acknowledgment stays the same and the original password still applies.
+
 ## Step 13A — Stage B account lifecycle foundation
 
 Stage A remains available alongside the Stage B schema foundation. The audit found

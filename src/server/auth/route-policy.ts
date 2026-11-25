@@ -1,5 +1,5 @@
 /**
- * Default-private route policy: only the homepage, login page, public credential
+ * Default-private route policy: only the homepage, login/registration pages, public credential
  * verification and Auth.js protocol are public. New learner routes inherit authentication.
  */
 export function routeAccess(pathname: string): "public" | "authenticated" | "candidate" | "admin" {
@@ -16,6 +16,6 @@ export function routeAccess(pathname: string): "public" | "authenticated" | "can
   const inTree = (root: string) => path === root || path.startsWith(`${root}/`);
   if (inTree("/admin") || inTree("/api/admin")) return "admin";
   if (["/dashboard", "/onboarding", "/welcome", "/diagnostic", "/learn", "/practice", "/workflow-lab", "/technical-preview", "/capstone", "/opportunities", "/appeals"].some(inTree)) return "candidate";
-  if (path === "/" || path === "/login" || inTree("/verify") || inTree("/api/auth")) return "public";
+  if (path === "/" || path === "/login" || path === "/register" || inTree("/verify") || inTree("/api/auth")) return "public";
   return "authenticated";
 }
