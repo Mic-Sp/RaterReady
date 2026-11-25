@@ -40,5 +40,6 @@ export async function markLessonComplete(formData: FormData): Promise<void> {
   const user = await requireCandidate();
   await completeLesson(prisma, user.id, formData.get("level"), formData.get("competency"));
   revalidatePath("/dashboard");
+  revalidatePath("/learn", "layout");
   redirect("/dashboard?notice=lesson-saved");
 }

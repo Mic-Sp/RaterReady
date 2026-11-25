@@ -44,7 +44,7 @@ test("direct advanced entry, optional reference and progress-preserving level sw
     await checkAccessibility(page);
     await page.getByRole("button", { name: "Choose Advanced Calibration", exact: true }).click();
     await expect(page.getByLabel("Learning level", { exact: true })).toHaveValue("ADVANCED");
-    await page.getByRole("link", { name: "Resume learning: G1", exact: true }).click();
+    await page.getByRole("link", { name: "Resume learning: Calibrate interpretations of an ambiguous rubric", exact: true }).click();
     await page.getByRole("button", { name: "Mark lesson complete", exact: true }).click();
     await expect(page.getByText("Advanced Calibration · 1 of 6 lessons marked complete", { exact: false })).toBeVisible();
     await page.getByLabel("Learning level", { exact: true }).selectOption("FOUNDATIONS");

@@ -35,6 +35,9 @@ import { completeAccountLink, lookupAuthLink, requestAccountLink } from "../src/
 import type { AuthDeliveryRuntime } from "../src/server/auth/email-delivery";
 import { consumeLifecycleBudget, consumeRegistrationBudget, REGISTRATION_EMAIL_LIMIT, REGISTRATION_GLOBAL_LIMIT } from "../src/server/auth/registration-rate-limit";
 import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "../src/lib/registration";
+import { curriculumLessons } from "./curriculum-lessons";
+import { getCurriculumLessons } from "../src/server/learning/service";
+import { seedCurriculum } from "./seed-curriculum";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -165,6 +168,59 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     } finally {
       await prisma.candidateProfile.update({ where: { userId: marcus.id }, data: { selectedLevel: original.selectedLevel, diagnosticStatus: original.diagnosticStatus, timeMultiplier: original.timeMultiplier } });
     }
+  });
+
+  it("seeds all instruction idempotently while preserving live/demo accounts, content banks and legacy completion timestamps", async () => {
+    const id = await capstoneCandidate(false);
+    const completion = await completeLesson(prisma, id, "FOUNDATIONS", "G1");
+    const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
+    const scenarios = await prisma.scenario.findMany({ orderBy: { id: "asc" } });
+    const attempts = await prisma.assessmentAttempt.findMany({ where: { candidateId: id } });
+    await prisma.$transaction(seedCurriculum);
+    const first = await prisma.curriculumLesson.findMany({ orderBy: [{ level: "asc" }, { competency: "asc" }] });
+    await seedSyntheticData(prisma, testPasswords);
+    expect(await prisma.curriculumLesson.findMany({ orderBy: [{ level: "asc" }, { competency: "asc" }] })).toEqual(first);
+    expect(first).toHaveLength(18);
+    for (const level of ["FOUNDATIONS", "INTERMEDIATE", "ADVANCED"] as const) {
+      const lessons = await getCurriculumLessons(prisma, level);
+      expect(lessons.map(({ competency }) => competency)).toEqual(["G1", "G2", "G3", "G4", "G5", "G6"]);
+      expect(lessons.map(({ title }) => title)).toEqual(curriculumLessons.filter((item) => item.level === level).map((item) => item.content.title));
+    }
+    expect(await prisma.user.findMany({ orderBy: { id: "asc" } })).toEqual(users);
+    expect(await prisma.scenario.findMany({ orderBy: { id: "asc" } })).toEqual(scenarios);
+    expect(await prisma.moduleProgress.findUnique({ where: { id: completion.id } })).toEqual(completion);
+    expect(await prisma.assessmentAttempt.findMany({ where: { candidateId: id } })).toEqual(attempts);
+    expect(await prisma.credential.count({ where: { attempt: { candidateId: id } } })).toBe(0);
+  });
+
+  it("preserves all 18 self-marked lessons across switches/connections without satisfying practice or finalized-pass boundaries", async () => {
+    const id = await capstoneCandidate(false);
+    const other = new PrismaClient({ datasourceUrl: testUrl });
+    try {
+      for (const { level, competency } of curriculumLessons) {
+        await selectLearningLevel(prisma, id, level);
+        const saved = await completeLesson(prisma, id, level, competency);
+        expect(await completeLesson(other, id, level, competency)).toEqual(saved);
+      }
+      const records = await prisma.moduleProgress.findMany({ where: { candidateId: id }, orderBy: { id: "asc" } });
+      for (const level of ["FOUNDATIONS", "INTERMEDIATE", "ADVANCED", "FOUNDATIONS"] as const) {
+        await selectLearningLevel(other, id, level);
+        const snapshot = await getLearningSnapshot(prisma, id);
+        expect(snapshot.curriculum).toHaveLength(6);
+        expect(snapshot.moduleProgress.filter((entry) => entry.level === level)).toHaveLength(6);
+      }
+      expect(await other.moduleProgress.findMany({ where: { candidateId: id }, orderBy: { id: "asc" } })).toEqual(records);
+      const readiness = await getCapstoneReadiness(prisma, id);
+      expect(readiness).toMatchObject({ kind: "MISSING_PRACTICE", missingPractice: ["G1", "G2", "G3", "G4", "G5", "G6"], latestFinalized: null });
+      expect(readiness.blueprint?.scoringPolicy.passingThreshold).toBe(85);
+      await expect(startCapstoneAttempt(prisma, id, startInput())).rejects.toMatchObject({ reason: "MISSING_PRACTICE" });
+      expect(await prisma.assessmentAttempt.count({ where: { candidateId: id } })).toBe(0);
+      expect(await prisma.practiceProgress.count({ where: { candidateId: id } })).toBe(0);
+      expect(await prisma.scenarioExposure.count({ where: { candidateId: id } })).toBe(0);
+      expect(await prisma.credential.count({ where: { attempt: { candidateId: id } } })).toBe(0);
+      await expect(completeLesson(prisma, id, "EXPERT", "G1")).rejects.toThrow();
+      await expect(completeLesson(prisma, id, "FOUNDATIONS", "G7")).rejects.toThrow();
+    } finally { await other.$disconnect(); }
   });
 
   it("defaults new accounts to live/unverified without consent and never seeds over non-demo records", async () => {

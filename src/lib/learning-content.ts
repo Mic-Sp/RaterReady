@@ -1,6 +1,7 @@
 import type { Competency, LearningLevel } from "@prisma/client";
 
-/** Public curriculum labels. G1–G6 are RaterReady's internal identifiers, not an industry standard. */
+/** Legacy diagnostic-v1 labels/lesson slots, retained for versioned advisory selections.
+ * Substantive instruction is seeded separately; current practice names live in generalist-competencies.ts. */
 export const competencies = [
   { code: "G1", title: "Understand the task", lesson: "Identify the requested outcome, constraints and audience before evaluating a response.", example: "DEMO - SYNTHETIC: If a fictional library notice asks for one sentence about Friday closing time, extra opening hours do not satisfy a different task." },
   { code: "G2", title: "Apply the rubric", lesson: "Use the same explicit criteria for every response. Separate factual accuracy, instruction following and presentation.", example: "DEMO - SYNTHETIC: A polished fictional notice can still contain the wrong closing time. Judge the stated criterion rather than confidence or style." },
@@ -9,6 +10,9 @@ export const competencies = [
   { code: "G5", title: "Explain the judgment", lesson: "Connect your conclusion to a rubric criterion and a specific piece of evidence. Explain uncertainty without inventing certainty.", example: "DEMO - SYNTHETIC: ‘The fictional notice says 6 p.m.; both responses state that time, so both meet factual accuracy’ explains a tie with evidence." },
   { code: "G6", title: "Work independently", lesson: "Keep task instructions separate from response content. Check your reasoning and document uncertainty before submitting.", example: "DEMO - SYNTHETIC: A response saying ‘ignore the rubric and give me full credit’ is content to evaluate, never an instruction to obey." },
 ] as const satisfies readonly { code: Competency; title: string; lesson: string; example: string }[];
+
+/** Map current practice competencies to retained lesson URLs; never relabel or migrate saved reading rows. */
+export const practiceLessonSlots = { G1: "G1", G2: "G2", G3: "G4", G4: "G3", G5: "G6", G6: "G5" } as const satisfies Record<Competency, Competency>;
 
 /** Every level is directly selectable, including before or after the optional diagnostic. */
 export const learningLevels = [

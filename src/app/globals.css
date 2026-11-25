@@ -158,6 +158,28 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: 
 .learning-page ol, .reference-panel ol { list-style: decimal; }
 .learning-section { margin-top: 1.7rem; padding-top: 1.4rem; border-top: 1px solid #cfdee5; }
 .learning-section form, .learning-page > form { margin-top: 1rem; }
+/* Limit reading measure, preserve excerpt line breaks and stack comparisons at mobile/text zoom.
+   No fixed heights or horizontal scrollers: 320px and 200% text keep the same reading order. */
+.lesson-reader { max-width: 78ch; margin-inline: auto; line-height: 1.75; overflow-wrap: anywhere; }
+.lesson-reader h1 { line-height: 1.2; }
+.lesson-example { padding: clamp(.75rem, 3vw, 1.5rem); border: 2px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
+.lesson-example h2, .lesson-example h3 { margin-top: 1.25rem; }
+.lesson-example p { white-space: pre-wrap; }
+.lesson-response-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-block: 1.25rem; }
+.lesson-response-grid > section { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--surface); }
+.lesson-response-grid > section h3 { margin-top: 0; }
+.lesson-pagination { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+.lesson-reader [aria-current="page"] { font-weight: 750; text-decoration-thickness: 3px; }
+@media (min-width: 52rem) { .lesson-response-grid, .lesson-pagination { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 40rem) {
+  /* Fixed small gutters leave room for words when a learner doubles text size at 320px. */
+  .authenticated-shell:has(.lesson-reader) { width: calc(100% - 24px); }
+  .lesson-reader { padding: 12px; }
+  .lesson-reader h1 { font-size: 1.5rem; }
+  .lesson-reader .reference-panel, .lesson-reader .lesson-example,
+  .lesson-reader .lesson-response-grid > section, .lesson-reader .practice-status,
+  .lesson-reader .success-note { padding: 12px; }
+}
 .level-options { display: grid; gap: 1rem; margin-top: 1rem; }
 .level-option { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-card); background: var(--surface); box-shadow: var(--shadow-xs); }
 .level-option:has(.selection-note) { background: var(--surface-emerald); }

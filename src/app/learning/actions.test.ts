@@ -58,4 +58,13 @@ describe("candidate learning Server Action boundaries", () => {
     expect(mocks.completeLesson).not.toHaveBeenCalled();
     expect(mocks.saveDiagnostic).not.toHaveBeenCalled();
   });
+
+  it("records only guarded reading progress, ignoring posted certification claims or self-check answers", async () => {
+    const form = new FormData();
+    form.set("level", "INTERMEDIATE"); form.set("competency", "G4");
+    form.set("candidateId", "another-user"); form.set("passed", "true"); form.set("finalScore", "100"); form.set("selfCheck", "wrong");
+    await expect(markLessonComplete(form)).rejects.toThrow("REDIRECT:/dashboard?notice=lesson-saved");
+    expect(mocks.completeLesson).toHaveBeenCalledWith("TEST_DB", "authenticated-candidate", "INTERMEDIATE", "G4");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/learn", "layout");
+  });
 });

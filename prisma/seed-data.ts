@@ -6,6 +6,7 @@ import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 import { seedCapstone } from "./seed-capstone";
 import { curatedOpportunityFixtures } from "./opportunity-fixtures";
+import { seedCurriculum } from "./seed-curriculum";
 
 /**
  * Atomically upserts Stage A fixtures by stable unique keys. Existing profile choices,
@@ -14,6 +15,7 @@ import { curatedOpportunityFixtures } from "./opportunity-fixtures";
  */
 export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPasswords): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    await seedCurriculum(tx);
     for (const account of demoAccounts) {
       const existing = await tx.user.findUnique({ where: { accountCode: account.accountCode } });
       if (existing && !existing.isSyntheticFixture) {

@@ -2,18 +2,27 @@ import "server-only";
 import type { Competency, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { diagnosticAnswersSchema, diagnosticVersion, evaluateDiagnostic } from "../domain/diagnostic";
+import { curriculumContentSchema } from "../../lib/curriculum";
 
 export const learningLevelSchema = z.enum(["FOUNDATIONS", "INTERMEDIATE", "ADVANCED"]);
 export const competencySchema = z.enum(["G1", "G2", "G3", "G4", "G5", "G6"]);
 
 /** Read only the guarded learner's profile, independent completion records and advisory selections. */
 export async function getLearningSnapshot(db: PrismaClient, candidateId: string) {
-  return db.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, include: {
+  const profile = await db.candidateProfile.findUniqueOrThrow({ where: { userId: candidateId }, include: {
     moduleProgress: true, diagnostic: true, practiceProgress: true,
     // Resume metadata is allowlisted too: nested raw scenario rows would expose secure JSON.
     practiceDrafts: { where: { submittedAt: null, scenario: { bank: "PRACTICE", status: "PUBLISHED", track: "GENERALIST", isSyntheticFixture: true } },
       orderBy: { savedAt: "desc" }, take: 1, select: { scenarioId: true, savedAt: true, scenario: { select: { title: true } } } },
   } });
+  return { ...profile, curriculum: await getCurriculumLessons(db, profile.selectedLevel) };
+}
+
+/** Read validated public instruction in stable slot order; never query Scenario or secure grading data. */
+export async function getCurriculumLessons(db: PrismaClient, input: unknown) {
+  const level = learningLevelSchema.parse(input);
+  const rows = await db.curriculumLesson.findMany({ where: { level }, orderBy: { competency: "asc" } });
+  return rows.map(({ competency, contentJson }) => ({ level, competency, ...curriculumContentSchema.parse(contentJson) }));
 }
 
 /** Persist an explicit choice only; never delete/update ModuleProgress or force diagnostic placement. */
@@ -29,6 +38,8 @@ export async function selectLearningLevel(db: PrismaClient, candidateId: string,
 export async function completeLesson(db: PrismaClient, candidateId: string, level: unknown, code: unknown) {
   const parsedLevel = learningLevelSchema.parse(level);
   const competency = competencySchema.parse(code);
+  // A valid enum alone must not create progress for a lesson that has not been published by seeding.
+  await db.curriculumLesson.findUniqueOrThrow({ where: { level_competency: { level: parsedLevel, competency } }, select: { competency: true } });
   return db.moduleProgress.upsert({
     where: { candidateId_competency_level: { candidateId, competency, level: parsedLevel } },
     create: { candidateId, competency, level: parsedLevel }, update: {},

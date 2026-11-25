@@ -15,6 +15,7 @@ import type { PracticeFormState } from "./form-state";
 import { WorkspaceBar } from "../components/workspace-bar";
 import { StatusBadge } from "../components/status-badge";
 import { catalogHeading } from "../../lib/catalog-presentation";
+import { practiceLessonSlots } from "../../lib/learning-content";
 
 type WorkspaceData = Awaited<ReturnType<typeof loadPracticeWorkspace>>;
 
@@ -126,7 +127,7 @@ export function PracticeWorkspace({ scenario, draft, result: savedResult }: Work
       <h3>Your submitted justification</h3><blockquote className="candidate-justification"><SyntheticText>{state.values.writtenJustification}</SyntheticText></blockquote>
       <ul>{result.feedback.rubricCriteria.map((criterion) => <li key={criterion.id}><SyntheticText>{controls.criteria.find((item) => item.id === criterion.id)?.label ?? criterion.id}</SyntheticText>: <SyntheticText>{criterion.aligned ? "Aligned with an accepted interpretation" : "Revisit this criterion with the expert explanation"}</SyntheticText></li>)}</ul>
       <p><SyntheticText rebrand>{result.feedback.reviewGuidance}</SyntheticText></p><p>Your written justification is retained. No final score, passing decision or credential is issued. Practice completion does not establish Generalist Qualification Exam readiness.</p>
-      <p><SyntheticText>{technical ? "Optional Generalist habit references (no progress awarded): " : "Review a competency reference: "}</SyntheticText>{scenario.competencies.map((item) => <Link key={item.code} href={`/learn/${item.code}`}><SyntheticText>{item.code}</SyntheticText> </Link>)}</p>
+      <p><SyntheticText>{technical ? "Optional Generalist habit references (no progress awarded): " : "Review a competency reference: "}</SyntheticText>{scenario.competencies.map((item) => <Link key={item.code} href={`/learn/${practiceLessonSlots[item.code]}`}><SyntheticText>{item.code}</SyntheticText> </Link>)}</p>
       </>}
       {/* Reset uses the acknowledged revision; a stale/failed reset retains this locked result and its feedback. */}
       <form action={action} aria-busy={pending}>

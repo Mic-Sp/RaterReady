@@ -20,6 +20,7 @@ import type { Competency } from "@prisma/client";
 export function LearningDashboard({ user, profile, notice, readiness, credentials = [], opportunities }: { user: AuthIdentity; profile: Awaited<ReturnType<typeof getLearningSnapshot>>; notice?: string; readiness?: CapstoneReadiness; credentials?: CandidateCredential[]; opportunities?: { unlocked: boolean } }) {
   const completed = profile.moduleProgress.filter((item) => item.level === profile.selectedLevel);
   const resume = nextLesson(profile.moduleProgress, profile.selectedLevel);
+  const resumeTitle = profile.curriculum.find((item) => item.competency === resume)?.title ?? resume;
   const level = learningLevels.find((item) => item.code === profile.selectedLevel)!;
   const practiceAreas = new Set(profile.practiceProgress.map((item) => item.competency));
   const nextPractice = competencies.find((item) => !practiceAreas.has(item.code))?.code ?? "G1";
@@ -51,7 +52,8 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
       <p className="progress-metric"><strong><SyntheticText rebrand>{level.title}</SyntheticText></strong> · {completed.length} of 6 lessons marked complete</p>
       <progress max={6} value={completed.length} aria-label="Lessons marked complete at the current level" />
       <p>Completion records reflect lessons you mark complete. They are not graded practice results, a Generalist Qualification Exam readiness decision, or a credential.</p>
-      <Link href={`/learn/${resume}?level=${profile.selectedLevel}`} className="primary-button button-link"><SyntheticText>{completed.length === 6 ? `Review ${resume}` : `Resume learning: ${resume}`}</SyntheticText></Link>
+      <Link href={`/learn/${resume}?level=${profile.selectedLevel}`} className="primary-button button-link"><SyntheticText>{completed.length === 6 ? `Review: ${resumeTitle}` : `Resume learning: ${resumeTitle}`}</SyntheticText></Link>
+      <Link href={`/learn?level=${profile.selectedLevel}`} className="inline-link">Browse all lessons in {level.title}</Link>
     </section>
     <section className="learning-section" aria-labelledby="level-heading"><h2 id="level-heading">Change your learning level</h2>
       <p>Switch freely. Earlier completions remain available at their original level.</p>
@@ -63,12 +65,12 @@ export function LearningDashboard({ user, profile, notice, readiness, credential
       <Link href="/welcome" className="inline-link">Revisit the welcome check-in</Link>
     </section>
     <section className="learning-section dashboard-wide" aria-labelledby="curriculum-heading"><h2 id="curriculum-heading">Six-module curriculum</h2>
-      <p>G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Follow the sequence or revisit any lesson.</p>
-      <ol className="curriculum-list learning-card-grid" role="list">{competencies.map((item) => <li key={item.code}>
-        <LearningCard headingId={`lesson-${item.code}`} headingLevel={3} title={item.title} href={`/learn/${item.code}?level=${profile.selectedLevel}`} action={`Open ${item.code} lesson`}
-          metadata={<span className="competency-tag">{item.code} · {level.title}</span>}
-          summary={<><p>{completed.some((entry) => entry.competency === item.code) ? "Complete at this level" : "Not yet marked complete at this level"}</p>
-            <p className="field-hint">Completed at: {profile.moduleProgress.filter((entry) => entry.competency === item.code).map((entry) => learningLevels.find((l) => l.code === entry.level)!.title).join(", ") || "No levels yet"}</p></>} />
+      <p>Six substantive lessons at each level. Follow the sequence or revisit any lesson; earlier reading progress stays saved. Related G1–G6 links use RaterReady’s internal Generalist practice competencies, not an external industry standard.</p>
+      <ol className="curriculum-list learning-card-grid" role="list">{profile.curriculum.map((item, index) => <li key={item.competency}>
+        <LearningCard headingId={`lesson-${item.competency}`} headingLevel={3} title={item.title} href={`/learn/${item.competency}?level=${profile.selectedLevel}`} action={`Read lesson ${index + 1}`}
+          metadata={<span className="competency-tag">Lesson {index + 1} · {level.title}</span>}
+          summary={<><p>{item.summary}</p><p>{completed.some((entry) => entry.competency === item.competency) ? "Complete at this level" : "Not yet marked complete at this level"}</p>
+            <p className="field-hint">Completed at: {profile.moduleProgress.filter((entry) => entry.competency === item.competency).map((entry) => learningLevels.find((l) => l.code === entry.level)!.title).join(", ") || "No levels yet"}</p></>} />
       </li>)}</ol>
     </section>
     <section className="learning-section" aria-labelledby="diagnostic-status-heading"><h2 id="diagnostic-status-heading">Optional skills diagnostic</h2>

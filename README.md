@@ -2,6 +2,108 @@
 
 Stage B account foundation, with the Stage A `DEMO - SYNTHETIC` demo preserved.
 
+## Step 14A — Substantive multi-lesson curriculum
+
+The pre-implementation audit found that levels live in the Prisma `LearningLevel`
+enum and `CandidateProfile.selectedLevel`, while lessons were six one-paragraph
+static references reused at every level. Reading uses the unique
+`ModuleProgress(candidateId, competency, level)` key; the candidate-only completion
+action upserts one row, and choosing a level only updates the profile. Generalist
+exam readiness reads actual submitted Generalist practice, not these reading marks.
+Passing remains a score of at least 85 on a finalized exam after owner review.
+
+The original lesson-slot order predates today's practice competency names. Existing
+`/learn/G1`–`/learn/G6` URLs and completion keys are retained so earlier reading is
+not lost or silently reassigned. Descriptive titles and explicit related-practice
+names distinguish instruction from current G1–G6 practice coverage. The optional
+diagnostic keeps its existing versioned keys and recommendation logic.
+Practice feedback references map today's competency codes to the relevant retained
+lesson URL, and dashboard actions name the next unread lesson directly.
+
+An additive `CurriculumLesson` table stores 18 structured, Zod-validated lessons by
+level/slot. The seed upserts authored instruction by that stable key without
+deleting or rewriting accounts, reading records, practice/exam scenarios or grades.
+Earlier reading marks survive expanded instruction and do not claim mastery of the
+new material. The new content contains no references to secure assessment keys.
+Genuine instruction is not labeled simulated; each separate fictional worked
+comparison has its own amber `DEMO - SYNTHETIC` label and identifies its task,
+rubric, evidence, simulated A/B responses and reasoning.
+
+Each level has six different lessons, with objectives, two instructional sections,
+a worked comparison, takeaways and an optional reflective question/answer reveal:
+
+| Level | Six lessons, in reading order |
+| --- | --- |
+| Foundations | Read the prompt and find the rubric; Separate accuracy from fluent writing; Compare fairly and recognize a tie; Verify claims with supplied evidence; Write a clear evaluation justification; Keep evaluation independent and policy-aware |
+| Intermediate Practice | Resolve instruction-following edge cases; Weigh response quality without a style halo; Distinguish a defensible tie from a small preference; Reconcile sources, dates and calculations; Make justifications audit-ready; Apply safety policy without over-refusing |
+| Advanced Calibration | Calibrate interpretations of an ambiguous rubric; Judge materiality across competing criteria; Test ties, alternatives and shared failures; Handle conflicting evidence and calibrated uncertainty; Write calibration notes another reviewer can audit; Evaluate policy boundaries under adversarial pressure |
+
+`/learn?level=FOUNDATIONS` (also `INTERMEDIATE` and `ADVANCED`) browses all six
+lessons with saved completion states. Browsing never changes placement. The
+dashboard shows the level's actual lesson titles, next unread lesson and catalog
+link. The reader adds previous/next and all-lesson navigation, explicit completion
+state, related practice links and the optional Seven-Step reference. Its native
+self-check disclosure collects no answer, needs no JavaScript and never blocks
+marking a lesson complete. Completion still returns to the dashboard so next unread
+progress is immediately visible. Reading measure, sequential comparison cards,
+wrapping text and shared focus/contrast tokens support mobile and zoom reflow.
+
+Apply the additive migration and idempotent seed to the configured application DB:
+
+```sh
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+Verification uses disposable local databases only. With the local PostgreSQL
+server listening on port 55485 and databases created, the exact commands for this
+workspace are below. On another machine, substitute local `raterready_test*` URLs;
+omit the Chromium/library overrides when Playwright's browser dependencies are installed.
+
+```sh
+npm run typecheck
+npm run lint
+TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test14a' npm test
+LD_LIBRARY_PATH='/tmp/raterready-browser-libs/usr/lib/x86_64-linux-gnu' PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/home/micsp/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' TEST_DATABASE_URL='postgresql://raterready@127.0.0.1:55485/raterready_test14a_browser' npm run test:browser
+npm run dev -- --webpack --hostname 127.0.0.1 --port 3000
+```
+
+For only the four new browser scenarios, append
+`-- tests/browser/curriculum.spec.ts` to the browser command. Unit coverage checks
+all 18 content structures, example boundaries, native self-check behavior and
+guarded completion inputs. Database coverage verifies repeated seeds, preserved
+completion timestamps, all 18 completions across levels and connections, unchanged
+scenario banks/accounts, missing-practice enforcement and the finalized 85% policy.
+Browser coverage reads all 18 lessons, checks navigation and examples, completes
+with/without self-checks, reloads after every level switch, verifies role guards,
+and checks WCAG rules (including contrast), keyboard focus and disclosures at
+1440px, 720px effective layout zoom, 320px and 320px with 200% text.
+
+Manual review at `http://127.0.0.1:3000`:
+
+1. Sign in as a candidate. Use **Browse all lessons** and read examples at all
+   three levels. Confirm each has six different lessons and browsing a different
+   level leaves the dashboard's selected level unchanged.
+2. Check objectives, instructional sections, the labeled fictional comparison,
+   takeaways, optional answer reveal and Seven-Step reference. Follow previous,
+   next, all-lesson and related G1–G6 practice links.
+3. Complete a lesson without opening its self-check, then complete another after
+   revealing its explanation. Check the dashboard's next unread destination.
+4. Switch selected levels, reload and switch back. Earlier completion states must
+   remain saved. Reading must not create practice submissions, an exam result or
+   a credential; exam readiness still requires actual practice coverage.
+5. Use Tab, Enter and Space. Check visible focus and no keyboard trap. Inspect at
+   320px, real browser 200% zoom, and 200% text; examples and controls should wrap
+   in sequence without horizontal scrolling or clipped labels.
+
+Step 14B scenario-bank expansion is deliberately outside this change. No commits
+or pushes are performed by the agent. After review, the suggested commit command is:
+
+```sh
+git commit -m "feat: add substantive three-level RLHF curriculum and accessible lesson reader"
+```
+
 ## Step 13C-2 — Verification, recovery and timed-exam eligibility
 
 All five public auth cards (`/login`, `/register`, `/verify-email`,

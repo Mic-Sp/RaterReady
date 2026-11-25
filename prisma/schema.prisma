@@ -236,7 +236,18 @@ model DiagnosticSession {
   completedAt        DateTime?        @db.Timestamptz(3)
 }
 
-/// Progress is independent of selectedLevel, so switching levels never deletes completion.
+/// Authored non-certifying instruction; fictional worked excerpts are labeled inside contentJson.
+/// The composite key retains historical lesson slots, independently of practice competency names.
+model CurriculumLesson {
+  level       LearningLevel
+  competency  Competency
+  contentJson Json
+
+  @@id([level, competency])
+}
+
+/// Self-marked reading, never practice coverage or mastery. Independent of selectedLevel.
+/// Existing historical slot keys survive curriculum expansion and level switches unchanged.
 model ModuleProgress {
   id          String           @id @default(cuid())
   candidateId String
