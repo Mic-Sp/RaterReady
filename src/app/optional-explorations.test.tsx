@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WorkflowLabPage from "./workflow-lab/page";
 import TechnicalPreviewPage from "./technical-preview/page";
@@ -17,6 +18,27 @@ beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ id: "guar
 afterEach(cleanup);
 
 describe("optional exploration boundaries and semantics", () => {
+  it("frames the lab as pre-flight setup with five worked examples and a collapsed lesson reference", async () => {
+    const { container } = render(await WorkflowLabPage());
+    expect(screen.getByText(/optional, unscored pre-flight workspace setup guide/)).toBeDefined();
+    const setup = screen.getByRole("region", { name: "Set up your workspace" });
+    const cards = within(setup).getAllByRole("region");
+    expect(cards).toHaveLength(5);
+    for (const card of cards) {
+      expect(within(card).getByText("Why this matters.")).toBeDefined();
+      expect(within(card).getByText("DEMO - SYNTHETIC")).toBeDefined();
+      expect(within(card).getByText("Rushed setup")).toBeDefined();
+      expect(within(card).getByText("Ready workspace")).toBeDefined();
+    }
+    expect(screen.getByRole("link", { name: "Try these habits in Generalist practice" }).getAttribute("href")).toBe("/practice");
+    expect(screen.getByRole("link", { name: "Return to dashboard" }).getAttribute("href")).toBe("/dashboard");
+    const reference = screen.getByText("Reference: The Seven-Step Evaluation Method (taught in the lessons)");
+    expect(container.querySelector("article")?.lastElementChild).toBe(reference.closest("details"));
+    expect(reference.closest("details")?.open).toBe(false);
+    await userEvent.setup().click(reference);
+    expect(screen.getByRole("link", { name: "Open the Generalist lessons" }).getAttribute("href")).toBe("/learn");
+  });
+
   it("offers a labeled, reversible self-check with polite feedback and explicit optional/rules notices", async () => {
     render(await WorkflowLabPage());
     expect(screen.getByText(/not required to earn the Generalist credential/).textContent).toContain("optional");
