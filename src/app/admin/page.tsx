@@ -13,6 +13,9 @@ import { listAdminOpportunities } from "../../server/opportunities/service";
 import { OpportunityControls } from "./opportunity-controls";
 import { opportunityLinkLabels } from "../../lib/opportunity-content";
 import { StatusBadge } from "../components/status-badge";
+import { GradingOperations } from "./grading-operations";
+import { displayJudgeModel, readGradingTelemetry } from "../../server/ai/grading-telemetry";
+import { writtenGradingPosture } from "../../server/ai/judges";
 
 export const metadata: Metadata = { title: "Admin reviewer console | RaterReady" };
 
@@ -24,17 +27,12 @@ export default async function AdminConsolePage() {
   const appeals = await listAdminAppeals(prisma);
   const opportunities = await listAdminOpportunities(prisma);
   const m = view.metrics;
+  const telemetry = await readGradingTelemetry(prisma);
+  const judges = writtenGradingPosture().map((judge) => ({ ...judge, model: displayJudgeModel(judge.model) ?? "Unavailable" }));
   return <article className="page-card learning-page reviewer-layout" aria-labelledby="console-heading">
     <p className="eyebrow">Owner operations</p><h1 id="console-heading">Admin reviewer console</h1>
     <p className="page-intro">Review independent rubric judgments, compare written evaluations, and finalize synthetic Generalist Qualification Exam attempts.</p>
-    {/* Named sections complement the shared main landmark; metrics and statuses always have text labels. */}
-    <section className="learning-section" aria-labelledby="operations-heading"><h2 id="operations-heading">Grading operations</h2>
-      <dl className="operations-grid"><div><dt>Pending queue depth</dt><dd>{m.pendingDepth}</dd></div><div><dt>Finalized reviews</dt><dd>{m.finalizedCount}</dd></div>
-        <div><dt>Synthetic grading jobs</dt><dd>{m.syntheticJobs}</dd></div><div><dt>Live grading jobs</dt><dd>{m.liveJobs}</dd></div></dl>
-      <p>Estimated synthetic API spend: $0.00. Synthetic fixtures make no paid API calls.</p>
-      <p>Estimated live API spend: unavailable. Token usage and provider pricing are not recorded.</p>
-      <p>Quota status: <SyntheticText>{m.quotaStatus}</SyntheticText>. Live grading circuit breaker: <SyntheticText>{m.liveEnabled ? "enabled by server configuration" : "disabled"}</SyntheticText>.</p>
-    </section>
+    <GradingOperations metrics={m} judges={judges} telemetry={telemetry} />
     {([{ id: "pending", title: "Pending review queue", rows: view.queue, total: m.pendingDepth },
       { id: "history", title: "Finalized review history", rows: view.history, total: m.finalizedCount }]).map(({ id, title, rows, total }) =>
       <section className="learning-section" aria-labelledby={`${id}-heading`} key={id}><h2 id={`${id}-heading`}><SyntheticText rebrand>{title}</SyntheticText></h2>

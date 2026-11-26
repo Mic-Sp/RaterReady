@@ -8,6 +8,13 @@ export class JudgeBreaker {
 
   constructor(private readonly now: () => number = Date.now) {}
 
+  /** Inspect this server instance without claiming or changing a recovery probe. */
+  status(key: string): "Closed" | "Open" | "Half-open" {
+    const state = this.circuits.get(key);
+    if (!state?.openUntil) return "Closed";
+    return state.openUntil > this.now() ? "Open" : "Half-open";
+  }
+
   /** Return a one-call completion callback, or null while open or another recovery probe is running. */
   admit(key: string): ((success: boolean) => void) | null {
     let circuit = this.circuits.get(key);

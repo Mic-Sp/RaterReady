@@ -432,6 +432,14 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .exam-slot-nav [aria-current="step"] { border: 3px solid var(--focus); font-weight: 700; background: #eaf6f1; }
 .exam-slot { margin-top: 1.5rem; scroll-margin-top: 9rem; }
 /* Reviewer landmarks follow DOM order; comparisons and criterion controls reflow without horizontal scrolling. */
+.grading-posture-card, .grading-detail, .grading-models, .judge-health-results { min-width: 0; overflow-wrap: anywhere; }
+@media (min-width: 56rem) { .judge-grid:has(> .grading-posture-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.grading-detail { margin-top: .75rem; }
+.grading-detail > div { margin-block: .35rem; }
+.grading-detail dt { color: var(--muted); font-weight: 600; }
+.grading-detail dd { margin: 0; }
+.grading-posture-card h4, .grading-models h4 { font-weight: 700; margin-bottom: .5rem; }
+.grading-models li, .judge-health-results li { padding-block: .65rem; }
 .operations-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
 .operations-grid > div { min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: .65rem; }
 .operations-grid dt { color: var(--muted); }

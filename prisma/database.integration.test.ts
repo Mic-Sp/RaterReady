@@ -1,3 +1,5 @@
+import { readGradingTelemetry } from "../src/server/ai/grading-telemetry";
+import { consumeJudgeHealthCheckBudget } from "../src/server/auth/registration-rate-limit";
 import * as capstoneClock from "../src/server/capstone/clock";
 import { practiceBank } from "./practice-bank";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -1446,6 +1448,38 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await prisma.reviewCase.findUnique({ where: { attemptId: attempt } })).toMatchObject({ status: "PENDING", triggerReason: "JUDGE_DISAGREEMENT", gradingReasons: expect.arrayContaining(["ALPHA_SIGN_OFF", "JUDGE_DISAGREEMENT"]) });
     expect(await prisma.aiGradingReceipt.count({ where: { attemptId: attempt } })).toBe(6);
     expect(await prisma.assessmentAttempt.findUnique({ where: { id: attempt } })).toMatchObject({ writtenScore: null, finalScore: null, passed: null });
+  });
+
+  it("counts synthetic fallback and live telemetry without exposing disagreements before preliminary scoring", async () => {
+    const runtime = testGradingRuntime("disagree");
+    const { attempt } = await submittedForGrading(runtime);
+    await processWrittenGrading(prisma, attempt, runtime);
+    const before = await readGradingTelemetry(prisma);
+    expect(before.sampleSize).toBeLessThanOrEqual(60);
+    expect(before.fallbacks).toBeGreaterThan(0);
+    const flash = before.models.find((row) => row.model === "gemini:gemini-3.8-flash");
+    expect(flash?.usage.totalTokens.tokens).toBeGreaterThanOrEqual(369);
+    expect(flash?.usage.totalTokens.reports).toBeGreaterThanOrEqual(3);
+    expect(JSON.stringify(before)).not.toMatch(/Confidential|rationale|candidateText|alignment|test-gemini-key/);
+    expect(JSON.stringify(before)).not.toContain(attempt);
+    await savePreliminaryReview(prisma, attempt, await ownerScores(attempt));
+    const after = await readGradingTelemetry(prisma);
+    expect(after.disagreements).toBe(before.disagreements + 3);
+    expect(after.agreements).toBe(before.agreements);
+  });
+
+  it("shares the three-probe quota across concurrent workers and resets after its database-clock window", async () => {
+    const { createHmac } = await import("node:crypto");
+    const secret = randomBytes(32).toString("hex");
+    const keyHash = createHmac("sha256", secret).update("judge-health-check:v1:global").digest("hex");
+    const results = await Promise.all(Array.from({ length: 7 }, () => consumeJudgeHealthCheckBudget(prisma, secret)));
+    expect(results.filter(Boolean)).toHaveLength(3);
+    const now = Date.now();
+    await prisma.registrationRateLimit.update({ where: { keyHash }, data: {
+      windowStartedAt: new Date(now - 16 * 60_000), expiresAt: new Date(now - 60_000),
+    } });
+    expect(await consumeJudgeHealthCheckBudget(prisma, secret)).toBe(true);
+    await prisma.registrationRateLimit.delete({ where: { keyHash } });
   });
 
   it("keeps matching live votes pending and never dispatches a closed-alpha learner's prose", async () => {

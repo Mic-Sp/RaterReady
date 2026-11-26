@@ -8,6 +8,7 @@ import { normalizeEmail } from "../../lib/registration";
 // The SQL counter cap is GLOBAL_LIMIT + 1; changing that bound needs an additive migration.
 export const REGISTRATION_GLOBAL_LIMIT = 30;
 export const REGISTRATION_EMAIL_LIMIT = 5;
+export const JUDGE_HEALTH_CHECK_LIMIT = 3;
 
 /** Atomic, database-clock fixed window; saturated counters cannot overflow under prolonged abuse. */
 async function spend(tx: Prisma.TransactionClient, keyHash: string, limit: number): Promise<boolean> {
@@ -23,6 +24,14 @@ async function spend(tx: Prisma.TransactionClient, keyHash: string, limit: numbe
         THEN date_trunc('milliseconds', clock_timestamp()) + interval '15 minutes' ELSE "RegistrationRateLimit"."expiresAt" END
     RETURNING "attemptCount"`;
   return row.attemptCount <= limit;
+}
+
+/** A single shared quota across server instances. Call only after sole-owner authorization. */
+export async function consumeJudgeHealthCheckBudget(db: PrismaClient, secret: string): Promise<boolean> {
+  if (secret.length < 32) throw new Error("Health check limiter unavailable.");
+  // Fixed HMAC namespace keeps probes separate from registration and account recovery counters.
+  const key = createHmac("sha256", secret).update("judge-health-check:v1:global").digest("hex");
+  return db.$transaction((tx) => spend(tx, key, JUDGE_HEALTH_CHECK_LIMIT));
 }
 
 /**

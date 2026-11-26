@@ -28,7 +28,10 @@ export function writtenGradingPosture(runtime: GradingRuntime = {}) {
   return ([1, 2] as const).map((judgeSlot) => {
     const judge = config?.[judgeSlot];
     return { judgeSlot, provider: judge?.provider ?? "fixture", model: judge?.model ?? FIXTURE_MODEL_VERSION,
-      posture: judge?.posture ?? retentionPostures.fallback };
+      serviceTier: !judge ? "Local fixture" : judge.posture === retentionPostures.free ? "Free" : "Paid",
+      posture: judge?.posture ?? retentionPostures.fallback,
+      breaker: judge ? (runtime.breaker ?? processBreaker).status(`${judge.provider}:${judge.model}`) : "Inactive",
+    } as const;
   });
 }
 

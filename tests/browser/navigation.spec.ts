@@ -122,3 +122,46 @@ test("reviewer header offers only the console, wide metrics, mobile reflow and s
   await expect(page).toHaveURL("/login");
   await page.goto("/admin"); await expect(page).toHaveURL("/login");
 });
+
+test("admin judge posture and the quota-limited fixture health check reflow with keyboard focus", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page, "admin-michael");
+  const posture = page.getByRole("region", { name: "Current judge posture" });
+  for (const label of ["Judge A", "Judge B"]) {
+    const slot = posture.getByRole("region", { name: label, exact: true });
+    await expect(slot).toContainText("Deterministic Fallback");
+    await expect(slot).toContainText("Local fixture");
+    await expect(slot).toContainText("Circuit breaker");
+    await expect(slot).toContainText("Inactive");
+  }
+  const telemetry = page.getByRole("region", { name: "Recent receipt telemetry" });
+  await expect(telemetry.getByText("Agreed pairs", { exact: true })).toBeVisible();
+  await expect(telemetry.getByText("Fallback votes", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  const health = page.getByRole("region", { name: /^Judge health check/ });
+  const run = health.getByRole("button", { name: "Run judge health check" });
+  const submit = async () => {
+    const response = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/admin");
+    await run.press("Enter");
+    await response;
+    await expect(run).not.toHaveAttribute("aria-disabled", "true");
+  };
+  await run.focus();
+  await expect(run).toHaveCSS("outline-width", "3px");
+  await submit();
+  await expect(run).toBeFocused();
+  await expect(health.getByRole("status")).toContainText("Health check complete");
+  await expect(health.getByText("Valid", { exact: true })).toHaveCount(2);
+  const details = telemetry.locator("summary");
+  if (await details.count()) {
+    await details.press("Enter");
+    await expect(telemetry.getByText("Mean latency", { exact: true }).first()).toBeVisible();
+  }
+  await noOverflow(page);
+  await accessible(page);
+  await submit();
+  await submit();
+  await submit();
+  await expect(health.getByRole("status")).toContainText("Health check limit reached");
+});
