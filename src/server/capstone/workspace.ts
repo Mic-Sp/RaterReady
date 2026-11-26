@@ -5,7 +5,7 @@ import { capstoneDraftResponseSchema, capstoneResponseComplete, type CapstoneDra
 import { capstoneDatabaseNow, lockCapstoneCandidate } from "./clock";
 import { scoreCapstoneResponses } from "../domain/capstone-scoring";
 import { enqueueWrittenGrading } from "../ai/written-grading";
-import { gradingRuntime, type GradingRuntime } from "../ai/judges";
+import type { GradingRuntime } from "../ai/judges";
 import type { FinalizedCapstoneResult } from "../../lib/capstone-results";
 import { credentialPrivateSelect, credentialPrivateView } from "../credentials/projection";
 import { appealSelect, appealOrder, appealView } from "../appeals/projection";
@@ -177,7 +177,7 @@ export async function saveCapstoneDraft(db: PrismaClient, candidateId: string, i
  * exist only inside this transaction. A stable server idempotency key makes retries return
  * the original receipt without rescoring, even after the original exam deadline.
  */
-export async function submitCapstoneAttempt(db: PrismaClient, candidateId: string, input: unknown, runtime: GradingRuntime = gradingRuntime()): Promise<CapstoneMutationResult> {
+export async function submitCapstoneAttempt(db: PrismaClient, candidateId: string, input: unknown, runtime: GradingRuntime = {}): Promise<CapstoneMutationResult> {
   const parsed = submitSchema.safeParse(input);
   if (!parsed.success) return { ok: false, code: "CONFIRMATION", snapshot: null };
   const data = parsed.data;

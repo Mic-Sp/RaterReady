@@ -1036,23 +1036,51 @@ votes illustrate criterion scores and rationales without inspecting prose for
 keywords or making external calls. They are demonstrations, not semantic grading.
 The three written rubrics remain alignment 0–2, evidence/reasoning 0–2, clarity 0–1.
 Exact criterion equality is required: `[2,1,1]` versus `[1,2,1]` is disagreement
-despite equal totals. All raw votes remain private, including from the owner until
-a future rubric-first review implementation saves the preliminary assessment.
+despite equal totals. The owner must save the preliminary assessment before
+accessing the judge votes.
 
 The `next/server` after-response worker claims each job once. Concurrent/repeated
 workers skip claimed or terminal jobs. There are no automatic paid retries;
 `retryCount` stays zero. A call that times out, fails validation or fails at the
 provider becomes a terminal failure category with **no criterion scores**. An
 interrupted claim is marked timed out on a later worker invocation after its
-30-second lease, without dispatching it again. The stable dispatch key is also
-passed to any future approved live adapter for provider deduplication.
+30-second lease, without dispatching it again. The stable dispatch key identifies
+the receipt internally.
 
-No live provider transport or approval is configured or seeded. Setting the flag
-to `true` alone therefore makes no external calls: jobs fall back to human review.
-A future server-owned adapter must have a current, matching provider/model ZDR
-approval from `admin-michael`, evidence of verification, disabled retention and
-training, and support for idempotency before its transport may execute. Browser
-inputs cannot configure adapters, approvals, models or fixture modes.
+Step 15A adds stateless Gemini and OpenAI written judges. The master switch
+`ENABLE_LIVE_ZDR_GRADING` is a literal opt-in. Both slots need valid provider,
+model and key configuration before either dispatches. With the switch off or
+configuration incomplete, new jobs use the deterministic fixtures. The same
+fallback applies to real learner accounts and expired submissions. Existing
+queued work keeps its original model and posture pins.
+
+Gemini defaults to `gemini-3.8-flash` for Judge A and `gemini-3.5-flash-lite`
+for Judge B. Set `GEMINI_API_KEY` and the master switch in `.env.local` for
+local demo grading. Each `WRITTEN_JUDGE_A_*` or `WRITTEN_JUDGE_B_*` group can
+select its own compatible model. Set `PROVIDER=openai`, a model ID and
+`TIER=paid` for the OpenAI slot and supply `OPENAI_API_KEY`. Review the effective
+configuration with `npm run grade:written -- --posture`.
+
+Live dispatch is limited to demo accounts and labeled fictional exam material.
+The payload includes the prompt, allowlisted evidence, frozen written rubric
+and submitted justification. Keep demo prose fictional. The private-pattern
+screen blocks common identifiers but cannot recognize every disclosure in
+unstructured text. Provider responses are validated before storing scores.
+Immutable receipts record model identifiers, token counts when supplied,
+confidence and uncertainty flags, latency and declared retention posture.
+Provider error bodies and malformed payloads are discarded.
+
+Free-tier posture applies by default. Paid posture identifies a configured paid
+project using stateless requests. A paid slot may be labeled ZDR-Attested only
+after the operator verifies the applicable provider and project terms and sets
+that slot's `ZDR_ATTESTED=true`. The application reports these declarations.
+See the [Gemini API terms](https://ai.google.dev/gemini-api/terms) and
+[OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data).
+
+The process-local breaker counts consecutive failures per provider and model.
+After three failures it pauses calls for 60 seconds and allows one recovery
+probe. Requests time out after eight seconds. An open breaker, a rejection or
+a timeout leaves the affected votes with the owner for review.
 
 `ReviewCase` is created **before** any judge runs. Stage A mandatory audit cannot
 be disabled: even six successful agreeing votes remain `PENDING_REVIEW`. All

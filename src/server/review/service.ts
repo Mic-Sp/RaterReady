@@ -1,4 +1,5 @@
 import "server-only";
+import { writtenGradingPosture } from "../ai/judges";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { requireAdmin } from "../../lib/auth";
@@ -96,7 +97,9 @@ export async function inspectUnlockedReview(db: PrismaClient, attemptId: string)
         const judges = [1, 2].map((judgeSlot) => {
           const receipt = receipts.find((v) => v.responseId === r.id && v.judgeSlot === judgeSlot);
           if (!receipt) return { judgeSlot, status: "AWAITING_RECEIPT" as const, vote: null };
-          const parsed = writtenVoteSchema.safeParse(receipt.rawVoteJson);
+          // Live receipts also carry confidence and transport metadata. Project only the
+          // validated rubric vote here, after the independent owner assessment unlocks it.
+          const parsed = writtenVoteSchema.strip().safeParse(receipt.rawVoteJson);
           return { receiptId: receipt.id, judgeSlot, rubricId: receipt.rubricId, modelVersion: receipt.modelVersion,
             promptVersion: receipt.promptVersion, demoLabel: receipt.demoLabel, status: receipt.status, errorCode: receipt.errorCode,
             vote: receipt.status === "SUCCEEDED" && parsed.success ? parsed.data : null };
@@ -224,5 +227,5 @@ export async function getReviewConsole(db: PrismaClient) {
     independentScoresSaved: row.ownerPreliminarySavedAt !== null });
   return { queue: queue.map(project), history: history.map(project),
     metrics: { pendingDepth, finalizedCount, syntheticJobs, liveJobs, syntheticEstimatedSpendUsd: 0,
-      liveEstimatedSpendUsd: null, quotaStatus: "Not configured", liveEnabled: process.env.ENABLE_LIVE_ZDR_GRADING === "true" } };
+      liveEstimatedSpendUsd: null, quotaStatus: "Not configured", liveEnabled: writtenGradingPosture().every((slot) => slot.provider !== "fixture") } };
 }

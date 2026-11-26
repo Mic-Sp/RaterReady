@@ -2,8 +2,8 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient, type ReviewTriggerReason } from "@prisma/client";
 import { capstoneDatabaseNow } from "../capstone/clock";
-import { writtenInputSchema, writtenRubricSchema, writtenVotesAgree, writtenVoteSchema } from "./written-contract";
-import { evaluateWrittenJudge, FIXTURE_MODEL_VERSION, gradingRuntime, WRITTEN_PROMPT_VERSION, type GradingRuntime, type JudgeOutcome } from "./judges";
+import { syntheticContextSchema, writtenInputSchema, writtenRubricSchema, writtenVotesAgree, writtenVoteSchema } from "./written-contract";
+import { evaluateWrittenJudge, writtenJudgePin, type GradingRuntime, type JudgeOutcome } from "./judges";
 
 const LEASE_MS = 30000;
 const settled = new Set(["SUCCEEDED", "FAILED", "TIMED_OUT", "INVALID_OUTPUT"]);
@@ -19,12 +19,13 @@ async function lockAttempt(tx: Prisma.TransactionClient, attemptId: string) {
  * Only three designated rubric/text snapshots are selected; no keys, secrets, or sibling votes enter inputs.
  * Stage A mandatory audit is unconditional and created BEFORE any adapter runs.
  */
-export async function enqueueWrittenGrading(tx: Prisma.TransactionClient, attemptId: string, runtime: GradingRuntime = gradingRuntime()): Promise<void> {
+export async function enqueueWrittenGrading(tx: Prisma.TransactionClient, attemptId: string, runtime: GradingRuntime = {}): Promise<void> {
   await lockAttempt(tx, attemptId);
   const a = await tx.assessmentAttempt.findUniqueOrThrow({ where: { id: attemptId }, select: {
     mode: true, track: true, status: true, submissionKey: true, isSyntheticFixture: true,
+    candidate: { select: { user: { select: { isSyntheticFixture: true } } } },
     capstoneBlueprint: { select: { slots: { select: { position: true, writtenPrompt: true } } } },
-    responses: { select: { id: true, position: true, writtenJustification: true, scenario: { select: { rubricId: true, rubric: { select: { criteriaJson: true } } } } } },
+    responses: { select: { id: true, position: true, writtenJustification: true, scenario: { select: { rubricId: true, isSyntheticFixture: true, prompt: true, evidenceJson: true, rubric: { select: { criteriaJson: true } } } } } },
   } });
   if (a.mode !== "CAPSTONE" || a.track !== "GENERALIST" || !a.isSyntheticFixture || !a.capstoneBlueprint
     || !["SUBMITTED", "GRADING", "PENDING_REVIEW", "EXPIRED"].includes(a.status)
@@ -44,13 +45,22 @@ export async function enqueueWrittenGrading(tx: Prisma.TransactionClient, attemp
       await tx.reviewCase.update({ where: { attemptId }, data: { triggerReason: "MALFORMED_JSON", gradingReasons: ["ALPHA_SIGN_OFF", "MALFORMED_JSON"] } });
       continue;
     }
-    const input = parsed.data;
-    const inputHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
-    for (const judgeSlot of [1, 2]) {
+    const source = response.scenario;
+    // Copy public evidence fields only. Identity, scenario keys and provider policy never enter the prompt.
+    const evidence = (source.evidenceJson as { sources?: unknown[] } | null)?.sources;
+    const context = syntheticContextSchema.safeParse({ prompt: source.prompt,
+      evidence: Array.isArray(evidence) ? evidence.map((item) => {
+        const value = item as { id?: unknown; text?: unknown } | null;
+        return { id: value?.id, text: value?.text };
+      }) : null });
+    const syntheticAllowed = a.status !== "EXPIRED" && a.candidate.user.isSyntheticFixture && source.isSyntheticFixture;
+    for (const judgeSlot of [1, 2] as const) {
+      const { posture, ...pin } = writtenJudgePin(judgeSlot, syntheticAllowed, runtime);
+      // Missing/malformed live evidence is held for review at dispatch rather than silently changing modes.
+      const input = posture ? { ...parsed.data, ...(context.success ? { context: context.data } : {}), retentionPosture: posture } : parsed.data;
+      const inputHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
       await tx.aiGradingJob.upsert({ where: { responseId_judgeSlot: { responseId: response.id, judgeSlot } }, update: {},
-        create: { responseId: response.id, rubricId: response.scenario.rubricId, judgeSlot,
-          modelVersion: runtime.liveEnabled ? runtime.liveAdapter?.modelVersion ?? "unconfigured-live-provider" : FIXTURE_MODEL_VERSION,
-          promptVersion: WRITTEN_PROMPT_VERSION, isSyntheticFixture: !runtime.liveEnabled, inputSnapshotJson: input, inputHash,
+        create: { responseId: response.id, rubricId: source.rubricId, judgeSlot, ...pin, inputSnapshotJson: input, inputHash,
           dispatchKey: `written:${response.id}:${judgeSlot}:v1` } });
     }
   }
@@ -113,22 +123,33 @@ export async function reconcileWrittenGrading(db: PrismaClient, attemptId: strin
  * Durable, idempotent worker entry point for after-response execution or a trusted operator retry.
  * Each judge receives an independent input copy. Repeated/concurrent workers neither duplicate calls nor reopen terminal votes.
  */
-export async function processWrittenGrading(db: PrismaClient, attemptId: string, runtime: GradingRuntime = gradingRuntime()): Promise<void> {
+export async function processWrittenGrading(db: PrismaClient, attemptId: string, runtime: GradingRuntime = {}): Promise<void> {
   await db.$transaction((tx) => enqueueWrittenGrading(tx, attemptId, runtime));
-  const ids = await db.aiGradingJob.findMany({ where: { response: { attemptId } }, select: { id: true }, orderBy: { id: "asc" } });
-  for (const { id } of ids) {
-    const job = await claimJob(db, attemptId, id);
-    if (!job) continue;
-    let outcome: JudgeOutcome;
-    const input = writtenInputSchema.safeParse(job.inputSnapshotJson);
-    if (!input.success) outcome = { status: "INVALID_OUTPUT", errorCode: "INVALID_FROZEN_INPUT", latencyMs: 0 };
-    else outcome = await evaluateWrittenJudge(input.data, { isSyntheticFixture: job.isSyntheticFixture, modelVersion: job.modelVersion, promptVersion: job.promptVersion, position: job.response.position, dispatchKey: job.dispatchKey! }, runtime);
-    await db.$transaction(async (tx) => {
-      await lockAttempt(tx, attemptId);
-      // Claim ownership is checked again after the adapter returns; a recovered timeout cannot be overwritten by a late vote.
-      const current = await tx.aiGradingJob.findUniqueOrThrow({ where: { id } });
-      if (current.status === "RUNNING" && current.claimToken === job.claimToken) await completeJob(tx, job, outcome);
-    });
-  }
+  const ids = await db.aiGradingJob.findMany({ where: { response: { attemptId } }, select: { id: true, judgeSlot: true }, orderBy: { id: "asc" } });
+  // The slots run independently, but each slot dispatches its three votes sequentially.
+  // That lets the breaker observe repeated failures while bounding end-to-end latency.
+  await Promise.all([1, 2].map(async (judgeSlot) => {
+    for (const { id } of ids.filter((job) => job.judgeSlot === judgeSlot)) {
+      const job = await claimJob(db, attemptId, id);
+      if (!job) continue;
+      let outcome: JudgeOutcome;
+      const input = writtenInputSchema.safeParse(job.inputSnapshotJson);
+      if (!input.success) outcome = { status: "INVALID_OUTPUT", errorCode: "INVALID_FROZEN_INPUT", latencyMs: 0 };
+      else if (job.judgeSlot !== 1 && job.judgeSlot !== 2) outcome = { status: "INVALID_OUTPUT", errorCode: "INVALID_JUDGE_SLOT", latencyMs: 0 };
+      else {
+        const liveEligible = !job.isSyntheticFixture && await db.assessmentAttempt.count({ where: { id: attemptId,
+          isSyntheticFixture: true, status: "PENDING_REVIEW", candidate: { user: { isSyntheticFixture: true, accountStatus: "ACTIVE", role: "CANDIDATE" } } } }) === 1;
+        outcome = await evaluateWrittenJudge(input.data, { isSyntheticFixture: job.isSyntheticFixture, modelVersion: job.modelVersion,
+          promptVersion: job.promptVersion, position: job.response.position, judgeSlot: job.judgeSlot }, runtime,
+          { syntheticAllowed: liveEligible, posture: input.data.retentionPosture });
+      }
+      await db.$transaction(async (tx) => {
+        await lockAttempt(tx, attemptId);
+        // Claim ownership is checked again after the adapter returns; a recovered timeout cannot be overwritten by a late vote.
+        const current = await tx.aiGradingJob.findUniqueOrThrow({ where: { id } });
+        if (current.status === "RUNNING" && current.claimToken === job.claimToken) await completeJob(tx, job, outcome);
+      });
+    }
+  }));
   await reconcileWrittenGrading(db, attemptId);
 }
