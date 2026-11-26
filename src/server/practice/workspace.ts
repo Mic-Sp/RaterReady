@@ -22,9 +22,13 @@ export class PracticeDraftConflict extends Error {
 /** Read public catalog metadata for the server-selected track; no draft/unpublished/capstone scenarios are browsable. */
 export async function listPracticeScenarios(db: PrismaClient, filters: { competency?: string; level?: string } = {}, track: PracticeTrack = "GENERALIST") {
   const parsed = z.object({ competency: z.enum(["G1", "G2", "G3", "G4", "G5", "G6"]).optional(), level: z.enum(["FOUNDATIONS", "INTERMEDIATE", "ADVANCED"]).optional() }).parse(filters);
-  return db.scenario.findMany({ where: { bank: "PRACTICE", status: "PUBLISHED", track, isSyntheticFixture: true,
-    ...(parsed.competency ? { competencies: { has: parsed.competency } } : {}), ...(parsed.level ? { difficulty: parsed.level } : {}) },
-    select: { id: true, title: true, version: true, competencies: true, difficulty: true }, orderBy: [{ title: "asc" }, { version: "desc" }] });
+  // Choose the newest published version BEFORE filtering: a superseded version may have other tags.
+  // Historical links, saved drafts and grading continue to resolve their own immutable scenario IDs.
+  const current = await db.scenario.findMany({ where: { bank: "PRACTICE", status: "PUBLISHED", track, isSyntheticFixture: true },
+    distinct: ["familyId"], orderBy: { version: "desc" },
+    select: { id: true, title: true, version: true, competencies: true, difficulty: true } });
+  return current.filter((item) => (!parsed.competency || item.competencies.includes(parsed.competency))
+    && (!parsed.level || item.difficulty === parsed.level)).sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** Load owned draft/result state within the fixed practice track; only submitted drafts may receive safe feedback. */

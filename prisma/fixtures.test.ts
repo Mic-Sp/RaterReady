@@ -1,3 +1,5 @@
+import { practiceBank } from "./practice-bank";
+import { capstoneScenarios } from "./capstone-fixtures";
 import { describe, expect, it } from "vitest";
 import { DEMO_LABEL, demoAccounts, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
 import { expandedPracticeScenarios, practiceRubric } from "./practice-fixtures";
@@ -5,6 +7,25 @@ import { generalistPracticeCompetencies } from "../src/lib/generalist-competenci
 import { technicalPreviewScenarios, technicalRubric } from "./technical-fixtures";
 
 describe("Stage A synthetic fixtures", () => {
+  it("covers every level of each practice competency and four disjoint exam families per slot", () => {
+    const practice = new Set(practiceBank.map((item) => item.familyCode));
+    const exam = new Set(capstoneScenarios.map((item) => item.familyCode));
+    expect(practice.size).toBe(18);
+    expect(exam.size).toBe(24);
+    expect([...exam].some((id) => practice.has(id))).toBe(false);
+    for (const code of Object.keys(generalistPracticeCompetencies)) {
+      const lessons = practiceBank.filter((item) => item.competencies[0] === code);
+      expect(lessons.map((item) => item.difficulty).sort()).toEqual(["ADVANCED", "FOUNDATIONS", "INTERMEDIATE"]);
+      expect(capstoneScenarios.filter((item) => item.competencies[0] === code)).toHaveLength(4);
+    }
+    for (const item of [...practiceBank, ...capstoneScenarios]) {
+      for (const text of [item.prompt, item.responseA, item.responseB, item.expertExplanation, ...item.evidenceJson.sources.map((s) => s.text)]) {
+        expect(text).toMatch(/^DEMO - SYNTHETIC/);
+      }
+      expect(item.answerKeyJson.verifiedSourceIds).toEqual(item.evidenceJson.sources.map((s) => s.id));
+    }
+  });
+
   it("contains exactly the two approved candidates and sole owner reviewer", () => {
     expect(demoAccounts.map(({ accountCode }) => accountCode)).toEqual(["demo-marcus", "demo-elena", "admin-michael"]);
     expect(demoAccounts[0]).toMatchObject({ level: "FOUNDATIONS", track: "GENERALIST", role: "CANDIDATE" });

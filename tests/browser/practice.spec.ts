@@ -20,6 +20,32 @@ async function accessible(page: Page) {
   await expectSyntheticBadges(page);
 }
 
+test("catalog filters all 18 exercises to one competency and level and reflows at 320px with double text", async ({ page }) => {
+  const db = new PrismaClient({ datasourceUrl: process.env.TEST_DATABASE_URL });
+  try {
+    await db.candidateProfile.update({ where: { userId: (await db.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } })).id },
+      data: { onboardingCompletedAt: new Date() } });
+    await signIn(page);
+    await page.goto("/practice");
+    const cards = page.getByRole("article");
+    await expect(cards).toHaveCount(18);
+    await page.getByLabel("Competency", { exact: true }).selectOption("G5");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(cards).toHaveCount(3);
+    await page.getByLabel("Scenario difficulty").selectOption("ADVANCED");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(cards).toHaveCount(1);
+    await expect(cards).toContainText("Handle a request for a small group report");
+    await page.setViewportSize({ width: 320, height: 760 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await accessible(page);
+    await cards.getByRole("link").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("region", { name: "Supplied verification evidence" })).toContainText("North 18");
+  } finally { await db.$disconnect(); }
+});
+
 test("key-free accessible A/B practice saves drafts, accepts approved ties and persists unlimited retries", async ({ page }) => {
   test.setTimeout(120000);
   const db = new PrismaClient({ datasourceUrl: process.env.TEST_DATABASE_URL });
@@ -29,7 +55,7 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await db.practiceDraft.deleteMany({ where: { candidateId: learner.id } });
     await db.practiceProgress.deleteMany({ where: { candidateId: learner.id } });
     const lessonBefore = await db.moduleProgress.findMany({ where: { candidateId: learner.id }, orderBy: { id: "asc" } });
-    const scenario = await db.scenario.findFirstOrThrow({ where: { family: { code: "demo-generalist-g6" }, bank: "PRACTICE", version: 1 } });
+    const scenario = await db.scenario.findFirstOrThrow({ where: { family: { code: "demo-generalist-g6" }, bank: "PRACTICE", version: 2 } });
     const attemptsBefore = await db.assessmentAttempt.count({ where: { candidateId: learner.id, mode: "PRACTICE" } });
     await signIn(page);
     await page.getByRole("link", { name: "Browse all Generalist practice scenarios" }).click();

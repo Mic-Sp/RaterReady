@@ -1,3 +1,5 @@
+import * as capstoneClock from "../src/server/capstone/clock";
+import { practiceBank } from "./practice-bank";
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PrismaClient, type Prisma } from "@prisma/client";
@@ -79,7 +81,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       const owner = await prisma.user.findUniqueOrThrow({ where: { accountCode: "admin-michael" } });
       return authorizeSession(prisma, { user: { id: owner.id, sessionVersion: owner.sessionVersion }, expires: new Date(Date.now() + 60000).toISOString() }, "ADMIN_REVIEWER");
     });
-    const blueprint = await prisma.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 1 } } });
+    const blueprint = await prisma.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 2 } } });
     capstoneBlueprintId = blueprint.id;
     scoringPolicyId = blueprint.scoringPolicyId;
     const scenario = await prisma.scenario.findFirstOrThrow({ where: { bank: "PRACTICE" } });
@@ -144,7 +146,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(after).toHaveLength(3);
     expect(await prisma.scenario.findMany({ orderBy: { id: "asc" } })).toEqual(scenariosBefore);
     expect(await prisma.rubric.count()).toBe(4);
-    expect(await prisma.scenarioFamily.count()).toBe(practiceScenarios.length + expandedPracticeScenarios.length + technicalPreviewScenarios.length + capstoneScenarios.length);
+    expect(await prisma.scenarioFamily.count()).toBe(practiceScenarios.length + expandedPracticeScenarios.length + practiceBank.filter((item) => item.version === 1).length + technicalPreviewScenarios.length + capstoneScenarios.length);
     expect(await prisma.opportunityListing.count()).toBe(2 + curatedOpportunityFixtures.length);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-synthetic-seed-v1" } })).toBe(1);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-practice-seed-v2" } })).toBe(1);
@@ -828,8 +830,29 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await prisma.scenarioExposure.findMany({ where: { candidateId }, orderBy: { familyId: "asc" } })).toEqual(exposures);
   });
 
+  it("keeps historical pins readable and exposes only current practice versions across repeated seeds", async () => {
+    const before = await listPracticeScenarios(prisma);
+    await seedSyntheticData(prisma, testPasswords);
+    const current = await listPracticeScenarios(prisma);
+    expect(current).toEqual(before);
+    expect(current).toHaveLength(18);
+    for (const item of practiceBank) {
+      const family = await prisma.scenarioFamily.findUniqueOrThrow({ where: { code: item.familyCode } });
+      const versions = await prisma.scenario.findMany({ where: { familyId: family.id, bank: "PRACTICE" }, orderBy: { version: "desc" } });
+      expect(current).toContainEqual(expect.objectContaining({ id: versions[0].id, version: item.version }));
+      if (item.version === 2) {
+        expect(current.some((entry) => entry.id === versions[1].id)).toBe(false);
+        expect((await loadPracticeWorkspace(prisma, candidateId, versions[1].id)).scenario.version).toBe(1);
+      }
+    }
+    const original = await prisma.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 1 } },
+      include: { slots: { include: { pool: true } } } });
+    expect(original.slots).toHaveLength(6);
+    expect(original.slots.every((slot) => slot.pool.length === 2)).toBe(true);
+  });
+
   it("publishes all six new competency families with pinned rubric v2 and repeatable identities", async () => {
-    const where = { bank: "PRACTICE" as const, family: { code: { in: expandedPracticeScenarios.map((item) => item.familyCode) } } };
+    const where = { bank: "PRACTICE" as const, version: 1, family: { code: { in: expandedPracticeScenarios.map((item) => item.familyCode) } } };
     const before = await prisma.scenario.findMany({ where, orderBy: { id: "asc" }, include: { rubric: true } });
     await seedSyntheticData(prisma, testPasswords);
     const after = await prisma.scenario.findMany({ where, orderBy: { id: "asc" }, include: { rubric: true } });
@@ -842,7 +865,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     }
   });
 
-  it.each(expandedPracticeScenarios)("scores persisted $familyCode primary judgments deterministically", async (fixture) => {
+  it.each([...expandedPracticeScenarios, ...practiceBank])("scores persisted $familyCode v$version primary judgments deterministically", async (fixture) => {
     const item = await prisma.scenario.findFirstOrThrow({ where: { family: { code: fixture.familyCode }, bank: "PRACTICE", version: fixture.version } });
     const result = await submitPracticeEvaluation(prisma, candidateId, { scenarioId: item.id, scenarioVersion: item.version, rubricVersion: 2,
       ...fixture.answerKeyJson, writtenJustification: "DEMO - SYNTHETIC: varied reasoning is retained for review, not machine prose grading." });
@@ -1080,7 +1103,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
 
   /** Fixed pins only. No clock, multiplier or question choice is a start input. */
   function startInput() {
-    return { acknowledged: true, blueprintId: capstoneBlueprintId, blueprintVersion: 1, scoringPolicyVersion: 1,
+    return { acknowledged: true, blueprintId: capstoneBlueprintId, blueprintVersion: 2, scoringPolicyVersion: 1,
       independentWorkPolicyVersion: capstoneBlueprint.independentWorkPolicyVersion };
   }
 
@@ -1098,8 +1121,8 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await prisma.capstoneBlueprint.findUniqueOrThrow({ where: { id: capstoneBlueprintId }, include: { scoringPolicy: true, slots: { include: { pool: true } } } })).toEqual(before);
     expect(before.slots).toHaveLength(6);
     expect(before.slots.filter((slot) => slot.writtenPrompt)).toHaveLength(3);
-    expect(before.slots.every((slot) => slot.pool.length === 2)).toBe(true);
-    expect(await prisma.scenario.count({ where: { bank: "CAPSTONE", family: { code: { in: capstoneScenarios.map((s) => s.familyCode) } } } })).toBe(12);
+    expect(before.slots.every((slot) => slot.pool.length === 4)).toBe(true);
+    expect(await prisma.scenario.count({ where: { bank: "CAPSTONE", family: { code: { in: capstoneScenarios.map((s) => s.familyCode) } } } })).toBe(24);
     expect(await prisma.auditEvent.count({ where: { eventKey: "stage-a-capstone-blueprint-v1" } })).toBe(1);
     await expect(prisma.scoringPolicy.update({ where: { id: scoringPolicyId }, data: { passingThreshold: 84 } })).rejects.toThrow(/immutable/);
     await expect(prisma.capstoneBlueprint.update({ where: { id: capstoneBlueprintId }, data: { baseDurationSeconds: 1 } })).rejects.toThrow(/immutable/);
@@ -1145,7 +1168,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(responses.every((r) => r.scenario.bank === "CAPSTONE" && r.writtenJustification === null)).toBe(true);
     await prisma.candidateProfile.update({ where: { userId: id }, data: { timeMultiplier: 2, selectedLevel: "ADVANCED" } });
     const resumed = await resumeCapstoneAttempt(prisma, id);
-    expect(resumed.attempt).toMatchObject({ id: first.attempt!.id, startedAt: first.attempt!.startedAt, expiresAt: first.attempt!.expiresAt, appliedTimeMultiplier: 1.5, blueprintVersion: 1, scoringPolicyVersion: 1 });
+    expect(resumed.attempt).toMatchObject({ id: first.attempt!.id, startedAt: first.attempt!.startedAt, expiresAt: first.attempt!.expiresAt, appliedTimeMultiplier: 1.5, blueprintVersion: 2, scoringPolicyVersion: 1 });
     for (const field of ["answerKeyJson", "allowedAlternativesJson", "expertExplanation", "responseA", "responseB", "pool", "scenarioId"]) expect(JSON.stringify(resumed)).not.toContain(field);
     await expect(prisma.assessmentAttempt.update({ where: { id: first.attempt!.id }, data: { expiresAt: new Date(Date.now() + 1000) } })).rejects.toThrow(/immutable/);
     const attempt = await prisma.assessmentAttempt.findUniqueOrThrow({ where: { id: first.attempt!.id } });
@@ -1169,13 +1192,42 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     await expect(prisma.assessmentAttempt.update({ where: { id: past.id }, data: { status: "IN_PROGRESS" } })).rejects.toThrow(/reopened/);
   });
 
+  it("reserves four complete disjoint forms across elapsed cooldowns before exhaustion", async () => {
+    const id = await capstoneCandidate();
+    const practiceIds = new Set((await prisma.scenario.findMany({ where: { bank: "PRACTICE" }, select: { familyId: true } })).map((s) => s.familyId));
+    const catalog = await listPracticeScenarios(prisma);
+    expect(catalog).toHaveLength(18);
+    const seen = new Set<string>();
+    // Advance only the test's trusted DAL clock between reservations; database pins and exposures stay intact.
+    let now = new Date();
+    const clock = vi.spyOn(capstoneClock, "capstoneDatabaseNow").mockImplementation(async () => now);
+    try {
+      for (let available = 4; available > 0; available--) {
+        expect(await getCapstoneReadiness(prisma, id)).toMatchObject({ kind: "READY", remainingForms: available });
+        const started = await startCapstoneAttempt(prisma, id, startInput());
+        const slots = await prisma.submissionResponse.findMany({ where: { attemptId: started.attempt!.id }, include: { scenario: true } });
+        expect(slots).toHaveLength(6);
+        for (const { scenario } of slots) {
+          expect(scenario.bank).toBe("CAPSTONE");
+          expect(practiceIds.has(scenario.familyId) || seen.has(scenario.familyId)).toBe(false);
+          seen.add(scenario.familyId);
+        }
+        now = new Date(now.getTime() + 2 * 3600000);
+        expect((await getCapstoneReadiness(prisma, id)).kind).toBe("COOLDOWN");
+        now = new Date(now.getTime() + 48 * 3600000);
+      }
+      expect(seen.size).toBe(24);
+      await expect(startCapstoneAttempt(prisma, id, startInput())).rejects.toMatchObject({ reason: "CAPACITY" });
+    } finally { clock.mockRestore(); }
+  });
+
   it("excludes all previously exposed families and denies exhausted capacity without recycling questions", async () => {
     const id = await capstoneCandidate();
     const slots = await prisma.capstoneBlueprintSlot.findMany({ where: { blueprintId: capstoneBlueprintId }, include: { pool: { include: { scenario: true }, orderBy: { scenarioId: "asc" } } } });
     const exposed = slots.map((slot) => slot.pool[0].scenario.familyId);
     await prisma.scenarioExposure.createMany({ data: exposed.map((familyId) => ({ candidateId: id, familyId })) });
     await prisma.assessmentAttempt.create({ data: { ...historicalPins(id, new Date(Date.now() - 49 * 3600000)), status: "EXPIRED" } });
-    expect((await getCapstoneReadiness(prisma, id)).remainingForms).toBe(1);
+    expect((await getCapstoneReadiness(prisma, id)).remainingForms).toBe(3);
     const started = await startCapstoneAttempt(prisma, id, startInput());
     const assigned = await prisma.submissionResponse.findMany({ where: { attemptId: started.attempt!.id }, select: { scenario: { select: { familyId: true } } } });
     expect(assigned.every((r) => !exposed.includes(r.scenario.familyId))).toBe(true);
@@ -1608,7 +1660,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await prisma.credential.findUnique({ where: { attemptId: attempt } })).toMatchObject({ id: credential.id, publicSlug: credential.publicSlug, status: "REVOKED", publicShareEnabled: false });
     const audit = await prisma.auditEvent.findMany({ where: { targetId: credential.id, action: "CREDENTIAL_ISSUED" } });
     expect(audit).toHaveLength(1);
-    expect(audit[0].metadataJson).toMatchObject({ blueprintVersion: 1, scoringPolicyVersion: 1, attemptId: attempt, publicShareEnabled: false });
+    expect(audit[0].metadataJson).toMatchObject({ blueprintVersion: 2, scoringPolicyVersion: 1, attemptId: attempt, publicShareEnabled: false });
     expect((await loadCapstoneWorkspace(prisma, id, attempt)).snapshot.result?.credential?.credentialCode).toBe(credential.publicSlug);
   });
 
@@ -1626,7 +1678,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     expect(await getPublicCredential(prisma, code)).toBeNull(); expect(await getPublicCredential(prisma, randomUUID())).toBeNull();
     await Promise.all([setCredentialSharing(prisma, code, true), setCredentialSharing(prisma, code, true)]);
     expect(await getPublicCredential(prisma, code)).toEqual({ credentialCode: code, status: "ACTIVE", issuedAt: credential.issuedAt.toISOString(),
-      track: "GENERALIST", competencies: ["G1", "G2", "G3", "G4", "G5", "G6"], blueprintVersion: 1, scoringPolicyVersion: 1 });
+      track: "GENERALIST", competencies: ["G1", "G2", "G3", "G4", "G5", "G6"], blueprintVersion: 2, scoringPolicyVersion: 1 });
     await setCredentialSharing(prisma, code, false); expect(await getPublicCredential(prisma, code)).toBeNull();
     await setCredentialSharing(prisma, code, true);
     await expect(changeCredentialStatus(prisma, code, { status: "SUSPENDED", reason: " \n " })).rejects.toThrow();

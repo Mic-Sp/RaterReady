@@ -70,7 +70,7 @@ export function PracticeWorkspace({ scenario, draft, result: savedResult }: Work
     <p className="page-intro"><SyntheticText rebrand>{scenario.competencyDisclosure}</SyntheticText></p>
     <p>Scenario version {scenario.version} · pinned rubric <SyntheticText>{scenario.rubric.code}</SyntheticText>, version {scenario.rubric.version}</p>
     {/* Source-first DOM order applies at every breakpoint: task, evidence/notes, pinned rubric, outputs, then evaluation controls. */}
-    <WorkspaceSection headingId="task-heading" title="Task prompt" kind="task"><p><SyntheticText rebrand>{scenario.prompt}</SyntheticText></p></WorkspaceSection>
+    <WorkspaceSection headingId="task-heading" title="Task prompt" kind="task"><p className="whitespace-pre-line"><SyntheticText rebrand>{scenario.prompt}</SyntheticText></p></WorkspaceSection>
     <WorkspaceSection headingId="evidence-heading" title="Supplied verification evidence" kind="evidence">
       <ul>{scenario.evidence.map((source) => <li key={source.id}><strong><SyntheticText>{source.id}</SyntheticText></strong><p><SyntheticText rebrand>{source.text}</SyntheticText></p></li>)}</ul>
       <EvaluationReference includeRubricGuide id="workspace-learning-reference" />

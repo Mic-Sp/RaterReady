@@ -34,6 +34,7 @@ export default async function PracticeBrowserPage({ searchParams }: { searchPara
         <option value="">All levels</option>{learningLevels.map((item) => <option key={item.code} value={item.code}><SyntheticText rebrand>{item.title}</SyntheticText></option>)}
       </select></div><button className="secondary-button" type="submit">Apply filters</button><Link href="/practice" className="inline-link">Clear filters</Link>
     </form>
+    {scenarios.length > 0 && <p className="field-hint">{scenarios.length} matching {scenarios.length === 1 ? "scenario" : "scenarios"}</p>}
     {!scenarios.length && <p role="status">No practice scenarios match these filters. Try another level or view all scenarios.</p>}
     <ul className="practice-catalog learning-card-grid" role="list">{scenarios.map((scenario) => <li key={scenario.id}>
       <LearningCard headingId={`scenario-${scenario.id}`} title={catalogHeading(scenario.title)} href={`/practice/${scenario.id}`}

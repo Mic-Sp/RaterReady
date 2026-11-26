@@ -11,7 +11,7 @@ async function prepare(db: PrismaClient, alternatives = false) {
   const user = await db.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } });
   await clearCapstones(db, user.id); await setCoverage(db, user.id, true);
   await db.candidateProfile.update({ where: { userId: user.id }, data: { onboardingCompletedAt: new Date(), timeMultiplier: 1 } });
-  const blueprint = await db.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 1 } }, include: { slots: { orderBy: { position: "asc" }, include: { pool: { include: { scenario: true } } } } } });
+  const blueprint = await db.capstoneBlueprint.findUniqueOrThrow({ where: { code_version: { code: capstoneBlueprint.code, version: 2 } }, include: { slots: { orderBy: { position: "asc" }, include: { pool: { include: { scenario: true } } } } } });
   if (alternatives) await db.scenarioExposure.createMany({ data: blueprint.slots.filter((s) => [4, 6].includes(s.position)).flatMap((s) => s.pool.filter((p) => (p.scenario.allowedAlternativesJson as unknown[]).length === 0).map((p) => ({ candidateId: user.id, familyId: p.scenario.familyId }))) });
   return { id: user.id, blueprint };
 }

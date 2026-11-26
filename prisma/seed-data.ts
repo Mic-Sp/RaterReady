@@ -1,3 +1,4 @@
+import { practiceBank } from "./practice-bank";
 import { PartnershipStatus, PrismaClient, PublicationStatus, Role, ScenarioBank, Track } from "@prisma/client";
 import { DEMO_LABEL, demoAccounts, fixtureDate, generalistRubric, opportunityListings, practiceScenarios } from "./fixtures";
 import type { DemoPasswords } from "./demo-passwords";
@@ -74,7 +75,7 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
       where: { code_version: { code: practiceRubric.code, version: practiceRubric.version } },
       create: { ...practiceRubric, demoLabel: DEMO_LABEL }, update: {},
     });
-    for (const { familyCode, ...scenario } of expandedPracticeScenarios) {
+    for (const { familyCode, ...scenario } of [...expandedPracticeScenarios, ...practiceBank]) {
       const family = await tx.scenarioFamily.upsert({ where: { code: familyCode }, create: { code: familyCode }, update: {} });
       await tx.scenario.upsert({
         where: { familyId_version_bank: { familyId: family.id, version: scenario.version, bank: ScenarioBank.PRACTICE } },
@@ -146,5 +147,5 @@ export async function seedSyntheticData(prisma: PrismaClient, passwords: DemoPas
       eventKey: "stage-a-technical-preview-v1", action: "SYNTHETIC_TECHNICAL_PREVIEW_INSTALLED", targetType: "SEED_VERSION", targetId: "stage-a-technical-v1",
       metadataJson: { demoLabel: DEMO_LABEL, scenarioCount: technicalPreviewScenarios.length, certifying: false },
     }], skipDuplicates: true });
-  }, { timeout: 30000 });
+  }, { timeout: 60000 });
 }
