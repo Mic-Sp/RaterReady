@@ -1387,7 +1387,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     const testFetch = vi.fn<typeof fetch>(async (url) => {
       if (behavior === "api") return new Response("PRIVATE_PROVIDER_BODY_MUST_NOT_LEAK", { status: 503 });
       if (behavior === "timeout") return new Promise<never>(() => {});
-      const disagree = behavior === "disagree" && String(url).includes("flash-lite");
+      const disagree = behavior === "disagree" && String(url).includes("gemini-3.5-flash-lite");
       const vote = { alignment: disagree ? 1 : 2, evidence: disagree ? 2 : 1, clarity: 1,
         rationale: "DEMO - SYNTHETIC: test-only independent criterion vote.", demoLabel: "DEMO - SYNTHETIC", confidence: "high", needsReview: false };
       return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [
@@ -1434,7 +1434,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     await processWrittenGrading(prisma, attempt, runtime);
     expect(runtime.testFetch!).toHaveBeenCalledTimes(6);
     const calls = vi.mocked(runtime.testFetch!).mock.calls;
-    expect(calls.filter(([url]) => String(url).includes("gemini-3.8-flash"))).toHaveLength(3);
+    expect(calls.filter(([url]) => String(url).includes("gemini-3.1-flash-lite"))).toHaveLength(3);
     expect(calls.filter(([url]) => String(url).includes("gemini-3.5-flash-lite"))).toHaveLength(3);
     for (const [, request] of calls) {
       const payload = String(request?.body);
@@ -1457,7 +1457,7 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
     const before = await readGradingTelemetry(prisma);
     expect(before.sampleSize).toBeLessThanOrEqual(60);
     expect(before.fallbacks).toBeGreaterThan(0);
-    const flash = before.models.find((row) => row.model === "gemini:gemini-3.8-flash");
+    const flash = before.models.find((row) => row.model === "gemini:gemini-3.1-flash-lite");
     expect(flash?.usage.totalTokens.tokens).toBeGreaterThanOrEqual(369);
     expect(flash?.usage.totalTokens.reports).toBeGreaterThanOrEqual(3);
     expect(JSON.stringify(before)).not.toMatch(/Confidential|rationale|candidateText|alignment|test-gemini-key/);

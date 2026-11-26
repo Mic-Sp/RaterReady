@@ -4,10 +4,11 @@ import { prisma } from "./lib/prisma";
 import { AuthorizationError, authorizeSession } from "./server/auth/guards";
 import { routeAccess } from "./server/auth/route-policy";
 import type { NextAuthRequest } from "next-auth";
+import { missingPageResponse } from "./lib/page-not-found";
 
-const checkAccess: (request: NextAuthRequest, event: NextFetchEvent) => Promise<NextResponse> = async (request) => {
+const checkAccess: (request: NextAuthRequest, event: NextFetchEvent) => Promise<Response> = async (request) => {
+  const access = routeAccess(request.nextUrl.pathname);
   try {
-    const access = routeAccess(request.nextUrl.pathname);
     await authorizeSession(prisma, request.auth,
       access === "admin" ? "ADMIN_REVIEWER" : access === "candidate" ? "CANDIDATE" : undefined);
     return NextResponse.next();
@@ -17,6 +18,9 @@ const checkAccess: (request: NextAuthRequest, event: NextFetchEvent) => Promise<
     // an explicit denial; never redirect/replay an unauthorized POST or Server Action.
     if (status === 401 && ["GET", "HEAD"].includes(request.method)
       && request.headers.get("accept")?.includes("text/html") && !request.nextUrl.pathname.startsWith("/api/")) {
+      // Default-private paths get the branded 404 without executing the requested route.
+      // Known role routes still lead to sign-in, and actions keep their explicit denial.
+      if (access === "authenticated") return missingPageResponse(request.method);
       const response = NextResponse.redirect(new URL("/login", request.url));
       response.headers.set("Cache-Control", "no-store");
       return response;

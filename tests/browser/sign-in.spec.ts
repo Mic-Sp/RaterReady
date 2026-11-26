@@ -24,7 +24,7 @@ test("public sign-in semantics, keyboard controls, mobile reflow and WCAG checks
   await page.goto("/login");
   await expect(page.getByRole("heading", { level: 1, name: "Welcome back." })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("sign-in.png"), fullPage: true });
-  await expect(page.getByLabel("Synthetic demonstration access")).toContainText("DEMO - SYNTHETIC");
+  await expect(page.getByLabel("RaterReady access modes")).toContainText("DEMO - SYNTHETIC");
   await expect(page.getByRole("link", { name: "Create a candidate account", exact: true })).toHaveAttribute("href", "/register");
   await expect(page.getByRole("combobox")).toHaveCount(0);
   await page.keyboard.press("Tab");

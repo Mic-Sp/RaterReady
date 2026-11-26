@@ -28,13 +28,13 @@ describe("synthetic judge health check", () => {
     const vote = { alignment: 2, evidence: 2, clarity: 1, rationale: "Confidential probe rationale.",
       confidence: "high", needsReview: false, demoLabel: "DEMO - SYNTHETIC" };
     const testFetch = vi.fn<typeof fetch>(async (url) => Response.json({
-      candidates: [{ finishReason: "STOP", content: { parts: [{ text: String(url).includes("flash-lite")
+      candidates: [{ finishReason: "STOP", content: { parts: [{ text: String(url).includes("gemini-3.5-flash-lite")
         ? "Private invalid provider response." : JSON.stringify(vote) }] } }],
     }));
     const breaker = new JudgeBreaker();
     const result = await probeWrittenJudges({ testFetch, breaker });
     expect(result).toMatchObject({ status: "complete", slots: [
-      { model: "gemini:gemini-3.8-flash", status: "Live response received", validation: "Valid" },
+      { model: "gemini:gemini-3.1-flash-lite", status: "Live response received", validation: "Valid" },
       { model: "gemini:gemini-3.5-flash-lite", status: "Invalid response", validation: "Invalid" },
     ] });
     expect(JSON.stringify(result)).not.toMatch(/Confidential|Private invalid|fake-test-key|alignment/);

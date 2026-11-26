@@ -1054,7 +1054,7 @@ configuration incomplete, new jobs use the deterministic fixtures. The same
 fallback applies to real learner accounts and expired submissions. Existing
 queued work keeps its original model and posture pins.
 
-Gemini defaults to `gemini-3.8-flash` for Judge A and `gemini-3.5-flash-lite`
+Gemini defaults to `gemini-3.1-flash-lite` for Judge A and `gemini-3.5-flash-lite`
 for Judge B. Set `GEMINI_API_KEY` and the master switch in `.env.local` for
 local demo grading. Each `WRITTEN_JUDGE_A_*` or `WRITTEN_JUDGE_B_*` group can
 select its own compatible model. Set `PROVIDER=openai`, a model ID and

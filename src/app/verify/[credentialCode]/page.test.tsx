@@ -17,6 +17,10 @@ describe("public certificate presentation", () => {
     expect(html).toContain("PRELIMINARY PILOT CREDENTIAL");
     expect(html).toContain("not an external industry standard");
     expect(html).toContain("does not imply third-party AI lab or platform endorsement");
+    expect(html).toContain("owner reviewed and finalized a passing result");
+    expect(html).toContain("justice-impacted and nontraditional talent");
+    expect(html).toContain('href="/register"');
+    expect(html).toContain('href="/login"');
     expect(html).not.toContain("candidateId");
     expect(mocks.publicCredential).toHaveBeenCalledWith("TEST_DB", "public-code");
   });
@@ -27,5 +31,6 @@ describe("public certificate presentation", () => {
     expect(views[0]).toContain("Credential unavailable");
     expect(views[0]).not.toContain("private-sentinel");
     expect(views[0]).not.toContain("certificate-metadata");
+    expect(views[0]).toContain('href="/register"');
   });
 });

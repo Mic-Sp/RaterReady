@@ -20,7 +20,7 @@ function readSlot(env: NodeJS.ProcessEnv, slot: "A" | "B"): JudgeConfig | undefi
   if (provider === "openai" && tier !== "paid") return;
   const apiKey = (provider === "gemini" ? env.GEMINI_API_KEY : env.OPENAI_API_KEY)?.trim();
   const model = modelId.safeParse(env[`WRITTEN_JUDGE_${slot}_MODEL`] ??
-    (provider === "gemini" ? (slot === "A" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite") : ""));
+    (provider === "gemini" ? (slot === "A" ? "gemini-3.1-flash-lite" : "gemini-3.5-flash-lite") : ""));
   if (!apiKey || !model.success) return;
   // Billing tiers are operator declarations. Attestation applies only to an explicitly paid slot.
   const posture = tier === "free" ? retentionPostures.free

@@ -39,6 +39,16 @@
 .app-shell { width: min(100% - 2.5rem, 31rem); margin: 0 auto; padding: 1.75rem 0 2rem; overflow-wrap: anywhere; }
 /* Auth cards use a centered 44rem desktop shell; other public pages retain their existing width. */
 .app-shell:not(.authenticated-shell):has(.public-auth-page) { width: min(100% - 2.5rem, 44rem); }
+.app-shell:has(.public-landing-page) { width: min(100% - 2rem, 58rem); }
+.public-landing-page .page-intro { max-width: 68ch; }
+.public-entry-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; margin-block: 1.25rem; }
+.public-entry-links .button-link { margin: 0; }
+.landing-steps { margin-block: .75rem; }
+.landing-access-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.landing-access-card { min-width: 0; padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
+@media (min-width: 44rem) {
+  .public-entry-links, .landing-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .public-auth-page { width: 100%; max-width: 44rem; margin-inline: auto; }
 .auth-link-form { margin-top: 1.25rem; }
 .auth-link-preview { margin-top: 1rem; padding: 1rem; border: 2px solid var(--accent); border-radius: .65rem; background: var(--surface-indigo); }

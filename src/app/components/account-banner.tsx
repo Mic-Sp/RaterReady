@@ -11,9 +11,12 @@ export function AccountBanner({ user }: { user: AuthIdentity | null }) {
       {!user.emailVerifiedAt && <div className="verification-pending"><p>Email verification pending. Learning and untimed practice remain available. Verify before starting a timed Generalist Qualification Exam.</p><VerificationRequestForm /></div>}
     </aside>;
   }
-  return <aside className="demo-notice" aria-label="Synthetic demonstration access">
+  if (user) return <aside className="demo-notice" aria-label="Synthetic demonstration access">
     <p className="notice-label"><DemoBadge /></p>
-    <p>{user ? "You are signed in with a synthetic demonstration account. Shared pilot credentials may be verified publicly."
-      : "RaterReady is in Closed Alpha. Live candidate registration and synthetic demonstration accounts are available. Shared pilot credentials may be verified publicly."}</p>
+    <p>You are signed in with a synthetic demonstration account. Shared pilot credentials may be verified publicly.</p>
+  </aside>;
+  return <aside className="account-notice" aria-label="RaterReady access modes">
+    <p className="notice-label"><span className="role-badge">Closed Alpha</span></p>
+    <p>Live learner accounts are available. <DemoBadge /> identifies demonstration accounts and fictional content.</p>
   </aside>;
 }

@@ -42,9 +42,13 @@ describe("protected role-routing shell", () => {
     await expect(RegistrationPage()).rejects.toThrow(`REDIRECT:${destination}`);
   });
 
-  it("routes anonymous entry to sign-in and renders the public form", async () => {
+  it("offers anonymous visitors the mission and direct entry to both account forms", async () => {
     mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
-    await expect(HomePage()).rejects.toThrow("REDIRECT:/login");
+    const landing = renderToStaticMarkup(await HomePage());
+    for (const text of ["Learn to evaluate AI responses", "justice-impacted and nontraditional", "RLHF",
+      "Closed Alpha", "DEMO - SYNTHETIC", "independent human review", "third-party endorsement", 'href="/register"', 'href="/login"']) {
+      expect(landing).toContain(text);
+    }
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ error: "private account details" }) })) ).not.toContain("private account details");
     expect(renderToStaticMarkup(await RegistrationPage())).toContain('href="/login"');
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({}) }))).toContain('href="/register"');

@@ -207,6 +207,21 @@ describe("Credentials and database-authoritative RBAC", () => {
     expect(mutation?.status).toBe(401);
   });
 
+  it("serves a generic browser 404 for denied default-private HTML paths without opening the route", async () => {
+    const headers = { accept: "text/html", host: "localhost", "x-forwarded-proto": "http" };
+    const url = "http://localhost/unlisted-private-sentinel";
+    const response = await proxy(new NextRequest(url, { headers }), {} as NextFetchEvent);
+    expect(response?.status).toBe(404);
+    expect(response?.headers.get("cache-control")).toBe("no-store");
+    const html = await response?.text();
+    expect(html).toContain("Page not found");
+    expect(html).not.toContain("unlisted-private-sentinel");
+    const head = await proxy(new NextRequest(url, { headers, method: "HEAD" }), {} as NextFetchEvent);
+    expect(head?.status).toBe(404);
+    expect(await head?.text()).toBe("");
+    expect((await proxy(new NextRequest(url, { headers, method: "POST" }), {} as NextFetchEvent))?.status).toBe(401);
+  });
+
   it.each(["/learner", "/dashboard", "/welcome", "/practice/1", "/capstone", "/admin", "/api/admin/review", "/api/authentication", "/future-learner-route", "/verify-email/private", "/forgot-password/private", "/reset-password/private"])("requires authentication for %s", async (path) => {
     expect((await protectedRequest(path))?.status).toBe(401);
   });
