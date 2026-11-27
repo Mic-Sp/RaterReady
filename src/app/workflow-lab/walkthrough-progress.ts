@@ -4,9 +4,10 @@ export type WalkthroughProgress = {
   activeStep: number;
   completed: number[];
   finished: boolean;
+  collapsed: boolean;
 };
 
-export const initialWalkthrough: WalkthroughProgress = { activeStep: 0, completed: [], finished: false };
+export const initialWalkthrough: WalkthroughProgress = { activeStep: 0, completed: [], finished: false, collapsed: false };
 
 /** Decode only valid step indices. Invalid or stale browser data starts a fresh walkthrough. */
 export function parseWalkthroughProgress(saved: string | null, stepCount: number): WalkthroughProgress {
@@ -16,12 +17,14 @@ export function parseWalkthroughProgress(saved: string | null, stepCount: number
   try {
     const value: unknown = JSON.parse(saved);
     if (!value || typeof value !== "object") return initialWalkthrough;
-    const { activeStep, completed, finished } = value as Partial<WalkthroughProgress>;
+    const { activeStep, completed, finished, collapsed } = value as Partial<WalkthroughProgress>;
     if (!isStep(activeStep) || !Array.isArray(completed) || completed.length > stepCount || !completed.every(isStep)) {
       return initialWalkthrough;
     }
     const uniqueSteps = [...new Set(completed)];
-    return { activeStep, completed: uniqueSteps, finished: finished === true && uniqueSteps.length === stepCount };
+    const isFinished = finished === true && uniqueSteps.length === stepCount;
+    // Older finished saves have no display preference and open on the completion summary.
+    return { activeStep, completed: uniqueSteps, finished: isFinished, collapsed: isFinished && collapsed !== false };
   } catch {
     return initialWalkthrough;
   }

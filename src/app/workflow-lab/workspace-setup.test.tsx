@@ -127,7 +127,7 @@ describe("Workflow Skills Lab", () => {
     expect(screen.getByText("0 of 5 complete")).toBeDefined();
   });
 
-  it("reveals the scratchpad model without storing notes and highlights practice only after finishing", async () => {
+  it("reveals the scratchpad model without storing notes and collapses the steps only after finishing", async () => {
     window.localStorage.setItem(walkthroughStorageKey, JSON.stringify({ activeStep: 2, completed: [0, 1, 3, 4], finished: false }));
     const user = userEvent.setup();
     const visit = render(<WorkspaceSetup />);
@@ -141,14 +141,64 @@ describe("Workflow Skills Lab", () => {
     expect(screen.getByText("Worked model")).toBeDefined();
     expect(screen.getByText("5 of 5 complete")).toBeDefined();
     expect(window.localStorage.getItem(walkthroughStorageKey)).not.toContain("Temporary synthetic note");
-    expect(screen.queryByRole("heading", { name: "Walkthrough complete" })).toBeNull();
     await user.click(step(5));
-    await user.click(screen.getByRole("button", { name: "Finish walkthrough" }));
-    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Walkthrough complete" }));
-    expect(screen.getByRole("link", { name: "Try these habits in Generalist practice" }).getAttribute("href")).toBe("/practice");
+    expect(screen.getByRole("button", { name: /^Step 5:.*complete$/ })).toBe(step(5));
+    expect(screen.queryByRole("heading", { name: "Walkthrough complete" })).toBeNull();
+    const practice = screen.getByRole("link", { name: "Try these habits in Generalist practice" });
+    expect(practice.getAttribute("href")).toBe("/practice");
+    expect(practice.classList.contains("inline-link")).toBe(true);
+    expect(screen.getByRole("link", { name: "Return to dashboard" }).getAttribute("href")).toBe("/dashboard");
+
+    const finish = screen.getByRole("button", { name: "Finish walkthrough" });
+    const updates = screen.getByRole("status", { name: "Walkthrough updates" });
+    await user.click(finish);
+    const heading = screen.getByRole("heading", { name: "Walkthrough complete" });
+    expect(document.activeElement).toBe(heading);
+    expect(updates.getAttribute("aria-live")).toBe("polite");
+    expect(updates.textContent).toBe("Walkthrough complete. All 5 setup steps are complete.");
+    expect(within(screen.getByRole("region", { name: "Walkthrough complete" }))
+      .getByRole("link", { name: "Try these habits in Generalist practice" }).classList.contains("primary-button")).toBe(true);
+    expect(screen.queryByRole("navigation", { name: "Setup steps" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Operating system" })).toBeNull();
+
+    const reopen = screen.getByRole("button", { name: "Reopen walkthrough steps", expanded: false });
+    const walkthrough = document.getElementById(reopen.getAttribute("aria-controls")!);
+    expect(walkthrough?.hidden).toBe(true);
+    await user.click(reopen);
+    expect(screen.getByRole("button", { name: "Hide walkthrough steps", expanded: true })).toBe(reopen);
+    expect(walkthrough?.hidden).toBe(false);
+    expect(document.activeElement).toBe(reopen);
+    expect(step(5).getAttribute("aria-current")).toBe("step");
+    const announcement = updates.firstElementChild;
+    await user.click(finish);
+    expect(walkthrough?.hidden).toBe(true);
+    expect(document.activeElement).toBe(heading);
+    expect(updates.firstElementChild).not.toBe(announcement);
+    expect(updates.textContent).toBe("Walkthrough complete. All 5 setup steps are complete.");
+
     visit.unmount();
     render(<WorkspaceSetup />);
-    expect(screen.getByRole("heading", { name: "Walkthrough complete" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Reopen walkthrough steps", expanded: false })).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "Reset walkthrough" }));
+    expect(screen.queryByRole("heading", { name: "Walkthrough complete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /walkthrough steps/ })).toBeNull();
+    expect(step(1).getAttribute("aria-current")).toBe("step");
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Arrange your comparison windows" }));
+    expect(window.localStorage.getItem(walkthroughStorageKey)).toBeNull();
+    expect(screen.getByRole("link", { name: "Try these habits in Generalist practice" }).classList.contains("inline-link")).toBe(true);
+  });
+
+  it("collapses a legacy finished save and remembers when review is reopened", async () => {
+    window.localStorage.setItem(walkthroughStorageKey, JSON.stringify({ activeStep: 1, completed: [0, 1, 2, 3, 4], finished: true }));
+    const user = userEvent.setup();
+    const visit = render(<WorkspaceSetup />);
+    await user.click(screen.getByRole("button", { name: "Reopen walkthrough steps", expanded: false }));
+    expect(screen.getByRole("table", { name: /browser shortcuts/ })).toBeDefined();
+    visit.unmount();
+    render(<WorkspaceSetup />);
+    await user.click(screen.getByRole("button", { name: "Hide walkthrough steps", expanded: true }));
+    expect(screen.queryByRole("table", { name: /browser shortcuts/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Reopen walkthrough steps", expanded: false })).toBeDefined();
   });
 
   it("uses a fresh start for invalid data and keeps progress in memory if storage is blocked", async () => {
