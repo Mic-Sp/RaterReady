@@ -1,35 +1,33 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { DemoBadge } from "../components/demo-badge";
+import { SetupMicroCheck } from "./setup-micro-check";
 import {
   BrowserShortcuts, defaultOperatingSystem, detectOperatingSystem, FindShortcut,
   operatingSystems, type OperatingSystem, WindowShortcuts,
 } from "./shortcut-reference";
+import {
+  initialWalkthrough, parseWalkthroughProgress, readWalkthroughProgress, saveWalkthroughProgress, type WalkthroughProgress,
+} from "./walkthrough-progress";
 
 type SetupHabit = {
-  id: string;
+  shortTitle: string;
   title: string;
   why: string;
   tips: readonly (readonly [lead: string, instruction: ReactNode])[];
   rushed: string;
   ready: string;
-  checkLabel: string;
   reference?: ReactNode;
 };
 
-function SetupCard({ habit, checked, onCheck }: {
-  habit: SetupHabit; checked: boolean; onCheck: (checked: boolean) => void;
-}) {
-  const headingId = `${habit.id}-heading`;
-  const tipsId = `${habit.id}-tips`;
-
+function SetupGuide({ habit }: { habit: SetupHabit }) {
   return (
-    <section className="workflow-setup-card" aria-labelledby={headingId}>
-      <h3 id={headingId}>{habit.title}</h3>
+    <>
       <p><strong>Why this matters.</strong> {habit.why}</p>
       <div className="workflow-card-body">
-        <ul id={tipsId} className="workflow-tips">
+        <ul className="workflow-tips">
           {habit.tips.map(([lead, instruction]) => <li key={lead}><strong>{lead}</strong> {instruction}</li>)}
         </ul>
         <div className="workflow-example">
@@ -41,30 +39,19 @@ function SetupCard({ habit, checked, onCheck }: {
         </div>
       </div>
       {habit.reference}
-      <label className="radio-choice workflow-check">
-        <input type="checkbox" checked={checked} aria-describedby={tipsId} onChange={(event) => onCheck(event.target.checked)} />
-        <span>{habit.checkLabel}</span>
-      </label>
-    </section>
+    </>
   );
 }
 
-// The platform snapshot is stable for the page lifetime and needs no listeners.
-function subscribeToPlatform() {
+// OS detection is static and this visit's progress changes are managed in React state.
+function subscribeToBrowserSnapshot() {
   return () => undefined;
 }
 
-/** Give learners five pre-flight setup habits and an OS reference. Self-checks stay in page memory. */
-export function WorkspaceSetup() {
-  const [chosenOs, setChosenOs] = useState<OperatingSystem | null>(null);
-  const [checked, setChecked] = useState<string[]>([]);
-  // SSR and the initial hydration pass both read Windows. React reads browser hints only from the client snapshot.
-  const detectedOs = useSyncExternalStore(subscribeToPlatform, detectOperatingSystem, () => defaultOperatingSystem);
-  const os = chosenOs ?? detectedOs;
-
-  const habits: SetupHabit[] = [
+function setupHabits(os: OperatingSystem): SetupHabit[] {
+  return [
     {
-      id: "workflow-windows",
+      shortTitle: "Windows",
       title: "Arrange your comparison windows",
       why: "A readable layout makes it easier to compare both responses against the same rubric.",
       tips: [
@@ -73,11 +60,10 @@ export function WorkspaceSetup() {
       ],
       rushed: "Two windows overlap. Response B is partly hidden and the rubric is behind another window.",
       ready: "One window shows the task and rubric, the other shows the responses. Both are readable without dragging windows around.",
-      checkLabel: "I practiced arranging a readable comparison workspace.",
       reference: <WindowShortcuts os={os} />,
     },
     {
-      id: "workflow-navigation",
+      shortTitle: "Tabs and zoom",
       title: "Set up tabs and zoom",
       why: "A predictable tab order and readable text make it easier to return to the task.",
       tips: [
@@ -86,24 +72,22 @@ export function WorkspaceSetup() {
       ],
       rushed: "The task is buried among unrelated tabs, and the rubric text is too small to read comfortably.",
       ready: "The task is the first tab, the source is beside it, and the text is large enough to read without sideways scrolling.",
-      checkLabel: "I practiced keyboard and tab navigation at a readable zoom.",
       reference: <BrowserShortcuts os={os} />,
     },
     {
-      id: "workflow-notes",
+      shortTitle: "Scratchpad",
       title: "Prepare a scratchpad",
       why: "A simple note template gives each observation a place as you read.",
       tips: [
-        ["Start with four labels.", "Add Claim, Source, Evidence and Open question. Keep copied text separate from your observations."],
+        ["Start with four labels.", "Add Claim, Source, Uncertainty and Judgment. Keep copied text separate from your observations."],
         ["Keep practice notes temporary.", "Use only synthetic task details. The practice scratchpad clears on reload and isn’t saved with drafts. Include any evidence needed for review in your written justification."],
       ],
       rushed: "A single paragraph mixes a quoted passage with a guess, and the source is missing.",
-      ready: "The scratchpad has a line for the claim, the source location, the exact quotation and a separate open question.",
-      checkLabel: "I practiced separating evidence from assumptions in a scratchpad.",
+      ready: "The scratchpad records the claim, the source location, an open question and a judgment based on the passage.",
     },
     {
-      id: "workflow-time",
-      title: "Plan time for each part",
+      shortTitle: "Time split",
+      title: "Plan your time split",
       why: "A flexible plan leaves room to check a claim and reread your explanation.",
       tips: [
         ["Sketch the order before starting.", "Make room for reading the task and rubric, comparing responses, verifying claims and reviewing your explanation."],
@@ -111,11 +95,10 @@ export function WorkspaceSetup() {
       ],
       rushed: "Most of the available time goes to polishing the first paragraph, leaving no time to check a key claim.",
       ready: "The plan reserves a separate pass for an uncertain claim and a final pass to review the explanation.",
-      checkLabel: "I practiced planning time for reading, verification and review.",
     },
     {
-      id: "workflow-verification",
-      title: "Set up for claim verification",
+      shortTitle: "Verification",
+      title: "Set up claim verification",
       why: "With the task, source and notes open, you can look up a claim without losing your place.",
       tips: [
         ["Open two dedicated tabs.", "Keep the task and rubric in one tab and the primary source in the next."],
@@ -124,13 +107,97 @@ export function WorkspaceSetup() {
       ],
       rushed: "The source replaces the task tab, and the evaluator scrolls through it looking for a date.",
       ready: "The task and rubric stay open. In the source tab, Find jumps to “effective date,” and the scratchpad is ready for the passage and section heading.",
-      checkLabel: "I practiced looking up a claim with the task, source and scratchpad open.",
     },
   ];
+}
+
+/** Guide learners through unscored pre-flight setup. Completion is browser-only and carries no assessment credit. */
+export function WorkspaceSetup() {
+  const [chosenOs, setChosenOs] = useState<OperatingSystem | null>(null);
+  const [localProgress, setLocalProgress] = useState<WalkthroughProgress | null>(null);
+  const [resetCount, setResetCount] = useState(0);
+  const [navigation, setNavigation] = useState<{ target: "step" | "finish"; announcement: string } | null>(null);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const finishHeading = useRef<HTMLHeadingElement>(null);
+
+  // SSR and initial hydration use Windows and Step 1. The client snapshot reads browser data afterward.
+  const detectedOs = useSyncExternalStore(subscribeToBrowserSnapshot, detectOperatingSystem, () => defaultOperatingSystem);
+  const savedProgress = useSyncExternalStore(subscribeToBrowserSnapshot, readWalkthroughProgress, () => null);
+  const os = chosenOs ?? detectedOs;
+  const habits = setupHabits(os);
+  const stepCount = habits.length;
+  const progress = localProgress ?? parseWalkthroughProgress(savedProgress, stepCount);
+  const { activeStep, completed, finished } = progress;
+  const habit = habits[activeStep];
+  const isLast = activeStep === stepCount - 1;
+  const isComplete = completed.includes(activeStep);
+  const allComplete = completed.length === stepCount;
+  const position = (step: number) => `Step ${step + 1} of ${stepCount}`;
+
+  // Move focus after an explicit action and let the persistent live region announce the new position.
+  // Restoring progress after hydration leaves focus where the learner put it.
+  useEffect(() => {
+    if (navigation) (navigation.target === "finish" ? finishHeading : stepHeading).current?.focus();
+  }, [navigation]);
+
+  function updateProgress(next: WalkthroughProgress) {
+    setLocalProgress(next);
+    saveWalkthroughProgress(next);
+  }
+
+  function goTo(step: number) {
+    if (step === activeStep) return;
+    updateProgress({ ...progress, activeStep: step });
+    setNavigation({ target: "step", announcement: position(step) });
+  }
+
+  function markComplete() {
+    if (!isComplete) updateProgress({ ...progress, completed: [...completed, activeStep] });
+  }
+
+  function finish() {
+    if (!allComplete) return;
+    updateProgress({ ...progress, finished: true });
+    setNavigation({ target: "finish", announcement: `All ${stepCount} setup steps are complete.` });
+  }
+
+  function reset() {
+    saveWalkthroughProgress(null);
+    setLocalProgress(initialWalkthrough);
+    setResetCount((count) => count + 1);
+    setNavigation({ target: "step", announcement: `Walkthrough reset. ${position(0)}.` });
+  }
 
   return (
     <section aria-labelledby="workflow-setup-heading">
       <h2 id="workflow-setup-heading">Set up your workspace</h2>
+      <div className="workflow-progress">
+        <div>
+          <p><strong>{completed.length} of {stepCount} complete</strong></p>
+          <p className="workflow-storage-note">Your progress stays in this browser.</p>
+        </div>
+        <button className="text-button" type="button" onClick={reset}>Reset walkthrough</button>
+      </div>
+      <nav className="workflow-step-nav" aria-label="Setup steps">
+        <ol className="workflow-step-list">
+          {habits.map((item, index) => {
+            const done = completed.includes(index);
+            return (
+              <li key={item.shortTitle}>
+                <button type="button" aria-current={activeStep === index ? "step" : undefined} aria-controls="workflow-active-step"
+                  onClick={() => goTo(index)}>
+                  <span>Step {index + 1}: {item.shortTitle}{done && <span className="sr-only">, complete</span>}</span>
+                  {done && <span className="workflow-done" aria-hidden="true">✓</span>}
+                  {activeStep === index && <span className="workflow-current" aria-hidden="true">Current step</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="Walkthrough updates">
+        {navigation?.announcement ?? ""}
+      </p>
       <fieldset className="workflow-os">
         <legend>Operating system</legend>
         <div className="flex flex-wrap gap-2">
@@ -142,16 +209,36 @@ export function WorkspaceSetup() {
           ))}
         </div>
       </fieldset>
-      <div className="grid gap-4">
-        {habits.map((habit) => (
-          <SetupCard key={habit.id} habit={habit} checked={checked.includes(habit.id)} onCheck={(isChecked) => {
-            setChecked((previous) => isChecked ? [...previous, habit.id] : previous.filter((id) => id !== habit.id));
-          }} />
-        ))}
-      </div>
-      <div className="workflow-check-summary">
-        <p role="status" aria-live="polite" aria-atomic="true">{checked.length} of {habits.length} workflow habits checked. Checks clear on reload.</p>
-        <button className="secondary-button" type="button" disabled={!checked.length} onClick={() => setChecked([])}>Reset self-check</button>
+      <section id="workflow-active-step" className="workflow-setup-card" aria-labelledby="workflow-step-heading">
+        <p className="workflow-step-position">{position(activeStep)}</p>
+        <h3 id="workflow-step-heading" ref={stepHeading} tabIndex={-1}>{habit.title}</h3>
+        <SetupGuide habit={habit} />
+        <SetupMicroCheck key={`${activeStep}-${resetCount}`} step={activeStep} os={os} completed={isComplete} onComplete={markComplete} />
+        {!isComplete && <p className="workflow-nav-hint">Try the setup check to mark this step complete, or choose any step above.</p>}
+        {isComplete && isLast && !allComplete && <p className="workflow-nav-hint">Complete all five setup checks to finish. You can return to any step above.</p>}
+        <div className="workflow-step-actions">
+          <button className="secondary-button workflow-fit-button" type="button" disabled={activeStep === 0}
+            onClick={() => goTo(activeStep - 1)}>Previous step</button>
+          {isLast ? (
+            <button className="primary-button workflow-fit-button" type="button" disabled={!allComplete} onClick={finish}>Finish walkthrough</button>
+          ) : (
+            <button className="primary-button workflow-fit-button" type="button" disabled={!isComplete} onClick={() => goTo(activeStep + 1)}>
+              Complete &amp; continue to Step {activeStep + 2} <span aria-hidden="true">→</span>
+            </button>
+          )}
+        </div>
+      </section>
+      <div className={finished ? "workflow-finish-panel" : "workflow-exit"}>
+        {finished && (
+          <>
+            <h3 ref={finishHeading} tabIndex={-1}>Walkthrough complete</h3>
+            <p>All five setup checks are complete. Try the same setup in a Generalist practice task.</p>
+          </>
+        )}
+        <div className="workflow-actions">
+          <Link href="/practice" className="primary-button button-link">Try these habits in Generalist practice</Link>
+          <Link href="/dashboard" className="inline-link">Return to dashboard</Link>
+        </div>
       </div>
     </section>
   );

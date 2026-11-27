@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WorkflowLabPage from "./workflow-lab/page";
@@ -18,18 +18,18 @@ beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ id: "guar
 afterEach(cleanup);
 
 describe("optional exploration boundaries and semantics", () => {
-  it("frames the lab as pre-flight setup with five worked examples and a collapsed lesson reference", async () => {
+  it("frames the lab as pre-flight setup with one active example and a collapsed lesson reference", async () => {
     const { container } = render(await WorkflowLabPage());
     expect(screen.getByText(/optional, unscored pre-flight workspace setup guide/)).toBeDefined();
     const setup = screen.getByRole("region", { name: "Set up your workspace" });
-    const cards = within(setup).getAllByRole("region");
-    expect(cards).toHaveLength(5);
-    for (const card of cards) {
-      expect(within(card).getByText("Why this matters.")).toBeDefined();
-      expect(within(card).getByText("DEMO - SYNTHETIC")).toBeDefined();
-      expect(within(card).getByText("Rushed setup")).toBeDefined();
-      expect(within(card).getByText("Ready workspace")).toBeDefined();
-    }
+    const steps = within(setup).getByRole("navigation", { name: "Setup steps" });
+    expect(within(steps).getAllByRole("button")).toHaveLength(5);
+    const panel = within(setup).getByRole("region", { name: "Arrange your comparison windows" });
+    expect(within(setup).queryByRole("region", { name: "Set up tabs and zoom" })).toBeNull();
+    expect(within(panel).getByText("Why this matters.")).toBeDefined();
+    expect(within(panel).getByText("DEMO - SYNTHETIC")).toBeDefined();
+    expect(within(panel).getByText("Rushed setup")).toBeDefined();
+    expect(within(panel).getByText("Ready workspace")).toBeDefined();
     expect(screen.getByRole("link", { name: "Try these habits in Generalist practice" }).getAttribute("href")).toBe("/practice");
     expect(screen.getByRole("link", { name: "Return to dashboard" }).getAttribute("href")).toBe("/dashboard");
     const reference = screen.getByText("Reference: The Seven-Step Evaluation Method (taught in the lessons)");
@@ -39,21 +39,12 @@ describe("optional exploration boundaries and semantics", () => {
     expect(screen.getByRole("link", { name: "Open the Generalist lessons" }).getAttribute("href")).toBe("/learn");
   });
 
-  it("offers a labeled, reversible self-check with polite feedback and explicit optional/rules notices", async () => {
+  it("keeps the setup checks client-only and preserves optional and assessment rules disclosures", async () => {
     render(await WorkflowLabPage());
     expect(screen.getByText(/not required to earn the Generalist credential/).textContent).toContain("optional");
     expect(screen.getByRole("complementary").textContent).toContain("third-party assessment or employer");
-    const controls = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(controls).toHaveLength(5);
-    for (const control of controls) {
-      expect(control.labels?.[0].textContent?.length).toBeGreaterThan(10);
-      expect(document.getElementById(control.getAttribute("aria-describedby")!)).not.toBeNull();
-    }
-    fireEvent.click(controls[0]); fireEvent.click(controls[4]);
-    expect(screen.getByRole("status").textContent).toContain("2 of 5");
-    expect(screen.getByRole("status").getAttribute("aria-live")).toBe("polite");
-    fireEvent.click(screen.getByRole("button", { name: "Reset self-check" }));
-    expect(controls.every((control) => !control.checked)).toBe(true);
+    await userEvent.setup().click(screen.getByRole("radio", { name: "One window is easier to read" }));
+    expect(screen.getByText("1 of 5 complete")).toBeDefined();
     expect(document.querySelector("form")).toBeNull();
     expect(mocks.list).not.toHaveBeenCalled(); expect(mocks.load).not.toHaveBeenCalled();
   });

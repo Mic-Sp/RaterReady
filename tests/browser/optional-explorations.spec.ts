@@ -20,7 +20,8 @@ async function accessible(page: Page) {
   await expectSyntheticBadges(page);
 }
 
-test("optional workflow guide supports a keyboard self-check, rule notices and dashboard return", async ({ page }) => {
+test("optional workflow walkthrough supports keyboard setup checks, persistence, reset and reflow", async ({ page }) => {
+  test.setTimeout(120000);
   const db = new PrismaClient({ datasourceUrl: process.env.TEST_DATABASE_URL });
   try {
     const user = await db.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } });
@@ -32,20 +33,95 @@ test("optional workflow guide supports a keyboard self-check, rule notices and d
     await expect(page.getByRole("heading", { name: "Workflow Skills Lab", exact: true })).toBeVisible();
     await expect(page.getByText(/not required to earn the Generalist credential/)).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Follow the assessment’s own rules" })).toContainText("third-party assessment or employer");
-    await expect(page.getByRole("checkbox")).toHaveCount(5);
-    const checkbox = page.getByRole("checkbox").first();
-    await checkbox.focus(); await page.keyboard.press("Space");
-    await expect(checkbox).toBeChecked();
-    await expect(page.getByRole("status")).toContainText("1 of 5 workflow habits checked");
-    await page.getByRole("checkbox").last().check();
-    await expect(page.getByRole("status")).toContainText("2 of 5 workflow habits checked");
+    const steps = page.getByRole("navigation", { name: "Setup steps" });
+    const step = (number: number) => steps.getByRole("button", { name: new RegExp(`^Step ${number}:`) });
+    const next = (number: number) => page.getByRole("button", { name: `Complete & continue to Step ${number}` });
+    const updates = page.getByRole("status", { name: "Walkthrough updates" });
+    const feedback = page.getByRole("status", { name: "Setup check feedback" });
+    const setup = page.getByRole("region", { name: "Set up your workspace" });
+    const os = setup.getByRole("group", { name: "Operating system" });
+    await expect(steps.getByRole("button")).toHaveCount(5);
+    await expect(step(1)).toHaveAttribute("aria-current", "step");
+    await expect(next(2)).toBeDisabled();
+    const windows = os.getByRole("radio", { name: "Windows" });
+    await windows.check();
+    await windows.press("ArrowRight");
+    await expect(os.getByRole("radio", { name: "macOS" })).toBeChecked();
+    await expect(setup.getByRole("table", { name: "macOS window shortcuts" }).locator("kbd > kbd").first()).toHaveText("Fn");
     await accessible(page);
-    await page.getByRole("button", { name: "Reset self-check", exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("0 of 5 workflow habits checked");
+
+    await page.getByRole("radio", { name: "A response is cut off" }).check();
+    await expect(feedback).toContainText("Widen the windows");
+    await expect(next(2)).toBeDisabled();
+    const readable = page.getByRole("radio", { name: "Both snapped windows are readable" });
+    await readable.press("Space");
+    await expect(readable).toBeChecked();
+    await expect(step(1)).toHaveAccessibleName(/complete/);
+    await next(2).press("Enter");
+    await expect(page.getByRole("heading", { name: "Set up tabs and zoom" })).toBeFocused();
+    await expect(updates).toHaveAttribute("aria-live", "polite");
+    await expect(updates).toHaveText("Step 2 of 5");
+    await expect(setup.getByRole("table", { name: "macOS browser shortcuts" })).toBeVisible();
+    await expect(page.getByText("1 of 5 complete")).toBeVisible();
+
+    await page.reload();
+    await expect(step(2)).toHaveAttribute("aria-current", "step");
+    await expect(step(1)).toHaveAccessibleName(/complete/);
+    await expect(page.getByText("1 of 5 complete")).toBeVisible();
+    await page.getByRole("button", { name: "Previous step" }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Arrange your comparison windows" })).toBeFocused();
+    await step(5).click();
+    await expect(page.getByRole("button", { name: "Finish walkthrough" })).toBeDisabled();
+    await step(2).click();
+
+    await page.getByRole("radio", { name: "Task and rubric first, source next, both readable" }).check();
+    await next(3).click();
+    await page.getByRole("button", { name: "Compare with model" }).click();
+    await expect(feedback).toContainText("Add a short note under Claim");
+    for (const label of ["Claim", "Source", "Uncertainty", "Judgment"]) {
+      await page.getByRole("textbox", { name: label }).fill("Temporary synthetic practice note");
+    }
+    await page.getByRole("button", { name: "Compare with model" }).click();
+    await expect(page.getByText("Worked model")).toBeVisible();
+    await expect(page.getByText("3 of 5 complete")).toBeVisible();
+    await page.reload();
+    await expect(step(3)).toHaveAttribute("aria-current", "step");
+    await expect(page.getByRole("textbox", { name: "Claim" })).toHaveValue("");
+    await expect(page.getByText("3 of 5 complete")).toBeVisible();
+    await next(4).click();
+    await page.getByRole("radio", { name: /3 minutes Understand/ }).check();
+    await next(5).click();
+    await os.getByRole("radio", { name: "macOS" }).check();
+    const lookup = setup.getByRole("region", { name: "Setup check" }).getByText(/Try it now/).locator("..");
+    await expect(lookup.locator("kbd > kbd")).toHaveText(["Cmd", "F"]);
+    await page.getByRole("radio", { name: "June 3", exact: true }).check();
+    await expect(feedback).toContainText("notice was drafted");
+    await page.getByRole("radio", { name: "June 18" }).check();
+    await expect(page.getByText("5 of 5 complete")).toBeVisible();
+    await page.getByRole("button", { name: "Finish walkthrough" }).click();
+    const complete = page.getByRole("heading", { name: "Walkthrough complete" });
+    await expect(complete).toBeFocused();
+    await expect(complete.locator("..").getByRole("link", { name: "Try these habits in Generalist practice" })).toHaveAttribute("href", "/practice");
+    await accessible(page);
+
+    await page.reload();
+    await expect(complete).toBeVisible();
+    await page.getByRole("button", { name: "Reset walkthrough" }).click();
+    await expect(page.getByText("0 of 5 complete")).toBeVisible();
+    await expect(complete).toHaveCount(0);
+    await expect(updates).toHaveText("Walkthrough reset. Step 1 of 5.");
+    await page.reload();
+    await expect(step(1)).toHaveAttribute("aria-current", "step");
+    await expect(page.getByText("0 of 5 complete")).toBeVisible();
+
     await page.setViewportSize({ width: 320, height: 740 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await accessible(page);
+    for (const number of [1, 2, 3, 4, 5]) {
+      await step(number).click();
+      await expect(step(number)).toHaveAttribute("aria-current", "step");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+      await accessible(page);
+    }
     await page.getByRole("link", { name: "Return to dashboard", exact: true }).click();
     await expect(page).toHaveURL("/dashboard");
     expect(await db.practiceProgress.findMany({ where: { candidateId: user.id } })).toEqual(progress);

@@ -110,9 +110,11 @@ export function BrowserShortcuts({ os }: { os: OperatingSystem }) {
         ["Next tab", os === "macOS" ? ["Cmd", "Option", "Right Arrow"] : ["Ctrl", "Tab"]],
         ["Zoom in", [modifier, "+"]],
         ["Zoom out", [modifier, "-"]],
+        ["Quick zoom", os === "macOS" ? ["Trackpad pinch"] : ["Ctrl", "Scroll wheel"]],
         ["Reset zoom", [modifier, "0"]],
       ]} />
       <p className="workflow-shortcut-note">If a shortcut differs in your browser, use its tab or zoom controls.</p>
+      <p className="workflow-try"><strong>Try it now.</strong> Open a second browser tab and use the Next tab shortcut to return here. Adjust the zoom until this guide is easy to read.</p>
     </div>
   );
 }

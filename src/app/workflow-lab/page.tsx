@@ -23,10 +23,6 @@ export default async function WorkflowLabPage() {
         <p>A third-party assessment or employer may restrict browsing, notes, windows or tools. RaterReady does not authorize tools on someone else’s assessment.</p>
       </aside>
       <WorkspaceSetup />
-      <div className="workflow-actions">
-        <Link href="/practice" className="primary-button button-link">Try these habits in Generalist practice</Link>
-        <Link href="/dashboard" className="inline-link">Return to dashboard</Link>
-      </div>
       <EvaluationReference
         summary="Reference: The Seven-Step Evaluation Method (taught in the lessons)"
         intro={<Link href="/learn" className="inline-link">Open the Generalist lessons</Link>}
