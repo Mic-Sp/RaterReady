@@ -180,9 +180,8 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: 
 .lesson-response-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-block: 1.25rem; }
 .lesson-response-grid > section { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--surface); }
 .lesson-response-grid > section h3 { margin-top: 0; }
-.lesson-pagination { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
 .lesson-reader [aria-current="page"] { font-weight: 750; text-decoration-thickness: 3px; }
-@media (min-width: 52rem) { .lesson-response-grid, .lesson-pagination { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 52rem) { .lesson-response-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 40rem) {
   /* Fixed small gutters leave room for words when a learner doubles text size at 320px. */
   .authenticated-shell:has(.lesson-reader) { width: calc(100% - 24px); }
@@ -556,3 +555,46 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
   .workspace-bar-meta .competency-tag, .workspace-bar-meta .status-badge, .workspace-bar-status .status-badge { font-size: .75rem; }
   .workspace-quick-reference > summary { padding: 8px; font-size: .75rem; }
 }
+
+/* Keep Explore in normal flow so the disclosure and its links reflow together. */
+.candidate-nav { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .5rem 1rem; }
+.candidate-nav > .navigation-links { display: flex; }
+.navigation-explore { min-width: 0; }
+.navigation-explore summary { min-height: 2.75rem; padding: .6rem .85rem; border: 1px solid var(--border); border-radius: .6rem; color: var(--accent-hover); cursor: pointer; font-size: .9375rem; font-weight: 700; }
+.navigation-explore .navigation-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; margin-top: .45rem; }
+.navigation-explore:has([aria-current]) summary { background: var(--surface-indigo); border-color: var(--accent); text-decoration: underline; }
+
+.dashboard-next { margin-top: 1rem; padding: var(--space-card); border: 1px solid var(--accent); border-radius: var(--radius-card); background: var(--surface-indigo); }
+.learning-page .dashboard-journey { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .5rem; margin-bottom: .8rem; padding: 0; list-style: none; }
+.learning-page .dashboard-journey li { min-width: 0; margin: 0; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); }
+.learning-page .dashboard-journey [aria-current="step"] { border-color: var(--accent); color: var(--accent-hover); font-weight: 700; }
+.dashboard-journey strong { display: block; font-size: .8125rem; }
+.dashboard-next .primary-button { width: fit-content; max-width: 100%; }
+.learning-section-title { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .7rem; margin-bottom: .65rem; }
+.learning-page .learning-section-title h2 { margin: 0; }
+.dashboard-reference .rubric-guide { margin-top: .5rem; }
+.reading-status { display: inline-block; padding-inline: .2rem; color: var(--muted); font-weight: 700; }
+.reading-status[data-complete="true"], .lesson-marked { color: var(--success); font-weight: 700; }
+.learning-independence-note { margin-top: 1.25rem; color: var(--muted); font-size: .9375rem; }
+
+.learning-page .curriculum-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .3rem; max-width: 42rem; margin-top: 1rem; padding: .3rem; list-style: none; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface); }
+.learning-page .curriculum-levels li { min-width: 0; margin: 0; }
+.curriculum-levels a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; height: 100%; padding: .4rem .5rem; border: 1px solid transparent; border-radius: .48rem; color: var(--accent-hover); text-align: center; }
+.curriculum-levels a:hover { background: var(--surface-muted); }
+.curriculum-levels a[aria-current="page"] { border-color: var(--accent); background: var(--surface-indigo); font-weight: 700; text-decoration: underline; text-underline-offset: .2rem; }
+
+.lesson-mini-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .3rem 1rem; margin-bottom: 1rem; padding: .55rem .75rem; border: 1px solid var(--border); border-radius: .6rem; background: var(--surface); font-size: .875rem; line-height: 1.45; }
+.lesson-mini-progress { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .55rem; color: var(--muted); }
+.lesson-mini-progress progress { width: 4.5rem; max-width: 100%; height: .55rem; margin: 0; }
+/* Narrow and short viewports keep the mini-header in flow rather than obscuring zoomed content. */
+@media (min-width: 36rem) and (min-height: 32rem) {
+  .lesson-mini-header { position: sticky; top: 0; z-index: 3; box-shadow: var(--shadow-xs); }
+  .lesson-reader :focus-visible { scroll-margin-block-start: 6rem; }
+}
+.lesson-background .learning-section { margin-top: .7rem; padding-top: .7rem; }
+.lesson-action-bar { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: .8rem; }
+.lesson-action-bar form, .lesson-action-bar .button-link { margin: 0; }
+.lesson-action-bar .button-link, .lesson-practice-card .button-link { width: fit-content; max-width: 100%; }
+.lesson-practice-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
+.lesson-practice-card ul { margin-top: .65rem; }
+.lesson-footer nav a { text-decoration: underline; text-underline-offset: .2rem; }

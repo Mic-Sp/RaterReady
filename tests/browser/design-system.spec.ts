@@ -87,7 +87,7 @@ test("polished chrome and card tiers preserve keyboard access, disclosures, tabl
       if (["/practice", "/technical-preview", "/dashboard"].includes(path)) await cardHierarchy(page);
       await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
       await accessible(page);
-      await expect(nav.getByRole("link", { name: "Qualification Exam", exact: true })).toBeVisible();
+      await expect(nav.getByRole("link", { name: "Exam", exact: true })).toBeVisible();
       await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     }
   } finally { await db.$disconnect(); }

@@ -162,7 +162,7 @@ test("key-free accessible A/B practice saves drafts, accepts approved ties and p
     await page.getByRole("link", { name: "Return to dashboard", exact: true }).click();
     await expect(page.getByText("1 of 6 competency areas practiced", { exact: true })).toBeVisible();
     await expect(page.getByText("2 practice submission(s)", { exact: true })).toBeVisible();
-    await expect(page.getByText("Not yet assessed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "View exam readiness", exact: true })).toBeVisible();
     expect(await db.moduleProgress.findMany({ where: { candidateId: learner.id }, orderBy: { id: "asc" } })).toEqual(lessonBefore);
   } finally { await db.$disconnect(); }
 });

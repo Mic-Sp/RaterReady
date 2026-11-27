@@ -44,13 +44,13 @@ test("direct advanced entry, optional reference and progress-preserving level sw
     await checkAccessibility(page);
     await page.getByRole("button", { name: "Choose Advanced Calibration", exact: true }).click();
     await expect(page.getByLabel("Learning level", { exact: true })).toHaveValue("ADVANCED");
-    await page.getByRole("link", { name: "Resume learning: Calibrate interpretations of an ambiguous rubric", exact: true }).click();
+    await page.getByRole("region", { name: "Six-module curriculum" }).getByRole("link", { name: "Read lesson 1", exact: true }).click();
     await page.getByRole("button", { name: "Mark lesson complete", exact: true }).click();
     await expect(page.getByText("Advanced Calibration · 1 of 6 lessons marked complete", { exact: false })).toBeVisible();
     await page.getByLabel("Learning level", { exact: true }).selectOption("FOUNDATIONS");
     await page.getByRole("button", { name: "Save learning level", exact: true }).click();
     await expect(page.getByText("Foundations · 0 of 6 lessons marked complete", { exact: false })).toBeVisible();
-    await expect(page.getByText("Completed at: Advanced Calibration", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Six-module curriculum" }).getByText("Reading not yet complete", { exact: true })).toHaveCount(6);
     await page.getByLabel("Learning level", { exact: true }).selectOption("ADVANCED");
     await page.getByRole("button", { name: "Save learning level", exact: true }).click();
     // Wait for the Server Action's persisted result before deliberately reloading the page.
@@ -59,7 +59,7 @@ test("direct advanced entry, optional reference and progress-preserving level sw
     await expect(page.getByText("Advanced Calibration · 1 of 6 lessons marked complete", { exact: false })).toBeVisible();
     expect(await db.moduleProgress.count({ where: { candidateId } })).toBe(1);
     await expect(page.getByRole("heading", { name: "Generalist Qualification Exam readiness", exact: true })).toBeVisible();
-    await expect(page.getByText("Not yet assessed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "View exam readiness", exact: true })).toBeVisible();
     await checkAccessibility(page);
     await page.screenshot({ path: test.info().outputPath("learning-dashboard.png"), fullPage: true });
     await page.setViewportSize({ width: 320, height: 740 });

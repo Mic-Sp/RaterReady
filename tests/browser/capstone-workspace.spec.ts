@@ -56,7 +56,7 @@ test("six-slot autosave reloads, suppresses coaching and locks a confirmed 95-po
     await expect(workspaceBar).toContainText("Coaching stays disabled");
     await page.keyboard.press("Escape");
     await expect(quickReference).toBeFocused();
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Qualification Exam", exact: true })).toHaveAttribute("aria-current", "location");
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Exam", exact: true })).toHaveAttribute("aria-current", "location");
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
     await expect(page.getByText("Seven-Step Independent Evaluation Method", { exact: false })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Understanding Rubrics & Evaluation Criteria" })).toHaveCount(0);

@@ -19,7 +19,7 @@ test("readiness reports missing Generalist submissions, pinned policy and accomm
     await clearCapstones(db, id); await setCoverage(db, id, false);
     await db.candidateProfile.update({ where: { userId: id }, data: { onboardingCompletedAt: new Date(), timeMultiplier: 1 } });
     await signIn(page, "demo-elena");
-    await page.getByRole("link", { name: "Check Generalist Qualification Exam readiness", exact: true }).click();
+    await page.getByRole("link", { name: "View exam readiness", exact: true }).click();
     await expect(page.getByText(/Fresh form capacity: 4\./)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Generalist practice still needed", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Required Generalist practice coverage" }).getByRole("listitem").filter({ hasText: "Practice still needed" })).toHaveCount(6);

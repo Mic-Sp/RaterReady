@@ -17,15 +17,21 @@ describe("shared authenticated navigation", () => {
   it("exposes all candidate destinations, identity and one sign-out control", async () => {
     render(<AuthenticatedNavigation user={candidate} />);
     const nav = screen.getByRole("navigation", { name: "Main navigation" });
-    expect(within(nav).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
-      ["Dashboard", "/dashboard"], ["Practice", "/practice"], ["Workflow Lab", "/workflow-lab"],
-      ["Technical Preview", "/technical-preview"], ["Qualification Exam", "/capstone"], ["Opportunities", "/opportunities"],
+    const [core] = within(nav).getAllByRole("list");
+    expect(within(core).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Dashboard", "/dashboard"], ["Learn", "/learn"], ["Practice", "/practice"], ["Exam", "/capstone"], ["Opportunities", "/opportunities"],
     ]);
     expect(within(nav).getByRole("link", { name: "Practice", current: "location" })).toBeDefined();
     expect(screen.getByText(candidate.name)).toBeDefined();
     expect(screen.getByText("Candidate")).toBeDefined();
     expect(screen.getByText("DEMO - SYNTHETIC")).toBeDefined();
     const user = userEvent.setup();
+    const explore = within(nav).getByText("Explore", { exact: true });
+    expect(explore.closest("details")?.open).toBe(false);
+    await user.click(explore);
+    expect(explore.closest("details")?.open).toBe(true);
+    const optional = within(nav).getByRole("list", { name: "Optional tools" });
+    expect(within(optional).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/workflow-lab", "/technical-preview"]);
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(mocks.signOut).toHaveBeenCalled();
   });

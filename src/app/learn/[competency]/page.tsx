@@ -19,7 +19,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const lessons = level.data === profile.selectedLevel ? profile.curriculum : await getCurriculumLessons(prisma, level.data);
   const lesson = lessons.find((item) => item.competency === code.data);
   if (!lesson) notFound();
-  const completed = profile.moduleProgress.some((item) => item.competency === code.data && item.level === level.data);
+  const completed = new Set(profile.moduleProgress.filter((item) => item.level === level.data).map((item) => item.competency));
   // Reuse the key-free published Generalist catalog. Prefer this level, then offer an existing
   // exercise at another level rather than inventing scenarios or exposing any secure bank.
   const catalog = await listPracticeScenarios(prisma);
@@ -29,5 +29,5 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
     return scenario ? [scenario] : [];
   });
   const relatedScenarios = [...new Map(related.map((item) => [item.id, item])).values()];
-  return <LessonReader lesson={lesson} lessons={lessons} completed={completed} relatedScenarios={relatedScenarios} />;
+  return <LessonReader lesson={lesson} lessons={lessons} completed={completed.has(code.data)} completedCount={completed.size} relatedScenarios={relatedScenarios} />;
 }

@@ -24,7 +24,7 @@ test("a provisioned live candidate has Closed Alpha account labels and separate 
     await expect(page.getByLabel("Closed alpha account access")).toHaveCount(0);
     await expect(page.getByLabel("Synthetic demonstration access")).toHaveCount(0);
     await expect(page.locator("header [data-synthetic-badge]")).toHaveCount(0);
-    await page.getByRole("link", { name: "Qualification Exam", exact: true }).click();
+    await page.getByRole("link", { name: "Exam", exact: true }).click();
     await expect(page).toHaveURL("/capstone");
     await expect(page.locator("main [data-synthetic-badge]").first()).toBeVisible();
     await page.getByRole("link", { name: "Practice", exact: true }).click();

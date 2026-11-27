@@ -249,7 +249,7 @@ test("Technical Preview reuses accessible practice scoring with approved ties an
     await page.getByRole("link", { name: "Browse Technical Preview exercises", exact: true }).click();
     await expect(page.locator(".practice-catalog > li")).toHaveCount(5);
     await page.getByRole("link", { name: "Return to dashboard", exact: true }).click();
-    await expect(page.getByText("Not yet assessed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "View exam readiness", exact: true })).toBeVisible();
     expect(await db.candidateProfile.findUniqueOrThrow({ where: { userId: user.id }, include: { moduleProgress: true, practiceProgress: true, diagnostic: true } })).toEqual(profile);
     expect(await db.scenarioExposure.findMany({ where: { candidateId: user.id }, orderBy: { familyId: "asc" } })).toEqual(exposures);
     expect(await db.credential.count({ where: { attempt: { candidateId: user.id } } })).toBe(credentials);

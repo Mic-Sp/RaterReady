@@ -36,9 +36,16 @@ test("candidate navigation persists across all learning views, with wide layouts
     await signIn(page, "demo-marcus");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
     const destinations = [
-      ["Dashboard", "/dashboard"], ["Practice", "/practice"], ["Workflow Lab", "/workflow-lab"],
-      ["Technical Preview", "/technical-preview"], ["Qualification Exam", "/capstone"], ["Opportunities", "/opportunities"],
+      ["Dashboard", "/dashboard"], ["Learn", "/learn"], ["Practice", "/practice"], ["Exam", "/capstone"], ["Opportunities", "/opportunities"],
     ];
+    const explore = nav.locator("summary", { hasText: "Explore" });
+    await expect(nav.getByRole("link", { name: "Workflow Lab", exact: true })).toBeHidden();
+    await explore.press("Enter");
+    const optional = nav.getByRole("list", { name: "Optional tools" });
+    await expect(optional.getByRole("link")).toHaveCount(2);
+    await optional.getByRole("link", { name: "Workflow Lab" }).click();
+    await expect(page).toHaveURL("/workflow-lab");
+    await expect(optional.getByRole("link", { name: "Workflow Lab" })).toHaveAttribute("aria-current", "page");
     for (const [label, path] of destinations) {
       await nav.getByRole("link", { name: label, exact: true }).click();
       await expect(page).toHaveURL(path);
@@ -55,8 +62,10 @@ test("candidate navigation persists across all learning views, with wide layouts
       await noOverflow(page);
     }
     await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await page.getByRole("link", { name: "Understanding Rubrics & Evaluation Criteria", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Understanding Rubrics & Evaluation Criteria" })).toContainText("Safety & stated policy");
+    const rubric = page.getByRole("region", { name: "Understanding Rubrics & Evaluation Criteria" });
+    await expect(rubric).toBeHidden();
+    await page.getByRole("main").locator("summary").filter({ hasText: /^Reference$/ }).press("Enter");
+    await expect(rubric).toContainText("Safety & stated policy");
     const progress = await page.getByRole("region", { name: "Your learning progress", exact: true }).boundingBox();
     const level = await page.getByRole("region", { name: "Change your learning level", exact: true }).boundingBox();
     expect(progress!.y).toBe(level!.y);
@@ -70,6 +79,7 @@ test("candidate navigation persists across all learning views, with wide layouts
       await page.goto(path);
       await expect(nav).toBeVisible();
       await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
+      if (path === "/learn/G1") await expect(nav.getByRole("link", { name: "Learn", exact: true })).toHaveAttribute("aria-current", "location");
     }
     expect((await page.locator(".app-shell").boundingBox())!.width).toBe(1280);
     await expect(nav.getByRole("link", { name: "Practice", exact: true })).toHaveAttribute("aria-current", "location");
