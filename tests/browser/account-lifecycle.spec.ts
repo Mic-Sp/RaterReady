@@ -14,14 +14,14 @@ test("a provisioned live candidate has Closed Alpha account labels and separate 
     candidateProfile: { create: { onboardingCompletedAt: new Date() } } } });
   try {
     await page.goto("/login");
-    await expect(page.getByRole("link", { name: "Create a candidate account", exact: true })).toHaveAttribute("href", "/register");
-    await page.getByLabel("Account identifier", { exact: true }).fill(live.accountCode);
+    await expect(page.getByRole("link", { name: "New here? Create a free learner account", exact: true })).toHaveAttribute("href", "/register");
+    await page.getByLabel("Email address or account identifier", { exact: true }).fill(live.accountCode);
     await page.getByLabel("Password", { exact: true }).fill(testPasswords["demo-marcus"]);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL("/dashboard");
     await expect(page.locator(".account-controls")).toContainText("Closed Alpha");
     await expect(page.locator(".account-controls [data-synthetic-badge]")).toHaveCount(0);
-    await expect(page.getByLabel("Closed alpha account access")).toContainText("live closed-alpha account");
+    await expect(page.getByLabel("Closed alpha account access")).toHaveCount(0);
     await expect(page.getByLabel("Synthetic demonstration access")).toHaveCount(0);
     await expect(page.locator("header [data-synthetic-badge]")).toHaveCount(0);
     await page.getByRole("link", { name: "Qualification Exam", exact: true }).click();

@@ -13,7 +13,7 @@ async function register(page: Page, email: string) {
   await page.getByLabel("Email address", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("checkbox").check();
-  await page.getByRole("button", { name: "Create candidate account", exact: true }).click();
+  await page.getByRole("button", { name: "Create learner account", exact: true }).click();
   await expect(page).toHaveURL("/welcome");
   await page.getByRole("button", { name: "Choose Foundations", exact: true }).click();
   await expect(page).toHaveURL("/dashboard?notice=level-saved");
@@ -22,7 +22,7 @@ async function register(page: Page, email: string) {
 /** Exercise the public sign-in path, including the changed credential after recovery. */
 async function login(page: Page, account: string, secret: string) {
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(account);
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill(account);
   await page.getByLabel("Password", { exact: true }).fill(secret);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }

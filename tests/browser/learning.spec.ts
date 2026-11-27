@@ -17,7 +17,7 @@ async function resetLearner(db: PrismaClient, accountCode: string) {
 /** Use the public form to exercise the full server-authorized onboarding entry. */
 async function signIn(page: Page, accountCode: keyof typeof testPasswords) {
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(accountCode);
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill(accountCode);
   await page.getByLabel("Password", { exact: true }).fill(testPasswords[accountCode]);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL("/onboarding");

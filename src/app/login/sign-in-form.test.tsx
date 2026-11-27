@@ -14,8 +14,10 @@ afterEach(cleanup);
 describe("accessible sign-in form", () => {
   it("provides labels, autocomplete, a persistent polite live region, and no registration or role controls", () => {
     render(<SignInForm />);
-    expect(screen.getByLabelText("Account identifier").getAttribute("autocomplete")).toBe("username");
+    expect(screen.getByLabelText("Email address or account identifier").getAttribute("autocomplete")).toBe("username");
     expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("current-password");
+    expect(screen.getByLabelText("Email address or account identifier").hasAttribute("aria-describedby")).toBe(false);
+    expect(screen.getByLabelText("Password").hasAttribute("aria-describedby")).toBe(false);
     expect(screen.getByRole("status").getAttribute("aria-live")).toBe("polite");
     expect(screen.getByRole("button", { name: "Sign in" }).getAttribute("type")).toBe("submit");
     expect(screen.queryByRole("combobox")).toBeNull();
@@ -46,7 +48,7 @@ describe("accessible sign-in form", () => {
     render(<SignInForm />);
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
     await screen.findByText("Enter your account identifier.");
-    const account = screen.getByLabelText("Account identifier");
+    const account = screen.getByLabelText("Email address or account identifier");
     const password = screen.getByLabelText("Password");
     expect(account.getAttribute("aria-invalid")).toBe("true");
     expect(account.getAttribute("aria-describedby")).toContain("account-error");
@@ -58,13 +60,13 @@ describe("accessible sign-in form", () => {
     vi.mocked(submitSignIn).mockImplementation(async (previous) => ({ attempt: previous.attempt + 1, accountCode: "demo-marcus", error: SIGN_IN_FAILURE }));
     const user = userEvent.setup();
     render(<SignInForm />);
-    await user.type(screen.getByLabelText("Account identifier"), "demo-marcus");
+    await user.type(screen.getByLabelText("Email address or account identifier"), "demo-marcus");
     await user.type(screen.getByLabelText("Password"), "incorrect demo password");
     screen.getByRole("button", { name: "Sign in" }).focus();
     await user.keyboard("{Enter}");
     await screen.findByText(SIGN_IN_FAILURE);
     expect(document.activeElement).toBe(screen.getByRole("status"));
-    expect((screen.getByLabelText("Account identifier") as HTMLInputElement).value).toBe("demo-marcus");
+    expect((screen.getByLabelText("Email address or account identifier") as HTMLInputElement).value).toBe("demo-marcus");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(submitSignIn).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("status").textContent).toBe(SIGN_IN_FAILURE);

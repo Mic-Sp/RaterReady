@@ -7,7 +7,7 @@ import { expectSyntheticBadges } from "./presentation";
 /** Authenticate through the real form; only the config-validated disposable local database is touched. */
 async function signIn(page: Page, accountCode: "demo-marcus" | "admin-michael") {
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(accountCode);
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill(accountCode);
   await page.getByLabel("Password", { exact: true }).fill(testPasswords[accountCode]);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(accountCode === "admin-michael" ? "/admin" : "/dashboard");

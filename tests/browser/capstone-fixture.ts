@@ -33,7 +33,7 @@ export async function setCoverage(db: PrismaClient, candidateId: string, ready: 
 /** Exercise the real Credentials UI, never a test-only authentication route. */
 export async function signInCapstone(page: Page, account: "demo-marcus" | "demo-elena") {
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(account);
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill(account);
   await page.getByLabel("Password", { exact: true }).fill(testPasswords[account]);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL("/dashboard");

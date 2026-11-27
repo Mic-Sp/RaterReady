@@ -8,7 +8,7 @@ import { expectSyntheticBadges } from "./presentation";
 /** Authenticate normally; config and setup restrict every database operation to a disposable local fixture database. */
 async function signIn(page: Page, accountCode: "demo-marcus" | "demo-elena") {
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill(accountCode);
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill(accountCode);
   await page.getByLabel("Password", { exact: true }).fill(testPasswords[accountCode]);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL("/dashboard");

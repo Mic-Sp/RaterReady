@@ -12,17 +12,20 @@ async function checkPublicReflow(page: Page) {
 }
 
 test("public landing explains the mission and gives keyboard access to registration and sign-in", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
   expect((await page.goto("/"))?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Learn to evaluate AI responses" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Learn to evaluate AI responses" })).toBeInViewport({ ratio: 1 });
+  const register = page.getByRole("link", { name: "Create a free learner account" });
+  await expect(register).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("banner").getByText("Closed Alpha", { exact: true })).toBeVisible();
+  await expect(page.locator(".site-header > aside")).toHaveCount(0);
   await expect(page.getByRole("main")).toContainText("justice-impacted and nontraditional talent");
-  await expect(page.getByRole("heading", { name: "Closed Alpha", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "DEMO - SYNTHETIC", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("DEMO - SYNTHETIC", { exact: true })).toHaveCount(1);
   await checkPublicReflow(page);
   await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
   await page.keyboard.press("Tab");
-  const register = page.getByRole("link", { name: "Create a free candidate account" });
   await expect(register).toBeFocused();
   await expect(register).toHaveCSS("outline-width", "3px");
   await page.keyboard.press("Enter");
@@ -49,6 +52,6 @@ test("public broken links get the branded 404 while credential lookups keep the 
   const learning = page.getByRole("region", { name: "Learn with RaterReady" });
   await expect(learning).toContainText("Closed Alpha");
   await expect(learning.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
-  await expect(learning.getByRole("link", { name: "Create a free candidate account" })).toHaveAttribute("href", "/register");
+  await expect(learning.getByRole("link", { name: "Create a free learner account" })).toHaveAttribute("href", "/register");
   await checkPublicReflow(page);
 });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { CLOSED_ALPHA_TERMS_VERSION, PASSWORD_GUIDANCE, REGISTRATION_LIMITED, REGISTRATION_RECEIVED } from "../../src/lib/registration";
+import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_LIMITED, REGISTRATION_RECEIVED } from "../../src/lib/registration";
 import { expectSyntheticBadges } from "./presentation";
 import { REGISTRATION_SIGN_IN_NOTICE } from "../../src/app/login/form-state";
 
@@ -26,15 +26,19 @@ test("eight-character password registration, versioned consent and unverified le
   const email = `register-${randomUUID()}@example.invalid`;
   try {
     await page.goto("/login");
-    const cta = page.getByRole("region", { name: "New to RaterReady?" });
-    await expect(cta.getByRole("link", { name: "Create a candidate account", exact: true })).toBeVisible();
-    expect((await cta.boundingBox())!.y).toBeLessThan((await page.getByRole("form", { name: "Sign in to RaterReady" }).boundingBox())!.y);
-    await cta.getByRole("link", { name: "Create a candidate account", exact: true }).focus();
+    const cta = page.getByRole("link", { name: "New here? Create a free learner account", exact: true });
+    await expect(cta).toBeVisible();
+    await cta.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL("/register");
-    await expect(page.getByRole("heading", { name: "Create your candidate account" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your learner account" })).toBeVisible();
     await expect(page.getByRole("checkbox")).not.toBeChecked();
-    await expect(page.getByText(PASSWORD_GUIDANCE, { exact: true })).toBeVisible();
+    const checklist = page.getByRole("list", { name: "Password requirements" });
+    const progress = page.getByRole("status", { name: "Password checklist progress" });
+    await expect(checklist.getByRole("listitem")).toHaveCount(6);
+    await expect(progress).toHaveText("0 of 6 requirements met.");
+    const terms = page.locator("details.registration-full-terms");
+    await expect(terms).toHaveJSProperty("open", false);
     await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("minlength", "8");
     await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("maxlength", "128");
     await expect(page.getByLabel("Website", { exact: true })).toBeHidden();
@@ -45,12 +49,20 @@ test("eight-character password registration, versioned consent and unverified le
       await page.evaluate((small) => { document.documentElement.style.fontSize = small ? "200%" : ""; }, width === 320);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
-      await expectSyntheticBadges(page);
     }
+    await terms.getByText("Read full terms", { exact: true }).press("Enter");
+    await expect(terms).toHaveJSProperty("open", true);
+    await expect(terms).toContainText("government IDs");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+    await expectSyntheticBadges(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     await page.getByLabel("Email address", { exact: true }).fill(` ${email.toUpperCase()} `);
+    await page.getByLabel("Password", { exact: true }).fill("River9 x");
+    await expect(progress).toHaveText("5 of 6 requirements met.");
     await page.getByLabel("Password", { exact: true }).fill(password);
+    await expect(progress).toHaveText("6 of 6 requirements met.");
     await page.getByLabel("Display name (optional)").fill("Local alpha learner");
     await page.getByRole("button", { name: "Show password" }).focus();
     await page.keyboard.press("Enter");
@@ -59,7 +71,7 @@ test("eight-character password registration, versioned consent and unverified le
     await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("type", "password");
     await page.getByRole("checkbox").focus();
     await page.keyboard.press("Space");
-    await page.getByRole("button", { name: "Create candidate account" }).focus();
+    await page.getByRole("button", { name: "Create learner account" }).focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL("/welcome");
     const user = await db.user.findUniqueOrThrow({ where: { email } });
@@ -93,7 +105,7 @@ test("eight-character password registration, versioned consent and unverified le
     // A repeat with the existing password follows the same authenticated handoff without
     // creating another account, replacing credentials, or resetting completed onboarding.
     await fillRegistration(page, email);
-    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await page.getByRole("button", { name: "Create learner account" }).click();
     await expect(page).toHaveURL("/welcome");
     expect(await db.auditEvent.count({ where: { actorUserId: user.id } })).toBe(2);
     expect((await db.candidateProfile.findUniqueOrThrow({ where: { userId: user.id } })).onboardingCompletedAt).not.toBeNull();
@@ -121,11 +133,11 @@ test("password length, composition and common-password errors are clear, associa
       await page.getByLabel("Password", { exact: true }).evaluate((input) => input.removeAttribute("maxlength"));
       await page.getByLabel("Password", { exact: true }).fill(secret);
       await page.getByRole("checkbox").check();
-      await page.getByRole("button", { name: "Create candidate account" }).click();
+      await page.getByRole("button", { name: "Create learner account" }).click();
       await expect(page.locator("#registration-password-error")).toHaveText(message);
       await expect(page.getByLabel("Password", { exact: true })).toBeFocused();
       await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("aria-describedby", "registration-password-hint registration-password-error");
-      await expect(page.getByText(PASSWORD_GUIDANCE, { exact: true })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Password requirements" })).toBeVisible();
       expect(await db.user.findUnique({ where: { email } })).toBeNull();
     }
     await page.setViewportSize({ width: 320, height: 900 });
@@ -140,25 +152,25 @@ test("server validation, required consent, authority tampering and the honeypot 
   const email = `reject-${randomUUID()}@example.invalid`;
   try {
     await page.goto("/register");
-    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await page.getByRole("button", { name: "Create learner account" }).click();
     await expect(page.getByText("Enter a valid email address.", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Email address", { exact: true })).toBeFocused();
     await page.getByLabel("Email address", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await page.getByRole("button", { name: "Create learner account" }).click();
     await expect(page.getByText("Read and accept the Closed-Alpha Privacy & Non-Endorsement Terms.", { exact: true })).toBeVisible();
     await expect(page.getByRole("checkbox")).toBeFocused();
     await page.getByRole("checkbox").check();
     await page.locator("form.registration-form").evaluate((form) => {
       const role = document.createElement("input"); role.name = "role"; role.value = "ADMIN_REVIEWER"; role.type = "hidden"; form.append(role);
     });
-    await page.getByRole("button", { name: "Create candidate account" }).click();
-    await expect(page.getByRole("status")).toContainText("candidate registration form");
+    await page.getByRole("button", { name: "Create learner account" }).click();
+    await expect(page.getByRole("status", { name: "Registration feedback" })).toContainText("learner registration form");
     expect(await db.user.findUnique({ where: { email } })).toBeNull();
     await fillRegistration(page, email);
     await page.locator('[name="website"]').evaluate((input) => { (input as HTMLInputElement).value = "bot.example.invalid"; });
-    await page.getByRole("button", { name: "Create candidate account" }).click();
-    await expect(page.getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
+    await page.getByRole("button", { name: "Create learner account" }).click();
+    await expect(page.getByRole("region", { name: "Registration request received" }).getByRole("status")).toHaveText(REGISTRATION_RECEIVED);
     expect(await db.user.findUnique({ where: { email } })).toBeNull();
     expect(await (await page.request.get("/api/auth/session")).json()).toBeNull();
   } finally { await db.$disconnect(); }
@@ -170,23 +182,24 @@ test("duplicate emails with the wrong password get a generic sign-in fallback an
   const email = `duplicate-${randomUUID()}@example.invalid`;
   try {
     await fillRegistration(page, email);
-    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await page.getByRole("button", { name: "Create learner account" }).click();
     await expect(page).toHaveURL("/welcome");
     const original = await db.user.findUniqueOrThrow({ where: { email } });
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL("/login");
     for (let count = 2; count <= 5; count += 1) {
       await fillRegistration(page, email.toUpperCase(), "Birch7!y");
-      await page.getByRole("button", { name: "Create candidate account" }).click();
+      await page.getByRole("button", { name: "Create learner account" }).click();
       await expect(page).toHaveURL("/login?notice=registration-sign-in");
       await expect(page.getByRole("status", { name: "Registration sign-in notice" })).toHaveText(REGISTRATION_SIGN_IN_NOTICE);
     }
     expect(await db.user.findUniqueOrThrow({ where: { email } })).toEqual(original);
     expect(await db.auditEvent.count({ where: { actorUserId: original.id } })).toBe(2);
     await fillRegistration(page, email);
-    await page.getByRole("button", { name: "Create candidate account" }).click();
-    await expect(page.getByRole("status")).toHaveText(REGISTRATION_LIMITED);
-    await expect(page.getByRole("status")).toBeFocused();
+    await page.getByRole("button", { name: "Create learner account" }).click();
+    const feedback = page.getByRole("status", { name: "Registration feedback" });
+    await expect(feedback).toHaveText(REGISTRATION_LIMITED);
+    await expect(feedback).toBeFocused();
   } finally { await disableFixture(db, email); await db.$disconnect(); }
 });
 
@@ -197,7 +210,7 @@ test("registration works as a native form before JavaScript hydration", async ({
   const email = `native-${randomUUID()}@example.invalid`;
   try {
     await fillRegistration(page, email);
-    await page.getByRole("button", { name: "Create candidate account" }).click();
+    await page.getByRole("button", { name: "Create learner account" }).click();
     await expect(page).toHaveURL("/welcome");
     await expect(page.locator(".account-controls")).toContainText("Closed Alpha");
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();

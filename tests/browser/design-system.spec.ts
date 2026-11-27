@@ -39,7 +39,7 @@ test("polished chrome and card tiers preserve keyboard access, disclosures, tabl
     await db.candidateProfile.update({ where: { userId: user.id }, data: { onboardingCompletedAt: new Date() } });
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/login");
-    await page.getByLabel("Account identifier", { exact: true }).fill("demo-marcus");
+    await page.getByLabel("Email address or account identifier", { exact: true }).fill("demo-marcus");
     await page.getByLabel("Password", { exact: true }).fill(testPasswords["demo-marcus"]);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL("/dashboard");

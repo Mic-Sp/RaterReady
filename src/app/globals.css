@@ -40,14 +40,12 @@
 /* Auth cards use a centered 44rem desktop shell; other public pages retain their existing width. */
 .app-shell:not(.authenticated-shell):has(.public-auth-page) { width: min(100% - 2.5rem, 44rem); }
 .app-shell:has(.public-landing-page) { width: min(100% - 2rem, 58rem); }
-.public-landing-page .page-intro { max-width: 68ch; }
+.public-landing-page .landing-promise { max-width: 48ch; font-size: 1.125rem; }
 .public-entry-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; margin-block: 1.25rem; }
 .public-entry-links .button-link { margin: 0; }
 .landing-steps { margin-block: .75rem; }
-.landing-access-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-.landing-access-card { min-width: 0; padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
 @media (min-width: 44rem) {
-  .public-entry-links, .landing-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-entry-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .public-auth-page { width: 100%; max-width: 44rem; margin-inline: auto; }
 .auth-link-form { margin-top: 1.25rem; }
@@ -59,6 +57,8 @@
 /* Brand, account and tabs follow DOM/visual order. Every link stays visible as
    desktop rows stack on narrow screens, without a hidden-menu prerequisite. */
 .navigation-chrome { display: grid; gap: 1.25rem; padding: var(--space-card); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-xs); }
+.site-header + main { margin-top: 1rem; }
+.brand-lockup { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; }
 .navigation-chrome > *, .navigation-identity > * { min-width: 0; }
 .authenticated-navigation { display: contents; }
 .authenticated-navigation > nav { padding-top: 1rem; border-top: 1px solid var(--line); }
@@ -76,42 +76,47 @@
 .sign-out-button:hover { background: var(--surface-muted); }
 .brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.65rem; font-weight: 750; letter-spacing: -.05em; text-decoration: none; }
 .brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: .8rem; background: var(--accent); color: #fff; font-size: 1.4rem; letter-spacing: -.06em; box-shadow: var(--shadow-xs); }
-.brand-description { margin-top: .5rem; color: var(--muted); font-size: .9375rem; }
 .demo-notice { margin: 1.25rem 0; padding: 1rem 1.15rem; border: 2px solid #925a0d; border-radius: .75rem; background: #fff4d6; color: #633704; font-size: .9375rem; }
-.account-notice { margin: 1.25rem 0; padding: 1rem 1.15rem; border: 2px solid var(--success); border-radius: .75rem; background: var(--surface); color: var(--ink); font-size: .9375rem; }
-.site-header > .demo-notice { display: grid; gap: .5rem 1rem; align-items: center; }
-.site-header > .account-notice { display: grid; gap: .5rem 1rem; align-items: center; }
-.site-header .notice-label { margin: 0; }
+.account-notice { margin-top: .75rem; padding: .7rem .9rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface); font-size: .9375rem; }
+.account-notice .auth-link-form { margin-top: .5rem; }
 .notice-label { margin-bottom: .2rem; font-weight: 750; font-size: .875rem; letter-spacing: .06em; }
 .page-card { padding: clamp(1.1rem, 3vw, 2.25rem); border: 1px solid var(--line); border-radius: 1.1rem; background: var(--surface); box-shadow: var(--shadow-sm); }
 .eyebrow { color: var(--muted); font-size: .8125rem; font-weight: 700; letter-spacing: .04em; margin-bottom: .75rem; }
 h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: -.035em; font-weight: 750; overflow-wrap: anywhere; }
 .page-intro { margin-top: .9rem; color: var(--muted); }
 .sign-in-form { margin-top: 1.4rem; }
-.registration-cta { display: grid; gap: .8rem; margin-top: 1.25rem; padding: 1.15rem; border: 2px solid var(--accent); border-radius: .8rem; background: var(--surface-indigo); overflow-wrap: anywhere; }
-.registration-cta h2 { font-size: 1.25rem; font-weight: 700; }
+.auth-secondary-links { display: flex; flex-wrap: wrap; gap: 0 1.2rem; align-items: baseline; margin-top: .7rem; color: var(--accent-hover); }
 .registration-sign-in-notice { margin-top: 1.25rem; padding: 1rem; border: 2px solid var(--accent); border-radius: .65rem; background: var(--surface-indigo); }
 .registration-form, .registration-received { margin-top: 1.4rem; }
 .registration-page { overflow-wrap: anywhere; }
 .registration-terms { min-width: 0; margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; }
 .registration-terms legend { max-width: 100%; padding-inline: .3rem; font-weight: 700; }
-.registration-terms ul { padding-left: 1.25rem; }
-.registration-terms li + li { margin-top: .75rem; }
+.registration-terms ul { padding-left: 1.25rem; list-style: disc; }
+.registration-terms li + li { margin-top: .45rem; }
+.registration-full-terms { margin-top: .55rem; padding-top: .25rem; border-top: 1px solid var(--line); }
+.registration-full-terms summary { min-height: 2.75rem; padding-block: .5rem; cursor: pointer; color: var(--accent-hover); font-weight: 700; text-decoration: underline; text-underline-offset: .2rem; }
+.registration-full-terms[open] { padding-bottom: .55rem; }
 .registration-consent { display: flex; align-items: flex-start; gap: .75rem; padding-block: .5rem; font-weight: 700; }
 .registration-consent input { flex-shrink: 0; width: 1.5rem; height: 1.5rem; margin-top: .15rem; accent-color: var(--accent); }
 .registration-received .primary-button { margin-top: 1.25rem; }
-.verification-pending { grid-column: 1 / -1; }
 .form-status:empty { margin: 0; }
 .form-status:not(:empty) { margin-bottom: 1.25rem; }
 .form-error { padding: .8rem 1rem; border-left: 3px solid var(--error); background: #fff2f3; color: #7f1d2b; font-size: .9375rem; }
 .form-field { margin-bottom: 1.35rem; }
 .form-field label { display: block; font-weight: 700; }
+.sign-in-form .form-field label, .form-field label:has(+ .password-control) { margin-bottom: .35rem; }
 .field-hint { margin: .3rem 0 .6rem; color: var(--muted); font-size: .875rem; }
 .form-field input { display: block; width: 100%; min-height: 3rem; padding: .65rem .8rem; border: 1px solid var(--border); border-radius: .5rem; background: #fff; color: var(--ink); }
 .form-field input[aria-invalid="true"] { border: 2px solid var(--error); }
 .field-error { margin-top: .5rem; color: var(--error); font-size: .875rem; font-weight: 600; }
 .password-control { display: flex; gap: .5rem; align-items: stretch; }
 .password-control input { min-width: 0; flex: 1; }
+.password-checklist { margin-top: .65rem; color: var(--muted); font-size: .875rem; }
+.password-checklist p { margin-bottom: .2rem; font-weight: 700; }
+.password-checklist ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .15rem .6rem; }
+.password-checklist li { display: flex; gap: .4rem; }
+.password-checklist li[data-met="true"] { color: var(--success); }
+.password-checklist li > :first-child { flex: 0 0 1em; font-weight: 700; }
 .visibility-button { min-height: 3rem; min-width: 4.25rem; padding: .5rem; border: 1px solid var(--border); border-radius: .5rem; background: #f4f8fa; color: var(--ink); font-weight: 700; font-size: .875rem; }
 .primary-button, .secondary-button { display: block; width: 100%; min-height: 3rem; padding: .7rem 1.1rem; border-radius: .65rem; font-weight: 700; line-height: 1.5; }
 .primary-button { border: 1px solid var(--accent); background: var(--accent); color: #fff; box-shadow: var(--shadow-xs); }
@@ -121,7 +126,6 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: 
 .secondary-button:hover { background: var(--surface-indigo); }
 .form-note { margin-top: 1rem; color: var(--muted); font-size: .875rem; text-align: center; }
 .site-footer { padding: 1.5rem .5rem 0; color: var(--muted); font-size: .875rem; text-align: center; }
-.site-footer p + p { margin-top: .3rem; }
 .role-badge, .demo-badge { border-radius: .3rem; padding: .25rem .55rem; font-size: .875rem; font-weight: 700; }
 .role-badge { color: var(--success); background: var(--surface-emerald); border: 1px solid var(--success); border-radius: 999px; }
 /* Every synthetic marker uses one text-bearing amber treatment; wrapping preserves 320px/200% reflow and forced-color borders. */
@@ -144,8 +148,6 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.35rem); line-height: 1.2; letter-spacing: 
   .navigation-identity, .account-controls { flex-wrap: nowrap; }
   .navigation-identity > p { flex: 0 1 auto; min-width: 8rem; max-width: 14rem; }
   .authenticated-navigation > nav { grid-column: 1 / -1; }
-  .site-header > .demo-notice { grid-template-columns: auto minmax(0, 1fr); }
-  .site-header > .account-notice { grid-template-columns: auto minmax(0, 1fr); }
 }
 @media (max-width: 63.99rem) { .navigation-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 40rem) {

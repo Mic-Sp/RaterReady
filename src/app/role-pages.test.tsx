@@ -21,7 +21,7 @@ vi.mock("../server/capstone/service", () => ({ getCapstoneReadiness: async () =>
 vi.mock("../server/credentials/service", () => ({ listCandidateCredentials: async () => [], listAdminCredentials: async () => [] }));
 vi.mock("../server/opportunities/service", () => ({ getCandidateOpportunities: async () => ({ unlocked: false, listings: [] }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound, usePathname: () => "/dashboard" }));
-vi.mock("./login/sign-in-form", () => ({ SignInForm: () => null }));
+vi.mock("./login/sign-in-form", () => ({ SignInForm: () => <form aria-label="Sign in to RaterReady" /> }));
 vi.mock("./register/registration-form", () => ({ RegistrationForm: () => null }));
 vi.mock("./components/account-link-forms", () => ({ VerificationRequestForm: () => <button>Send / resend verification link</button> }));
 
@@ -45,8 +45,8 @@ describe("protected role-routing shell", () => {
   it("offers anonymous visitors the mission and direct entry to both account forms", async () => {
     mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
     const landing = renderToStaticMarkup(await HomePage());
-    for (const text of ["Learn to evaluate AI responses", "justice-impacted and nontraditional", "RLHF",
-      "Closed Alpha", "DEMO - SYNTHETIC", "independent human review", "third-party endorsement", 'href="/register"', 'href="/login"']) {
+    for (const text of ["Learn to evaluate AI responses", "practical skills for remote AI evaluation work", "justice-impacted and nontraditional", "RLHF",
+      "Early access is open to sign-ups", "DEMO - SYNTHETIC", "independent human review", "third-party endorsement", 'href="/register"', 'href="/login"']) {
       expect(landing).toContain(text);
     }
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ error: "private account details" }) })) ).not.toContain("private account details");
@@ -54,14 +54,14 @@ describe("protected role-routing shell", () => {
     expect(renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({}) }))).toContain('href="/register"');
   });
 
-  it("promotes the new-learner CTA before sign-in and shows only the allowlisted session fallback notice", async () => {
+  it("puts sign-in before account creation and shows only the allowlisted session fallback notice", async () => {
     mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
     const html = renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ notice: "registration-sign-in" }) }));
-    expect(html).toContain('aria-labelledby="registration-cta-heading"');
-    expect(html).toContain('class="primary-button button-link"');
+    expect(html).toContain('class="inline-link"');
+    expect(html).toContain("New here? Create a free learner account");
     expect(html).toContain(REGISTRATION_SIGN_IN_NOTICE);
     expect(html).toContain('role="status"');
-    expect(html.indexOf("registration-cta-heading")).toBeLessThan(html.indexOf("Sign in with your email address"));
+    expect(html.indexOf('aria-label="Sign in to RaterReady"')).toBeLessThan(html.indexOf("New here?"));
     const unknown = renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve({ notice: "private-provider-error" }) }));
     expect(unknown).not.toContain(REGISTRATION_SIGN_IN_NOTICE);
     expect(unknown).not.toContain("private-provider-error");
@@ -107,26 +107,30 @@ describe("protected role-routing shell", () => {
     expect(html.indexOf('aria-label="Main navigation"')).toBeLessThan(html.indexOf('<main id="main-content"'));
     expect(html.match(/>Sign out</g)).toHaveLength(1);
     expect(html.match(/<main /g)).toHaveLength(1);
+    expect(html.match(/data-synthetic-badge="true"/g)).toHaveLength(1);
+    expect(html).not.toContain("demo-notice");
   });
 
-  it("keeps public sign-in compact with synthetic labeling and no authenticated controls", async () => {
+  it("marks early access in the compact public header without implying a learner account is synthetic", async () => {
     mocks.requireSession.mockRejectedValue(new AuthorizationError(401));
     const html = renderToStaticMarkup(await RootLayout({ children: <h1>Sign in</h1> }));
-    expect(html).toContain("DEMO - SYNTHETIC");
+    expect(html).toContain('<span class="role-badge">Closed Alpha</span>');
+    expect(html).not.toContain("account-notice");
+    expect(html).not.toContain("DEMO - SYNTHETIC");
+    expect(html).toContain('<footer class="site-footer">RaterReady · Free, independent AI evaluation training</footer>');
     expect(html).not.toContain('aria-label="Main navigation"');
     expect(html).not.toContain("authenticated-shell");
     expect(html).not.toContain("Sign out");
   });
 
-  it("separates the live account badge/banner from synthetic scenario content", async () => {
+  it("separates the verified live account badge from synthetic scenario content", async () => {
     const live = { ...candidate, isSyntheticFixture: false, demoLabel: null };
     mocks.requireSession.mockResolvedValue(live);
     const html = renderToStaticMarkup(await RootLayout({ children: <p>DEMO - SYNTHETIC scenario fixture</p> }));
     const navigation = renderToStaticMarkup(<AuthenticatedNavigation user={live} />);
     expect(navigation).toContain("Closed Alpha");
     expect(navigation).not.toContain("DEMO - SYNTHETIC");
-    expect(html).toContain('aria-label="Closed alpha account access"');
-    expect(html).toContain("live closed-alpha account");
+    expect(html).not.toContain("account-notice");
     expect(html).toContain("DEMO - SYNTHETIC scenario fixture");
     expect(html).not.toContain('aria-label="Synthetic demonstration access"');
     expect(html).not.toContain("signed in with a synthetic demonstration account");

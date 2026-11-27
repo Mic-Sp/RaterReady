@@ -21,7 +21,7 @@ export async function registerCandidate(db: PrismaClient, input: unknown, rateLi
     const parsed = registrationSchema.safeParse(input);
     if (!parsed.success) {
       const fields = parsed.error.flatten().fieldErrors;
-      return { status: "invalid", message: "Check the fields below and use the candidate registration form.", fieldErrors: {
+      return { status: "invalid", message: "Check the fields below and use the learner registration form.", fieldErrors: {
         email: fields.email?.[0], password: fields.password?.[0], displayName: fields.displayName?.[0],
         consent: fields.consent?.[0] ?? fields.consentVersion?.[0],
       } };

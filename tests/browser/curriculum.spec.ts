@@ -12,7 +12,7 @@ async function enterCurriculum(page: Page, db: PrismaClient) {
   await db.moduleProgress.deleteMany({ where: { candidateId: user.id } });
   await db.candidateProfile.update({ where: { userId: user.id }, data: { selectedLevel: "FOUNDATIONS", onboardingCompletedAt: new Date() } });
   await page.goto("/login");
-  await page.getByLabel("Account identifier", { exact: true }).fill("demo-marcus");
+  await page.getByLabel("Email address or account identifier", { exact: true }).fill("demo-marcus");
   await page.getByLabel("Password", { exact: true }).fill(testPasswords["demo-marcus"]);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL("/dashboard");
@@ -159,7 +159,7 @@ test("curriculum pages inherit candidate authorization and reject invalid lesson
       expect((await page.goto(path))?.status()).toBe(404);
     }
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
-    await page.getByLabel("Account identifier", { exact: true }).fill("admin-michael");
+    await page.getByLabel("Email address or account identifier", { exact: true }).fill("admin-michael");
     await page.getByLabel("Password", { exact: true }).fill(testPasswords["admin-michael"]);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL("/admin");

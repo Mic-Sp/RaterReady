@@ -9,7 +9,7 @@ import { expectSyntheticBadges } from "./presentation";
 
 /** Exercise real Credentials sessions; no browser-selected role or synthetic auth endpoint exists. */
 async function signIn(page: Page, account: "admin-michael" | "demo-marcus") {
-  await page.goto("/login"); await page.getByLabel("Account identifier", { exact: true }).fill(account);
+  await page.goto("/login"); await page.getByLabel("Email address or account identifier", { exact: true }).fill(account);
   await page.getByLabel("Password", { exact: true }).fill(testPasswords[account]); await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(account === "admin-michael" ? "/admin" : "/dashboard");
 }

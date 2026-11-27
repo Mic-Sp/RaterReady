@@ -18,14 +18,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
       <p className="eyebrow">Your RaterReady account</p>
       <h1 id="sign-in-heading">Welcome back.</h1>
       {notice === "registration-sign-in" && <p className="registration-sign-in-notice" role="status" aria-label="Registration sign-in notice">{REGISTRATION_SIGN_IN_NOTICE}</p>}
-      <section className="registration-cta" aria-labelledby="registration-cta-heading">
-        <h2 id="registration-cta-heading">New to RaterReady?</h2>
-        <p>Create your free candidate account and start learning.</p>
-        <Link href="/register" className="primary-button button-link">Create a candidate account</Link>
-      </section>
-      <p className="page-intro">Sign in with your email address or demonstration account identifier.</p>
       <SignInForm hasError={Boolean(error)} />
-      <p className="form-note"><Link href="/forgot-password">Forgot your password?</Link></p>
+      <div className="auth-secondary-links">
+        <Link href="/forgot-password" className="inline-link">Forgot your password?</Link>
+        <Link href="/register" className="inline-link">New here? Create a free learner account</Link>
+      </div>
     </section>
   );
 }

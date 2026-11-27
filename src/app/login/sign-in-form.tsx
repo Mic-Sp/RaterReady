@@ -29,21 +29,19 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
         {pending ? <p>Signing you in…</p> : state.error ? <p key={state.attempt} className="form-error"><SyntheticText rebrand>{state.error}</SyntheticText></p> : null}
       </div>
       <div className="form-field">
-        <label htmlFor="account-code">Account identifier</label>
-        <p id="account-hint" className="field-hint">Use your email address, or the demonstration account identifier provided to you.</p>
+        <label htmlFor="account-code">Email address or account identifier</label>
         <input ref={account} id="account-code" name="accountCode" type="text" autoComplete="username" autoCapitalize="none"
           spellCheck={false} required maxLength={254} defaultValue={state.accountCode} readOnly={pending}
           aria-invalid={Boolean(state.fieldErrors?.accountCode)}
-          aria-describedby={`account-hint${state.fieldErrors?.accountCode ? " account-error" : ""}`} />
+          aria-describedby={state.fieldErrors?.accountCode ? "account-error" : undefined} />
         {state.fieldErrors?.accountCode && <p id="account-error" className="field-error"><SyntheticText>{state.fieldErrors.accountCode}</SyntheticText></p>}
       </div>
       <div className="form-field">
         <label htmlFor="password">Password</label>
-        <p id="password-hint" className="field-hint">Use your account password (8–128 characters).</p>
         <div className="password-control">
           <input ref={password} id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password"
             required minLength={8} maxLength={128} readOnly={pending} aria-invalid={Boolean(state.fieldErrors?.password)}
-            aria-describedby={`password-hint${state.fieldErrors?.password ? " password-error" : ""}`} />
+            aria-describedby={state.fieldErrors?.password ? "password-error" : undefined} />
           <button type="button" className="visibility-button" aria-label={showPassword ? "Hide password" : "Show password"}
             aria-controls="password" aria-pressed={showPassword} disabled={pending} onClick={() => setShowPassword(!showPassword)}>
             <SyntheticText>{showPassword ? "Hide" : "Show"}</SyntheticText>
@@ -52,7 +50,6 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
         {state.fieldErrors?.password && <p id="password-error" className="field-error"><SyntheticText>{state.fieldErrors.password}</SyntheticText></p>}
       </div>
       <button type="submit" className="primary-button" disabled={pending}><SyntheticText>{pending ? "Signing in…" : "Sign in"}</SyntheticText></button>
-      <p className="form-note">RaterReady is in Closed Alpha. Synthetic demonstration accounts remain available.</p>
     </form>
   );
 }

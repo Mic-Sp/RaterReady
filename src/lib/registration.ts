@@ -7,7 +7,7 @@ export const CLOSED_ALPHA_TERMS = [
   "We store your email, password hash, optional display name, consent record, and learning and assessment activity to operate your account. Your email is not shown in public credentials; credential sharing starts off and requires your choice.",
   "Do not enter sensitive personal disclosures, justice-involvement history, criminal records, medical or disability diagnoses, government IDs, or third-party credentials in your display name, practice work, or other submissions. A nickname is welcome; a legal name is not required.",
   "RaterReady is independent. It is not affiliated with or endorsed by any outside employer. G1–G6 are RaterReady’s internal Generalist competency identifiers, not an external industry standard. Learning and pilot credentials do not certify you for outside employers or guarantee hiring, work, or compensation.",
-  "Synthetic scenarios and simulated outputs are labeled DEMO - SYNTHETIC. Learning and practice are available while email verification is pending; live candidates must verify before starting a timed Generalist Qualification Exam. Verification and password recovery use single-use links. When email delivery is unavailable, Closed-Alpha link previews are limited to your signed-in account or Michael Sprague’s admin session. Preview verification exercises the alpha workflow; it does not prove access to an email inbox.",
+  "Synthetic scenarios and simulated outputs are labeled DEMO - SYNTHETIC. You can learn and practice before verifying your email. Verify your email before starting the timed Generalist Qualification Exam. Verification and password recovery use single-use links. If email delivery is unavailable during Closed Alpha, link previews are available only to you when signed in or to an authorized reviewer. A preview does not prove access to an email inbox.",
 ] as const;
 
 export const REGISTRATION_RECEIVED = "Registration request received. Continue to sign in with your email and password. If you already have an account, use your existing password or request a password-reset link.";
@@ -29,18 +29,28 @@ function predictablePassword(value: string): boolean {
     || ["0123456789", "1234567890", "9876543210"].some((sequence) => value === sequence.repeat(13).slice(0, value.length));
 }
 
-/** Registration and recovery require 8–128 characters, uppercase/lowercase letters, a number and a symbol; never trim passwords.
- * Unicode letter/digit/punctuation/symbol classes are supported. Whitespace is not a symbol;
- * the 128-code-unit ceiling stays compatible with the existing hashing/authentication boundary.
- */
-export const accountPasswordSchema = z.string()
-  .refine((value) => Array.from(value).length >= 8, "Use at least 8 characters.")
-  .max(128, "Use 128 characters or fewer.")
-  .regex(/\p{Lu}/u, "Include at least one uppercase letter.")
-  .regex(/\p{Ll}/u, "Include at least one lowercase letter.")
-  .regex(/\p{Nd}/u, "Include at least one number.")
-  .regex(/[\p{P}\p{S}]/u, "Include at least one symbol (such as ! or @).")
-  .refine((value) => !predictablePassword(value), "Choose a less predictable password.");
+// Keep validation order and the 128-code-unit ceiling used by hashing and sign-in.
+const passwordRules = [
+  { label: "At least 8 characters", test: (value: string) => Array.from(value).length >= 8, error: "Use at least 8 characters." },
+  { label: "128 characters or fewer", test: (value: string) => value.length <= 128, error: "Use 128 characters or fewer." },
+  { label: "An uppercase letter", test: (value: string) => /\p{Lu}/u.test(value), error: "Include at least one uppercase letter." },
+  { label: "A lowercase letter", test: (value: string) => /\p{Ll}/u.test(value), error: "Include at least one lowercase letter." },
+  { label: "A number", test: (value: string) => /\p{Nd}/u.test(value), error: "Include at least one number." },
+  { label: "A symbol like ! or @", test: (value: string) => /[\p{P}\p{S}]/u.test(value), error: "Include at least one symbol (such as ! or @)." },
+  { label: "Avoids common patterns", test: (value: string) => !predictablePassword(value), error: "Choose a less predictable password." },
+] as const;
+
+/** Validate registration and recovery passwords using the same rules as the local checklist. */
+export const accountPasswordSchema = passwordRules.reduce((schema, rule) => schema.refine(rule.test, rule.error), z.string());
+
+/** Report rule completion without sending the in-progress password to the server. */
+export function getPasswordChecklist(password: string) {
+  const [minimum, maximum, ...composition] = passwordRules;
+  return [
+    { label: "8–128 characters", met: minimum.test(password) && maximum.test(password) },
+    ...composition.map(({ label, test }) => ({ label, met: test(password) })),
+  ];
+}
 
 /** Strict public payload: authority, timestamps, account codes and synthetic flags are never accepted. */
 export const registrationSchema = z.strictObject({
