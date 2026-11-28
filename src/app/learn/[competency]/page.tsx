@@ -5,6 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { competencySchema, getCurriculumLessons, getLearningSnapshot, learningLevelSchema } from "../../../server/learning/service";
 import { LessonReader } from "../lesson-reader";
 import { listPracticeScenarios } from "../../../server/practice/workspace";
+import { LearningActivity } from "../../components/learning-activity";
 
 export const metadata: Metadata = { title: "Generalist curriculum lesson | RaterReady" };
 
@@ -29,5 +30,5 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
     return scenario ? [scenario] : [];
   });
   const relatedScenarios = [...new Map(related.map((item) => [item.id, item])).values()];
-  return <LessonReader lesson={lesson} lessons={lessons} completed={completed.has(code.data)} completedCount={completed.size} relatedScenarios={relatedScenarios} />;
+  return <><LessonReader lesson={lesson} lessons={lessons} completed={completed.has(code.data)} completedCount={completed.size} relatedScenarios={relatedScenarios} /><LearningActivity lesson /></>;
 }

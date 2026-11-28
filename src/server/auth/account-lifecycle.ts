@@ -65,11 +65,10 @@ export async function requestAccountLink(db: PrismaClient, viewer: Viewer, purpo
       if (current.email !== user.email || current.sessionVersion !== user.sessionVersion
         || (viewer?.id === user.id && viewer.sessionVersion !== current.sessionVersion)) throw new Error("Request unavailable.");
       const token = await issueAuthToken(tx, user.id, purpose);
-      const stored = await tx.authToken.findUniqueOrThrow({ where: { tokenHash: hashAuthToken(token.rawToken) }, select: { id: true } });
-      await tx.auditEvent.create({ data: { eventKey: `auth-link:${stored.id}:issued`, actorUserId: viewer?.id ?? null,
+      await tx.auditEvent.create({ data: { eventKey: `auth-link:${token.id}:issued`, actorUserId: viewer?.id ?? null,
         action: "AUTH_LINK_ISSUED", targetType: "User", targetId: user.id,
-        metadataJson: { purpose, channel: delivery.mode, tokenReference: stored.id } } });
-      return { ...token, reference: stored.id };
+        metadataJson: { purpose, channel: delivery.mode, tokenReference: token.id } } });
+      return { ...token, reference: token.id };
     });
     const path = reset ? "/reset-password" : "/verify-email";
     // Fragments are not sent in HTTP requests/referrers. The client moves this code into POST state and clears the fragment.

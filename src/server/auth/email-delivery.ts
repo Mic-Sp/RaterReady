@@ -11,16 +11,20 @@ export type AuthDeliveryRuntime = {
   logPreview: (message: { purpose: AuthTokenPurpose; path: string; reference: string }) => void;
 };
 
-/** Trusted configuration only: never construct auth links from request Host/Origin or client input. */
-export function createAuthDeliveryRuntime(defer: AuthDeliveryRuntime["defer"], source: Readonly<Record<string, string | undefined>> = process.env, transport: typeof fetch = fetch): AuthDeliveryRuntime {
-  let origin = "";
+/** Derive a trusted auth link origin from server configuration. Fail closed on invalid or missing production configuration. */
+export function authAppOrigin(source: Readonly<Record<string, string | undefined>> = process.env): string {
   try {
     const configuredOrigin = source.AUTH_APP_ORIGIN || source.AUTH_URL;
     // Production must name its trusted application origin; never guess it from request headers.
     const url = new URL(configuredOrigin || (source.NODE_ENV === "production" ? "" : "http://127.0.0.1:3000"));
     if (url.username || url.password || (url.protocol !== "https:" && !(url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname)))) throw new Error("Invalid origin");
-    origin = url.origin;
-  } catch { /* An invalid origin disables issuance rather than producing attacker-controlled links. */ }
+    return url.origin;
+  } catch { return ""; }
+}
+
+/** Trusted configuration only: never construct auth links from request Host/Origin or client input. */
+export function createAuthDeliveryRuntime(defer: AuthDeliveryRuntime["defer"], source: Readonly<Record<string, string | undefined>> = process.env, transport: typeof fetch = fetch): AuthDeliveryRuntime {
+  const origin = authAppOrigin(source);
   const key = source.RESEND_API_KEY?.trim();
   const from = source.AUTH_EMAIL_FROM?.trim();
   const setting = source.AUTH_EMAIL_MODE || "auto";

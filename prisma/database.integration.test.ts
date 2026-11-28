@@ -43,6 +43,10 @@ import { CLOSED_ALPHA_TERMS_VERSION, REGISTRATION_RECEIVED } from "../src/lib/re
 import { curriculumLessons } from "./curriculum-lessons";
 import { getCurriculumLessons } from "../src/server/learning/service";
 import { seedCurriculum } from "./seed-curriculum";
+import { manageLearnerAccess } from "../src/server/admin/account-access";
+import { listControlPanelAccounts } from "../src/server/admin/accounts";
+import { listControlPanelAudit } from "../src/server/admin/audit";
+import { getSiteTelemetry } from "../src/server/admin/telemetry";
 
 vi.mock("server-only", () => ({}));
 const reviewAuth = vi.hoisted(() => ({ requireAdmin: vi.fn(), requireCandidate: vi.fn() }));
@@ -1879,5 +1883,79 @@ databaseTests("PostgreSQL schema and repeatable seed", () => {
       await reader.$disconnect();
       await updateOpportunityListing(prisma, referral.code, { active: current.active, verificationDate: current.lastVerifiedAt.toISOString().slice(0, 10) });
     }
+  });
+
+  it("issues an owner-only hashed reset and audits verification and status changes without reviving old sessions", async () => {
+    vi.stubEnv("AUTH_APP_ORIGIN", "https://raterready.example.invalid");
+    const owner = await reviewAuth.requireAdmin();
+    const marker = randomUUID();
+    const user = await prisma.user.create({ data: {
+      accountCode: `candidate-${marker}`, name: "Control panel test learner", email: `admin-panel-${marker}@example.invalid`,
+      role: "CANDIDATE", closedAlphaConsentAcceptedAt: new Date(), closedAlphaConsentVersion: CLOSED_ALPHA_TERMS_VERSION,
+      candidateProfile: { create: {} },
+    } });
+    const secret = randomBytes(32).toString("hex");
+    const act = (operation: string) => manageLearnerAccess(prisma, { target: user.id, operation }, secret);
+    expect((await manageLearnerAccess(prisma, { target: owner.id, operation: "disable" }, secret)).success).toBe(false);
+    expect((await listControlPanelAccounts(prisma, { filter: "unverified", q: marker })).accounts).toHaveLength(1);
+    const reset = await act("reset");
+    expect(reset.success).toBe(true);
+    const raw = new URL(reset.preview!.url).hash.slice(7);
+    const digest = hashAuthToken(raw);
+    const stored = await prisma.authToken.findUniqueOrThrow({ where: { tokenHash: digest } });
+    expect(stored.userId).toBe(user.id);
+    expect(stored.expiresAt.getTime() - stored.createdAt.getTime()).toBe(3_600_000);
+    const password = "ClosedAlpha3!recovery";
+    expect((await completeAccountLink(prisma, "PASSWORD_RESET", raw, password, secret)).ok).toBe(true);
+    expect((await completeAccountLink(prisma, "PASSWORD_RESET", raw, password, secret)).ok).toBe(false);
+    expect((await authenticateCredentials(prisma, { accountCode: user.email, password }))?.id).toBe(user.id);
+
+    expect((await act("verify")).success).toBe(true);
+    expect((await act("verify")).success).toBe(false);
+    const active = await authenticateCredentials(prisma, { accountCode: user.email, password });
+    expect(active?.emailVerifiedAt).toBeTruthy();
+    expect((await act("disable")).success).toBe(true);
+    expect(await authenticateCredentials(prisma, { accountCode: user.email, password })).toBeNull();
+    expect((await listControlPanelAccounts(prisma, { filter: "deactivated", q: marker })).accounts).toHaveLength(1);
+    expect((await act("enable")).success).toBe(true);
+    expect(await findActiveSessionUser(prisma, active)).toBeNull();
+    expect((await authenticateCredentials(prisma, { accountCode: user.email, password }))?.id).toBe(user.id);
+
+    const events = await prisma.auditEvent.findMany({ where: { targetId: user.id, actorUserId: owner.id } });
+    expect(events.map(({ action }) => action)).toEqual(expect.arrayContaining([
+      "ADMIN_PASSWORD_RESET_LINK_ISSUED", "ADMIN_EMAIL_VERIFIED", "ADMIN_ACCOUNT_DEACTIVATED", "ADMIN_ACCOUNT_REACTIVATED",
+    ]));
+    expect(events).toHaveLength(4);
+    expect([raw, digest, password].some((value) => JSON.stringify(events).includes(value))).toBe(false);
+    const audit = await listControlPanelAudit(prisma, { action: "ADMIN_PASSWORD_RESET_LINK_ISSUED" });
+    expect(audit.rows.some((row) => row.target === user.accountCode && row.actor === owner.accountCode)).toBe(true);
+    await expect(prisma.auditEvent.update({ where: { id: events[0].id }, data: { metadataJson: {} } })).rejects.toThrow(/append-only/);
+  });
+
+  it("counts live exam and competency activity by learner identity, independently of synthetic content", async () => {
+    const before = await getSiteTelemetry(prisma);
+    const { id, attempt } = await submittedForGrading({}, false);
+    await prisma.candidateProfile.update({ where: { userId: id }, data: { firstLessonOpenedAt: new Date(), lastActiveAt: new Date() } });
+    const pending = await getSiteTelemetry(prisma);
+    expect(pending.live.registered).toBe(before.live.registered + 1);
+    expect(pending.live.lessonStarted).toBe(before.live.lessonStarted + 1);
+    expect(pending.live.examStarted).toBe(before.live.examStarted + 1);
+    expect(pending.live.passed).toBe(before.live.passed);
+    expect(pending.live.skills[0].examScored).toBe(before.live.skills[0].examScored);
+    expect(pending.demo.registered).toBe(before.demo.registered);
+    await processWrittenGrading(prisma, attempt);
+    const scores = await ownerScores(attempt);
+    await savePreliminaryReview(prisma, attempt, scores);
+    await finalizeOwnerReview(prisma, attempt, { scores, rationale: "DEMO - SYNTHETIC: verified telemetry fixture." });
+    const finalized = await getSiteTelemetry(prisma);
+    expect(finalized.live.passed).toBe(before.live.passed + 1);
+    expect(finalized.live.examCompletions).toBe(before.live.examCompletions + 1);
+    expect(finalized.live.backupVotes).toBe(before.live.backupVotes + 6);
+    for (const skill of finalized.live.skills) {
+      expect(skill.examScored).toBe(before.live.skills.find((metric) => metric.code === skill.code)!.examScored + 1);
+      expect(skill.examAverage).not.toBeNull();
+    }
+    expect(finalized.demo.skills).toEqual(before.demo.skills);
+    expect(JSON.stringify(finalized)).not.toMatch(/answerKeyJson|allowedAlternativesJson|rationale|candidate-/);
   });
 });

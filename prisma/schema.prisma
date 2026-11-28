@@ -207,6 +207,9 @@ model CandidateProfile {
   diagnosticStatus      DiagnosticStatus    @default(NOT_STARTED)
   /// Records an explicit level choice; no diagnostic or beginner prerequisite is required.
   onboardingCompletedAt DateTime?           @db.Timestamptz(3)
+  /// Minimal learning telemetry: no URLs, visit history, device data or identifiers beyond this profile.
+  firstLessonOpenedAt    DateTime?           @db.Timestamptz(3)
+  lastActiveAt           DateTime?           @db.Timestamptz(3)
   /// The only accommodation datum: finite numeric multiplier >= 1, with no reason collected.
   timeMultiplier        Float               @default(1)
   createdAt             DateTime            @default(now()) @db.Timestamptz(3)

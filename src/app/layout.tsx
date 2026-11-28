@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { optionalPageIdentity } from "../server/auth/page-access";
 import { AuthenticatedNavigation } from "./components/authenticated-navigation";
+import { LearningActivity } from "./components/learning-activity";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "RaterReady", description: "Independent AI evaluation training in early access, with labeled synthetic demonstrations.", robots: { index: false, follow: false } };
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <AccountBanner user={user} />
           </header>
           <main id="main-content" tabIndex={-1}>{children}</main>
+          {user?.role === "CANDIDATE" && <LearningActivity />}
           <footer className="site-footer">{operator ? "RaterReady · Reviewer operations" : "RaterReady · Free, independent AI evaluation training"}</footer>
         </div>
       </body>

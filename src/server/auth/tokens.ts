@@ -25,9 +25,9 @@ export async function issueAuthToken(tx: Prisma.TransactionClient, userId: strin
   const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT date_trunc('milliseconds', clock_timestamp()) AS now`;
   const rawToken = randomBytes(32).toString("base64url");
   const expiresAt = new Date(clock.now.getTime() + lifetimes[purpose]);
-  await tx.authToken.create({ data: { userId, purpose, tokenHash: hashAuthToken(rawToken),
-    sessionVersion: user.sessionVersion, createdAt: clock.now, expiresAt } });
-  return { rawToken, expiresAt };
+  const { id } = await tx.authToken.create({ data: { userId, purpose, tokenHash: hashAuthToken(rawToken),
+    sessionVersion: user.sessionVersion, createdAt: clock.now, expiresAt }, select: { id: true } });
+  return { id, rawToken, expiresAt };
 }
 
 /**
