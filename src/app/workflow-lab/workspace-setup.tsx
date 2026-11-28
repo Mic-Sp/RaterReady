@@ -123,7 +123,7 @@ function setupHabits(os: OperatingSystem): SetupHabit[] {
   ];
 }
 
-/** Guide learners through unscored pre-flight setup. Completion is browser-only and carries no assessment credit. */
+/** Guide learners through unscored workspace setup. Completion is browser-only and carries no assessment credit. */
 export function WorkspaceSetup() {
   const [chosenOs, setChosenOs] = useState<OperatingSystem | null>(null);
   const [localProgress, setLocalProgress] = useState<WalkthroughProgress | null>(null);
@@ -200,7 +200,7 @@ export function WorkspaceSetup() {
           <p><strong>{completed.length} of {stepCount} complete</strong></p>
           <p className="workflow-storage-note">Your progress stays in this browser.</p>
         </div>
-        <button className="text-button" type="button" onClick={reset}>Reset walkthrough</button>
+        <button className="text-button workflow-reset" type="button" onClick={reset}>Reset walkthrough</button>
       </div>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="Walkthrough updates">
         {navigation && <span key={navigation.sequence}>{navigation.announcement}</span>}
@@ -246,12 +246,12 @@ export function WorkspaceSetup() {
             ))}
           </div>
         </fieldset>
-        <section id="workflow-active-step" className="workflow-setup-card" aria-labelledby="workflow-step-heading">
+        <section id="workflow-active-step" className="workflow-setup-card" data-step={activeStep + 1} aria-labelledby="workflow-step-heading">
           <p className="workflow-step-position">{position(activeStep)}</p>
           <h3 id="workflow-step-heading" ref={stepHeading} tabIndex={-1}>{habit.title}</h3>
           <SetupGuide habit={habit} />
           <SetupMicroCheck key={`${activeStep}-${resetCount}`} step={activeStep} os={os} completed={isComplete} onComplete={markComplete} />
-          {!isComplete && <p className="workflow-nav-hint">Try the setup check to mark this step complete, or choose any step above.</p>}
+          {!isComplete && <p className="workflow-nav-hint">Try the setup check to continue, or choose any step above.</p>}
           {isComplete && isLast && !allComplete && <p className="workflow-nav-hint">Complete all five setup checks to finish. You can return to any step above.</p>}
           <div className="workflow-step-actions">
             <button className="secondary-button workflow-fit-button" type="button" disabled={activeStep === 0}

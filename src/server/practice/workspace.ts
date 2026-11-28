@@ -26,9 +26,30 @@ export async function listPracticeScenarios(db: PrismaClient, filters: { compete
   // Historical links, saved drafts and grading continue to resolve their own immutable scenario IDs.
   const current = await db.scenario.findMany({ where: { bank: "PRACTICE", status: "PUBLISHED", track, isSyntheticFixture: true },
     distinct: ["familyId"], orderBy: { version: "desc" },
-    select: { id: true, title: true, version: true, competencies: true, difficulty: true } });
+    select: { id: true, title: true, version: true, competencies: true, difficulty: true, family: { select: { code: true } } } });
   return current.filter((item) => (!parsed.competency || item.competencies.includes(parsed.competency))
     && (!parsed.level || item.difficulty === parsed.level)).sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/** Return only the signed-in learner's Generalist participation markers for the visible catalog. */
+export async function listGeneralistCatalogActivity(db: PrismaClient, candidateId: string, catalog: readonly { id: string; family: { code: string } }[]) {
+  const [submitted, drafts, progress] = await Promise.all([
+    // Family history survives publication of a newer version. Scores and response contents stay out of this projection.
+    db.scenarioFamily.findMany({
+      where: { code: { in: catalog.map((scenario) => scenario.family.code) }, scenarios: { some: {
+        bank: "PRACTICE", track: "GENERALIST", isSyntheticFixture: true,
+        responses: { some: { attempt: { candidateId, mode: "PRACTICE", track: "GENERALIST", status: { in: ["SUBMITTED", "FINALIZED"] } } } },
+      } } },
+      select: { code: true },
+    }),
+    db.practiceDraft.findMany({ where: { candidateId, submittedAt: null, scenarioId: { in: catalog.map((scenario) => scenario.id) } }, select: { scenarioId: true } }),
+    db.practiceProgress.findMany({ where: { candidateId, submissionCount: { gt: 0 } }, select: { competency: true }, distinct: ["competency"] }),
+  ]);
+  return {
+    submittedFamilies: new Set(submitted.map(({ code }) => code)),
+    openDrafts: new Set(drafts.map(({ scenarioId }) => scenarioId)),
+    practicedCompetencies: new Set(progress.map(({ competency }) => competency)),
+  };
 }
 
 /** Load owned draft/result state within the fixed practice track; only submitted drafts may receive safe feedback. */

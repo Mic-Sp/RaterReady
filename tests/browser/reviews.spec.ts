@@ -143,8 +143,9 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       expect(await candidate.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await accessible(candidate);
       await candidate.evaluate(() => { document.documentElement.style.fontSize = ""; }); await candidate.setViewportSize({ width: 1280, height: 900 });
       await candidate.goto("/dashboard");
-      await expect(candidate.getByText(`${passed ? "Passed" : "Not yet passed"} · ${total.toFixed(2)} / 100`, { exact: true })).toBeVisible();
-      await expect(candidate.getByRole("link", { name: "View finalized result and competency guidance", exact: true })).toHaveAttribute("href", `/capstone/${fixture.attempt.id}`);
+      const dashboardReadiness = candidate.getByRole("region", { name: "Generalist Qualification Exam readiness" });
+      await expect(dashboardReadiness).toContainText(`Latest score: ${total.toFixed(2)} / 100 · ${passed ? "Passed" : "Not yet passed"}.`);
+      await expect(dashboardReadiness.getByRole("link", { name: "View score and feedback", exact: true })).toHaveAttribute("href", `/capstone/${fixture.attempt.id}`);
       await accessible(candidate);
       if (passed) {
         const credential = await db.credential.findUniqueOrThrow({ where: { attemptId: fixture.attempt.id } });
@@ -218,7 +219,7 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         } finally { await anonymous.close(); }
       }
       await candidate.goto("/capstone");
-      await expect(candidate.getByRole("heading", { name: passed ? "Generalist Qualification Exam already passed" : "Retake cooldown active", exact: true })).toBeVisible();
+      await expect(candidate.getByRole("heading", { name: passed ? "You've passed the exam" : "Your next attempt opens soon", exact: true })).toBeVisible();
       await accessible(candidate);
       if (!passed) {
         await candidate.goto("/opportunities");
@@ -271,8 +272,10 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         expect((await db.assessmentAttempt.findUniqueOrThrow({ where: { id: fixture.attempt.id } })).finalScore?.toNumber()).toBe(84);
         const issued = await db.credential.findUniqueOrThrow({ where: { attemptId: fixture.attempt.id } });
         expect(issued.publicShareEnabled).toBe(false);
-        await candidate.goto("/dashboard"); await expect(candidate.getByText(/Opportunity queue unlocked:/)).toBeVisible();
-        await candidate.getByRole("link", { name: "Check curated opportunity queue", exact: true }).click();
+        await candidate.goto("/dashboard");
+        const opportunityAccess = candidate.getByRole("region", { name: "Remote opportunity access" });
+        await expect(opportunityAccess.getByText("Your opportunity queue is open", { exact: true })).toBeVisible();
+        await opportunityAccess.getByRole("link", { name: "Check curated opportunity queue", exact: true }).click();
         await expect(candidate.getByRole("heading", { name: "Available curated listings", exact: true })).toBeVisible();
         for (const text of ["Organization:", "Link type:", "Source attribution:", "Last verified:", "Eligibility notes:", "NO_FORMAL_PARTNERSHIP", "Permission note:", "Referral disclosure:"])
           expect((await candidate.getByRole("main").innerText()).includes(text)).toBe(true);

@@ -4,17 +4,21 @@ export const operatingSystems = ["Windows", "macOS", "ChromeOS", "Linux"] as con
 export type OperatingSystem = (typeof operatingSystems)[number];
 export const defaultOperatingSystem: OperatingSystem = "Windows";
 
-/** Read desktop OS hints in the client snapshot only. ChromeOS must win over the legacy Linux platform string. */
+function detectDesktopOS(platform: string): OperatingSystem | undefined {
+  if (/android|iphone|ipad|ipod/i.test(platform)) return defaultOperatingSystem;
+  if (/\bcros\b|\bchrome ?os\b/i.test(platform)) return "ChromeOS";
+  if (/\bmac/i.test(platform)) return "macOS";
+  if (/\bwin(?:dows|32|64)?\b/i.test(platform)) return "Windows";
+  if (/\blinux\b/i.test(platform)) return "Linux";
+}
+
+/** Use explicit client hints first and default to Windows when nothing identifies a supported desktop OS. */
 export function detectOperatingSystem(): OperatingSystem {
   const browser = window.navigator as Navigator & { userAgentData?: { platform?: string } };
-  const platform = browser.userAgentData?.platform ?? "";
-  const legacy = `${browser.userAgent} ${browser.platform}`;
-
-  if (/android|iphone|ipad|ipod/i.test(platform || legacy)) return defaultOperatingSystem;
-  if (/\bcros\b|chrome ?os/i.test(`${platform} ${legacy}`)) return "ChromeOS";
-  if (/\bmac/i.test(platform || legacy)) return "macOS";
-  if (/\blinux/i.test(platform || legacy)) return "Linux";
-  return defaultOperatingSystem;
+  const platform = browser.userAgentData?.platform?.trim();
+  if (platform) return detectDesktopOS(platform) ?? defaultOperatingSystem;
+  // The legacy agent identifies ChromeOS before navigator.platform can misclassify it as Linux.
+  return detectDesktopOS(browser.userAgent) ?? detectDesktopOS(browser.platform) ?? defaultOperatingSystem;
 }
 
 type Shortcut = readonly string[];
@@ -96,7 +100,7 @@ export function WindowShortcuts({ os }: { os: OperatingSystem }) {
         [switchLabel, switchWindow],
       ]} />
       <p className="workflow-shortcut-note">{note}</p>
-      <p className="workflow-try"><strong>Try it now.</strong> Snap this browser window to the left, then to the right. Check that this guide stays readable in both positions.</p>
+      <p className="workflow-try"><strong>Try it now</strong> Snap this window left, then right. Check that you can still read the guide.</p>
     </div>
   );
 }

@@ -20,8 +20,8 @@ async function prepare(db: PrismaClient, alternatives = false) {
 async function start(page: Page, db: PrismaClient, id: string) {
   await signInCapstone(page, "demo-marcus"); await page.goto("/capstone");
   await page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ }).check();
-  await page.getByRole("button", { name: "Start timed Qualification Exam", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Your fixed server timer", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start Qualification Exam", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your exam deadline", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Resume active attempt", exact: true }).click();
   const attempt = await db.assessmentAttempt.findFirstOrThrow({ where: { candidateId: id, mode: "CAPSTONE" } });
   await expect(page).toHaveURL(`/capstone/${attempt.id}`);

@@ -60,7 +60,8 @@ test("authorized alpha verification preview is inert on GET, consumes once, revo
     await page.goto("/capstone");
     const gate = page.getByRole("region", { name: "Generalist Qualification Exam email verification" });
     await expect(gate).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start timed Qualification Exam", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start Qualification Exam", exact: true })).toBeDisabled();
+    await expect(page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ })).toBeDisabled();
     await gate.getByRole("button", { name: "Send / resend verification link", exact: true }).click();
     const preview = gate.getByRole("region", { name: "Closed-Alpha Verification Link Preview" });
     await expect(preview).toBeVisible();
@@ -90,7 +91,8 @@ test("authorized alpha verification preview is inert on GET, consumes once, revo
     await expect(page.getByRole("button", { name: "Send / resend verification link", exact: true })).toHaveCount(0);
     await page.goto("/capstone");
     await expect(page.getByRole("region", { name: "Generalist Qualification Exam email verification" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Start timed Qualification Exam", exact: true })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Start Qualification Exam", exact: true })).toBeDisabled();
     expect(await db.auditEvent.count({ where: { targetId: user.id, action: "EMAIL_VERIFIED" } })).toBe(1);
   } finally {
     await db.user.updateMany({ where: { email }, data: { accountStatus: "DISABLED" } });

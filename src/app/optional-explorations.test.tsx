@@ -18,9 +18,9 @@ beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ id: "guar
 afterEach(cleanup);
 
 describe("optional exploration boundaries and semantics", () => {
-  it("frames the lab as pre-flight setup with one active example and a collapsed lesson reference", async () => {
+  it("frames the lab as optional setup with one active example and a collapsed lesson reference", async () => {
     const { container } = render(await WorkflowLabPage());
-    expect(screen.getByText(/optional, unscored pre-flight workspace setup guide/)).toBeDefined();
+    expect(screen.getByText(/Optional five-minute setup guide/)).toBeDefined();
     const setup = screen.getByRole("region", { name: "Set up your workspace" });
     const steps = within(setup).getByRole("navigation", { name: "Setup steps" });
     expect(within(steps).getAllByRole("button")).toHaveLength(5);
@@ -41,7 +41,7 @@ describe("optional exploration boundaries and semantics", () => {
 
   it("keeps the setup checks client-only and preserves optional and assessment rules disclosures", async () => {
     render(await WorkflowLabPage());
-    expect(screen.getByText(/not required to earn the Generalist credential/).textContent).toContain("optional");
+    expect(screen.getByText(/Optional five-minute setup guide/).textContent).toContain("never graded");
     expect(screen.getByRole("complementary").textContent).toContain("third-party assessment or employer");
     await userEvent.setup().click(screen.getByRole("radio", { name: "One window is easier to read" }));
     expect(screen.getByText("1 of 5 complete")).toBeDefined();

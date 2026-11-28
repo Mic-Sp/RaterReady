@@ -2,29 +2,29 @@ import { useState, type ReactNode } from "react";
 import { DemoBadge } from "../components/demo-badge";
 import { FindShortcut, type OperatingSystem } from "./shortcut-reference";
 
-type Choice = { label: string; feedback: string; ready?: true };
+type Choice = { label: string; feedback: string };
 
 const windowChoices: Choice[] = [
-  { label: "Both snapped windows are readable", ready: true, feedback: "You can keep the task and rubric visible while comparing the responses." },
-  { label: "One window is easier to read", ready: true, feedback: "A single window works too. Read Response A, then Response B, and keep the rubric close." },
-  { label: "A response is cut off", feedback: "Widen the windows or switch to one readable window before you continue." },
+  { label: "Both snapped windows are readable", feedback: "You can keep the task and rubric visible while comparing the responses." },
+  { label: "One window is easier to read", feedback: "A single window works too. Read Response A, then Response B, and keep the rubric close." },
+  { label: "A response is cut off", feedback: "Try widening the windows or switching to one readable window." },
 ];
 
 const tabChoices: Choice[] = [
-  { label: "Task and rubric first, source next, both readable", ready: true, feedback: "That setup keeps the rubric easy to return to and lets you read both tabs comfortably." },
+  { label: "Task and rubric first, source next, both readable", feedback: "That setup keeps the rubric easy to return to and lets you read both tabs comfortably." },
   { label: "Source first, task tab hard to find", feedback: "Move the task and rubric to the first tab, then put the source next to it." },
   { label: "Tabs are in order, text is still too small", feedback: "Increase the browser zoom until you can read the text, and check that the controls still fit." },
 ];
 
 const timeChoices: Choice[] = [
-  { label: "4 minutes Understand, 4 Verify, 2 Review", ready: true, feedback: "This gives every part time. Adjust the split if a claim needs a longer check." },
-  { label: "3 minutes Understand, 5 Verify, 2 Review", ready: true, feedback: "This makes extra room for verification and keeps a final review pass." },
+  { label: "4 minutes Understand, 4 Verify, 2 Review", feedback: "This gives every part time. Adjust the split if a claim needs a longer check." },
+  { label: "3 minutes Understand, 5 Verify, 2 Review", feedback: "This makes extra room for verification and keeps a final review pass." },
   { label: "8 minutes Understand, 2 Verify, 0 Review", feedback: "Leave time to reread your explanation before submitting. Move some reading time to Review." },
 ];
 
 const findChoices: Choice[] = [
   { label: "June 3", feedback: "June 3 is when the notice was drafted. Search for “effective date” to find when the hours change." },
-  { label: "June 18", ready: true, feedback: "June 18 is the effective date. Keep the source open and note the date and its context in your scratchpad." },
+  { label: "June 18", feedback: "June 18 is the effective date. Keep the source open and note the date and its context in your scratchpad." },
   { label: "June 30", feedback: "June 30 is the follow-up date. Use the words around the match to confirm which date answers the claim." },
 ];
 
@@ -41,7 +41,7 @@ function ChoiceCheck({ prompt, choices, onComplete }: {
           <label className="radio-choice" key={choice.label}>
             <input type="radio" name="workflow-setup-answer" checked={selected === index} onChange={() => {
               setSelected(index);
-              if (choice.ready) onComplete();
+              onComplete();
             }} />
             <span>{choice.label}</span>
           </label>
@@ -68,12 +68,10 @@ function ScratchpadCheck({ onComplete }: { onComplete: () => void }) {
 
   function compareWithModel() {
     const missing = scratchpadFields.find(([label]) => !notes[label]?.trim());
-    if (missing) {
-      setFeedback(`Add a short note under ${missing[0]} before comparing with the model.`);
-      return;
-    }
-    // This check verifies the four fields are present. The learner compares their own prose with the model.
-    setFeedback("Your scratchpad has all four parts. Compare how the model connects the claim, source and uncertainty to a judgment.");
+    // Comparing with the model is the activity. Blank fields get a prompt, never a score.
+    setFeedback(missing
+      ? `Try adding a short note under ${missing[0]}. The model shows one way to fill it in.`
+      : "Your scratchpad has all four parts. Compare how the model connects the claim, source and uncertainty to a judgment.");
     setShowModel(true);
     onComplete();
   }
@@ -142,6 +140,9 @@ export function SetupMicroCheck({ step, os, completed, onComplete }: {
   return (
     <section className="workflow-micro-check" aria-labelledby="workflow-check-heading">
       <h4 id="workflow-check-heading">Setup check{completed && <span className="workflow-done">✓ Complete</span>}</h4>
+      <p className="workflow-check-guidance">{step === 2
+        ? "Unscored self-practice. Compare with the model whenever you’re ready."
+        : "Unscored self-practice. Choose any option to see a tip and continue."}</p>
       {activity}
     </section>
   );

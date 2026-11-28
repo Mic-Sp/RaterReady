@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceSetup } from "./workspace-setup";
+import { detectOperatingSystem } from "./shortcut-reference";
 import { walkthroughStorageKey } from "./walkthrough-progress";
 
 afterEach(() => {
@@ -37,6 +38,7 @@ function choice(name: string | RegExp) {
 describe("Workflow Skills Lab", () => {
   it("hydrates Windows and Step 1 markup safely before restoring the detected OS and saved step", () => {
     vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
     window.localStorage.setItem(walkthroughStorageKey, JSON.stringify({ activeStep: 1, completed: [0], finished: false }));
     const container = document.createElement("div");
     container.innerHTML = renderToString(<WorkspaceSetup />);
@@ -96,15 +98,36 @@ describe("Workflow Skills Lab", () => {
     expect(shortcutKeys("Windows window shortcuts", "Switch windows")).toEqual(["Alt", "Tab"]);
   });
 
+  it.each([
+    ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Win32", "Windows"],
+    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "MacIntel", "macOS"],
+    ["Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)", "Linux x86_64", "ChromeOS"],
+    ["Mozilla/5.0 (X11; Linux x86_64)", "Linux x86_64", "Linux"],
+    ["Generic desktop browser", "X11", "Windows"],
+  ])("detects desktop OS from %s on %s", (agent, platform, expected) => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue(platform);
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(agent);
+    expect(detectOperatingSystem()).toBe(expected);
+  });
+
+  it("uses the explicit OS hint before an ambiguous legacy platform", () => {
+    const navigator = window.navigator as Navigator & { userAgentData?: { platform: string } };
+    Object.defineProperty(navigator, "userAgentData", { configurable: true, value: { platform: "Chrome OS" } });
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    try {
+      expect(detectOperatingSystem()).toBe("ChromeOS");
+    } finally {
+      delete navigator.userAgentData;
+    }
+  });
+
   it("announces navigation, saves completed checks and the active step, and resets on request", async () => {
     const user = userEvent.setup();
     const firstVisit = render(<WorkspaceSetup />);
     const next = screen.getByRole<HTMLButtonElement>("button", { name: "Complete & continue to Step 2" });
     expect(next.disabled).toBe(true);
     await user.click(choice("A response is cut off"));
-    expect(screen.getByRole("status", { name: "Setup check feedback" }).textContent).toContain("Widen the windows");
-    expect(next.disabled).toBe(true);
-    await user.click(choice("One window is easier to read"));
+    expect(screen.getByRole("status", { name: "Setup check feedback" }).textContent).toContain("Try widening the windows");
     expect(next.disabled).toBe(false);
     await user.click(next);
     const heading = screen.getByRole("heading", { name: "Set up tabs and zoom" });
@@ -133,7 +156,9 @@ describe("Workflow Skills Lab", () => {
     const visit = render(<WorkspaceSetup />);
     const compare = screen.getByRole("button", { name: "Compare with model" });
     await user.click(compare);
-    expect(screen.getByRole("status", { name: "Setup check feedback" }).textContent).toContain("Add a short note under Claim");
+    expect(screen.getByRole("status", { name: "Setup check feedback" }).textContent).toContain("Try adding a short note under Claim");
+    expect(screen.getByText("Worked model")).toBeDefined();
+    expect(screen.getByText("5 of 5 complete")).toBeDefined();
     for (const label of ["Claim", "Source", "Uncertainty", "Judgment"]) {
       await user.type(screen.getByRole("textbox", { name: label }), "Temporary synthetic note");
     }

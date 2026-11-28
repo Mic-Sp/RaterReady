@@ -6,7 +6,7 @@ import { WorkspaceSetup } from "./workspace-setup";
 
 export const metadata: Metadata = { title: "Optional Workflow Skills Lab | RaterReady" };
 
-/** Candidate-only pre-flight guide for arranging tools before practice, with no scoring or readiness writes. */
+/** Candidate-only workspace guide with no scoring or readiness writes. */
 export default async function WorkflowLabPage() {
   await requirePageRole("CANDIDATE");
   return (
@@ -14,8 +14,7 @@ export default async function WorkflowLabPage() {
       <header>
         <h1 id="workflow-heading">Workflow Skills Lab</h1>
         <p className="page-intro">
-          Use this optional, unscored pre-flight workspace setup guide to get your windows, tabs and notes ready before evaluating.
-          It does not establish Generalist Qualification Exam readiness and is not required to earn the Generalist credential.
+          Optional five-minute setup guide to get your windows, tabs, and notes ready for practice. It’s never graded.
         </p>
       </header>
       <aside className="demo-notice workflow-rules" aria-labelledby="workflow-rules-heading">

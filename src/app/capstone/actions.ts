@@ -15,7 +15,7 @@ export async function startCapstoneAction(previous: CapstoneStartState, data: Fo
     await startCapstoneAttempt(prisma, user.id, { acknowledged: data.get("acknowledge") === "yes", blueprintId: data.get("blueprintId"),
       blueprintVersion: Number(data.get("blueprintVersion")), scoringPolicyVersion: Number(data.get("scoringPolicyVersion")), independentWorkPolicyVersion: data.get("independentWorkPolicyVersion") });
   } catch (error) {
-    return { sequence: previous.sequence + 1, error: error instanceof CapstonePolicyError ? error.message : "The capstone could not be started. Reload the readiness screen to check server status.",
+    return { sequence: previous.sequence + 1, error: error instanceof CapstonePolicyError ? error.message : "The exam could not be started. Reload this page to check your eligibility.",
       acknowledgmentError: error instanceof CapstonePolicyError && error.reason === "ACKNOWLEDGMENT" ? "Acknowledge the Independent-Work Policy before starting." : null };
   }
   revalidatePath("/capstone"); revalidatePath("/dashboard");

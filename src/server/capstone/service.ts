@@ -29,7 +29,8 @@ type Attempt = Prisma.AssessmentAttemptGetPayload<{ select: typeof attemptSelect
 
 export type CapstoneReadiness = {
   kind: CapstoneReadinessKind; serverNow: string; timeMultiplier: number; grantedSeconds: number | null;
-  practiced: Competency[]; missingPractice: Competency[]; remainingForms: number; cooldownUntil: string | null;
+  practiced: Competency[]; missingPractice: Competency[]; practiceSubmissionCounts: Record<Competency, number>;
+  remainingForms: number; cooldownUntil: string | null;
   blueprint: { id: string; code: string; version: number; title: string; baseDurationSeconds: number; retakeCooldownHours: number;
     requireGeneralistPractice: boolean; questionCount: number; writtenPromptCount: number; independentWorkPolicyVersion: string; rules: string[];
     scoringPolicy: { code: string; version: number; passingThreshold: number; judgment: number; rubric: number; verification: number; written: number } } | null;
@@ -44,8 +45,8 @@ export class CapstonePolicyError extends Error {
   constructor(public readonly reason: CapstoneReadinessKind | "ACKNOWLEDGMENT" | "STALE_POLICY") {
     super(reason === "ACKNOWLEDGMENT" ? "Read and acknowledge the Independent-Work Policy before starting."
       : reason === "EMAIL_UNVERIFIED" ? "Verify your email before starting a timed Generalist Qualification Exam. Learning and untimed practice remain available."
-      : reason === "STALE_POLICY" ? "The capstone policy changed. Reload the readiness screen and read the current policy."
-      : "A new capstone cannot start in the current readiness state. Review the server-confirmed status below.");
+      : reason === "STALE_POLICY" ? "The exam policy changed. Reload this page and read the current policy."
+      : "You can’t start a new exam right now. Reload this page to see your eligibility.");
     this.name = "CapstonePolicyError";
   }
 }
@@ -98,7 +99,12 @@ async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string
   // Check actual Generalist submissions, not diagnostic scores, self-marked lessons or client progress flags.
   const practice = await tx.submissionResponse.findMany({ where: { attempt: { candidateId, mode: "PRACTICE", track: "GENERALIST", status: { in: ["SUBMITTED", "FINALIZED"] } },
     scenario: { bank: "PRACTICE", track: "GENERALIST", isSyntheticFixture: true } }, select: { scenario: { select: { competencies: true } } } });
-  const practiced = competencies.filter((code) => practice.some((response) => response.scenario.competencies.includes(code)));
+  // Counts guide optional extra practice. Eligibility still requires only one submission per required area.
+  const practiceSubmissionCounts = { G1: 0, G2: 0, G3: 0, G4: 0, G5: 0, G6: 0 };
+  for (const response of practice) {
+    for (const code of new Set(response.scenario.competencies)) practiceSubmissionCounts[code]++;
+  }
+  const practiced = competencies.filter((code) => practiceSubmissionCounts[code] > 0);
   const exposures = await tx.scenarioExposure.findMany({ where: { candidateId }, select: { familyId: true } });
   const used = new Set(exposures.map((row) => row.familyId));
   const available = blueprint?.slots.map((slot) => ({ position: slot.position, scenarios: slot.pool.map((item) => item.scenario).filter((s) => !used.has(s.familyId)) })) ?? [];
@@ -106,7 +112,7 @@ async function loadLockedState(tx: Prisma.TransactionClient, candidateId: string
   const cooldown = capstoneCooldownUntil(attempts.map((a) => ({ ...a, cooldownHours: a.capstoneBlueprint?.retakeCooldownHours ?? blueprint?.retakeCooldownHours ?? 48 })), now);
   const finalized = attempts.find((a) => a.status === "FINALIZED" && a.finalizedAt && a.deterministicScore !== null && a.writtenScore !== null && a.finalScore !== null && a.passed !== null);
   const view: CapstoneReadiness = { kind: "UNAVAILABLE", serverNow: now.toISOString(), timeMultiplier: profile.timeMultiplier, grantedSeconds: null,
-    practiced, missingPractice: competencies.filter((code) => !practiced.includes(code)), remainingForms, cooldownUntil: cooldown?.toISOString() ?? null,
+    practiced, missingPractice: competencies.filter((code) => !practiced.includes(code)), practiceSubmissionCounts, remainingForms, cooldownUntil: cooldown?.toISOString() ?? null,
     blueprint: null, attempt: null, lastExpiredAt: attempts.find((a) => a.status === "EXPIRED")?.expiresAt?.toISOString() ?? null,
     latestFinalized: finalized ? { attemptId: finalized.id, deterministicScore: finalized.deterministicScore!.toNumber(), writtenScore: finalized.writtenScore!.toNumber(),
       finalScore: finalized.finalScore!.toNumber(), passed: finalized.passed!, finalizedAt: finalized.finalizedAt!.toISOString(),

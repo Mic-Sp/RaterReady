@@ -11,7 +11,7 @@ async function accessible(page: Page) {
   await expectSyntheticBadges(page);
 }
 
-test("readiness reports missing Generalist submissions, pinned policy and accommodations accessibly", async ({ page }) => {
+test("readiness shows the start checklist and keeps policy and exam details accessible", async ({ page }) => {
   const db = new PrismaClient({ datasourceUrl: process.env.TEST_DATABASE_URL });
   let id: string | undefined;
   try {
@@ -20,13 +20,29 @@ test("readiness reports missing Generalist submissions, pinned policy and accomm
     await db.candidateProfile.update({ where: { userId: id }, data: { onboardingCompletedAt: new Date(), timeMultiplier: 1 } });
     await signIn(page, "demo-elena");
     await page.getByRole("link", { name: "View exam readiness", exact: true }).click();
-    await expect(page.getByText(/Fresh form capacity: 4\./)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Generalist practice still needed", exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Required Generalist practice coverage" }).getByRole("listitem").filter({ hasText: "Practice still needed" })).toHaveCount(6);
-    await expect(page.getByText(/Diagnostic scores, Workflow Skills Lab completion and Technical Preview exercises never waive/)).toBeVisible();
-    await expect(page.getByText(/Passing requires at least 85% only after owner review and finalization/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start timed Qualification Exam", exact: true })).toHaveCount(0);
-    for (const name of ["ChatGPT", "Claude", "Gemini", "Traditional search engines", "Ordinary notes"]) await expect(page.getByText(name, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("60 minutes · 6 scenarios (3 with short written answers) · Pass at 85% · Retakes allowed after 48 hours.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Finish practicing all six areas", exact: true })).toBeVisible();
+    await expect(page.getByText("0 of 6 areas practiced", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "How ready am I?" })).toHaveAttribute("href", "/practice?competency=G1");
+    await expect(page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Start Qualification Exam", exact: true })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "What happens after you submit" })).toBeVisible();
+    const forms = page.getByText("4 exam forms available", { exact: true });
+    await expect(forms).toBeHidden();
+    const examDetails = page.locator("summary", { hasText: "Exam details" });
+    await examDetails.focus();
+    await page.keyboard.press("Enter");
+    await expect(forms).toBeVisible();
+    await expect(page.getByText("Passing threshold: 85%", { exact: true })).toBeVisible();
+    await expect(page.getByText(/you can try again after 48 hours with a fresh set of scenarios/)).toBeVisible();
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
+    const policy = page.locator("summary", { hasText: "Read the Independent-Work Policy" });
+    await policy.click();
+    const bullets = page.locator(".exam-policy").getByRole("listitem");
+    await expect(bullets).toHaveCount(4);
+    for (const rule of [/ChatGPT, Claude, Gemini/, /Traditional search engines/, /Ordinary notes/]) {
+      await expect(bullets.filter({ hasText: rule })).toBeVisible();
+    }
     await accessible(page);
     await page.setViewportSize({ width: 320, height: 740 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -45,18 +61,27 @@ test("explicit acknowledgment starts one accommodated timer, survives reload/clo
     const user = await db.user.findUniqueOrThrow({ where: { accountCode: "demo-marcus" } }); id = user.id;
     await clearCapstones(db, id); await setCoverage(db, id, true);
     await db.candidateProfile.update({ where: { userId: id }, data: { onboardingCompletedAt: new Date(), timeMultiplier: 1.5 } });
+    await page.setViewportSize({ width: 1280, height: 800 });
     await signIn(page, "demo-marcus"); await page.goto("/capstone");
-    await expect(page.getByRole("heading", { name: "Eligible to start", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "You're eligible to start", exact: true })).toBeVisible();
+    await expect(page.getByText("6 of 6 areas practiced", { exact: true })).toBeVisible();
+    await expect(page.getByText("Your time limit: 90 minutes.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "How ready am I?" })).toHaveAttribute("href", "/practice?competency=G1");
     const acknowledgment = page.getByRole("checkbox", { name: /I have read and will follow the Independent-Work Policy/ });
+    const start = page.getByRole("button", { name: "Start Qualification Exam", exact: true });
+    await expect(start).toBeInViewport({ ratio: 1 });
+    await expect(start).toHaveAccessibleDescription("The timer starts immediately and cannot be paused.");
     await expect(acknowledgment).not.toBeChecked();
-    await page.getByRole("button", { name: "Start timed Qualification Exam", exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("Read and acknowledge");
-    await expect(acknowledgment).toBeFocused();
+    await expect(start).toBeDisabled();
     expect(await db.assessmentAttempt.count({ where: { candidateId: id, mode: "CAPSTONE" } })).toBe(0);
+    await acknowledgment.focus();
     await page.keyboard.press("Space");
-    await expect(acknowledgment).toBeChecked(); await accessible(page);
-    await page.getByRole("button", { name: "Start timed Qualification Exam", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Your fixed server timer", exact: true })).toBeVisible();
+    await expect(acknowledgment).toBeChecked();
+    await expect(start).toBeEnabled(); await accessible(page);
+    await page.keyboard.press("Tab");
+    await expect(start).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Your exam deadline", exact: true })).toBeVisible();
     const attempt = await db.assessmentAttempt.findFirstOrThrow({ where: { candidateId: id, mode: "CAPSTONE" } });
     expect(attempt.expiresAt!.getTime() - attempt.startedAt.getTime()).toBe(5400000);
     const reference = page.getByTestId("capstone-attempt-id");
@@ -98,13 +123,13 @@ test("a near-deadline historical fixture auto-locks through server refresh and d
     await db.submissionResponse.createMany({ data: blueprint.slots.map((slot) => ({ attemptId: attempt.id, scenarioId: slot.pool[0].scenarioId, position: slot.position })) });
     await db.scenarioExposure.createMany({ data: blueprint.slots.map((slot) => ({ candidateId: id!, familyId: slot.pool[0].scenario.familyId })) });
     await page.goto("/capstone");
-    await expect(page.getByRole("heading", { name: "Your fixed server timer", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Retake cooldown active", exact: true })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText(/Previous attempt expired and is locked/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your exam deadline", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your next attempt opens soon", exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(/Your previous timer ended at/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Resume active attempt", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Start timed Qualification Exam", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start Qualification Exam", exact: true })).toBeDisabled();
     expect(await db.assessmentAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({ status: "EXPIRED", passed: null, finalScore: null });
-    await page.reload(); await expect(page.getByRole("heading", { name: "Retake cooldown active", exact: true })).toBeVisible();
+    await page.reload(); await expect(page.getByRole("heading", { name: "Your next attempt opens soon", exact: true })).toBeVisible();
     await accessible(page);
   } finally { if (id) await clearCapstones(db, id); await db.$disconnect(); }
 });

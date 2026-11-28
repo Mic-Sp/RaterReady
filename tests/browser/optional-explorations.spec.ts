@@ -31,7 +31,7 @@ test("optional workflow walkthrough supports keyboard setup checks, persistence,
     await signIn(page, "demo-marcus");
     await page.getByRole("link", { name: "Workflow Skills Lab", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Workflow Skills Lab", exact: true })).toBeVisible();
-    await expect(page.getByText(/not required to earn the Generalist credential/)).toBeVisible();
+    await expect(page.getByText(/Optional five-minute setup guide.*never graded/)).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Follow the assessment’s own rules" })).toContainText("third-party assessment or employer");
     const steps = page.getByRole("navigation", { name: "Setup steps" });
     const step = (number: number) => steps.getByRole("button", { name: new RegExp(`^Step ${number}:`) });
@@ -50,12 +50,12 @@ test("optional workflow walkthrough supports keyboard setup checks, persistence,
     await expect(setup.getByRole("table", { name: "macOS window shortcuts" }).locator("kbd > kbd").first()).toHaveText("Fn");
     await accessible(page);
 
-    await page.getByRole("radio", { name: "A response is cut off" }).check();
-    await expect(feedback).toContainText("Widen the windows");
-    await expect(next(2)).toBeDisabled();
-    const readable = page.getByRole("radio", { name: "Both snapped windows are readable" });
-    await readable.press("Space");
-    await expect(readable).toBeChecked();
+    const cutOff = page.getByRole("radio", { name: "A response is cut off" });
+    await cutOff.press("Space");
+    await expect(cutOff).toBeChecked();
+    await expect(feedback).toContainText("Try widening the windows");
+    await expect(next(2)).toBeEnabled();
+    await expect(next(2)).toHaveClass(/primary-button/);
     await expect(step(1)).toHaveAccessibleName(/complete/);
     await next(2).press("Enter");
     await expect(page.getByRole("heading", { name: "Set up tabs and zoom" })).toBeFocused();
@@ -77,7 +77,8 @@ test("optional workflow walkthrough supports keyboard setup checks, persistence,
     await page.getByRole("radio", { name: "Task and rubric first, source next, both readable" }).check();
     await next(3).click();
     await page.getByRole("button", { name: "Compare with model" }).click();
-    await expect(feedback).toContainText("Add a short note under Claim");
+    await expect(feedback).toContainText("Try adding a short note under Claim");
+    await expect(next(4)).toBeEnabled();
     for (const label of ["Claim", "Source", "Uncertainty", "Judgment"]) {
       await page.getByRole("textbox", { name: label }).fill("Temporary synthetic practice note");
     }
@@ -96,7 +97,6 @@ test("optional workflow walkthrough supports keyboard setup checks, persistence,
     await expect(lookup.locator("kbd > kbd")).toHaveText(["Cmd", "F"]);
     await page.getByRole("radio", { name: "June 3", exact: true }).check();
     await expect(feedback).toContainText("notice was drafted");
-    await page.getByRole("radio", { name: "June 18" }).check();
     await expect(page.getByText("5 of 5 complete")).toBeVisible();
     await expect(step(5)).toHaveAccessibleName(/complete/);
     const complete = page.getByRole("heading", { name: "Walkthrough complete" });

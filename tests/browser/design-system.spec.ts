@@ -68,7 +68,7 @@ test("polished chrome and card tiers preserve keyboard access, disclosures, tabl
       if (["/practice", "/technical-preview"].includes(path)) {
         await cardHierarchy(page);
         const cards = page.locator(".practice-catalog .learning-card");
-        expect(await cards.locator(".learning-card-meta [data-synthetic-badge]").count()).toBe(await cards.count());
+        expect(await cards.locator(".learning-card-meta [data-synthetic-badge]").count()).toBe(path === "/practice" ? 0 : await cards.count());
         expect(await cards.getByRole("heading").evaluateAll((headings) => headings.every((heading) => !heading.textContent?.startsWith("DEMO - SYNTHETIC")))).toBe(true);
         await cards.first().screenshot({ path: test.info().outputPath(`${path.slice(1)}-card.png`) });
         const action = cards.first().getByRole("link", { name: "Open scenario", exact: true });

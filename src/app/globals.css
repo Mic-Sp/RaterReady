@@ -345,21 +345,38 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
 .status-success { color: var(--success); border-color: var(--success); background: var(--surface-emerald); }
 .status-pending { color: var(--accent-hover); border-color: var(--accent); background: var(--surface-indigo); }
 .readiness-summary-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
-.readiness-coverage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding: 0 !important; list-style: none !important; margin: 1rem 0; }
-.learning-page .readiness-coverage > li { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface-muted); }
-.coverage-link { display: flex; align-items: flex-start; gap: .6rem; min-height: 2.75rem; margin-bottom: .65rem; text-underline-offset: .2rem; }
-.coverage-link > span { min-width: 0; }
-.coverage-link .competency-tag { flex-shrink: 0; }
-.blueprint-grid, .timing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
-.blueprint-grid > div, .timing-grid > div { padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface-muted); }
+.qualification-readiness { max-width: 52rem; margin-inline: auto; padding: clamp(1rem, 2.5vw, 1.75rem); }
+.exam-overview { margin-top: .75rem; padding: .65rem .85rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface-indigo); }
+.qualification-readiness .exam-overview p + p { margin-top: .15rem; }
+.exam-readiness, .exam-resume, .exam-after-submit { margin-top: 1rem; }
+.qualification-readiness :is(.exam-readiness, .exam-resume, .exam-after-submit) h2 { margin-bottom: .3rem; font-size: 1.125rem; }
+.learning-page .exam-checklist { padding: 0; list-style: none; }
+.learning-page .exam-checklist > li { margin: 0; padding-block: .2rem; border-top: 1px solid var(--line); }
+.exam-check-row { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr); align-items: baseline; gap: .6rem; min-height: 2.75rem; padding-inline: .4rem; }
+.exam-check-row .exam-check-icon { color: var(--success); font-weight: 700; text-align: center; }
+.qualification-readiness .exam-check-row h3 { margin: 0; font-size: 1rem; }
+.qualification-readiness .exam-check-row .inline-link { display: inline; }
+.exam-policy summary { width: fit-content; min-height: 2.75rem; padding: .48rem .4rem; color: var(--accent-hover); font-weight: 700; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.exam-policy ul { margin-bottom: .4rem; }
+.exam-policy:not([open]) + .radio-choice { padding-block: .35rem; }
+.capstone-start-form .exam-start-warning { margin: .45rem 0 .55rem; padding: .55rem .8rem; }
+.qualification-readiness .primary-button { width: fit-content; max-width: 100%; }
+.capstone-start-form[aria-busy="false"] .primary-button:disabled { cursor: default; }
+.exam-resume form { margin-top: .55rem; }
+.exam-details { margin-top: 1rem; padding: .45rem .85rem; }
+.exam-details > summary { padding-block: .5rem; }
+.exam-details > h2 { margin-block: .75rem .2rem; font-size: 1.125rem; }
+.exam-details ul .inline-link { display: inline; }
+.exam-threshold { font-weight: 700; }
+.exam-entry-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem 1.1rem; margin-top: .5rem; }
+.blueprint-grid, .timing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .5rem; margin: .65rem 0; }
+.blueprint-grid > div, .timing-grid > div { min-width: 0; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); }
 .blueprint-grid dt, .timing-grid dt, .certificate-metadata dt { color: var(--muted); font-size: .875rem; font-weight: 700; }
-.blueprint-grid dd { margin-top: .5rem; font-size: 2rem; font-weight: 750; line-height: 1.25; color: var(--accent-hover); }
-.blueprint-grid dd span { font-size: .875rem; font-weight: 400; color: var(--muted); }
-.passing-standard { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--success); border-radius: .65rem; background: var(--surface-emerald); }
-.passing-standard > strong { color: var(--success); font-size: 1.2rem; }
-.threshold-track { height: .65rem; overflow: hidden; margin: .75rem 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
-.threshold-track > span { display: block; height: 100%; background: var(--success); }
-.independent-policy-card { border-left: 4px solid var(--accent); }
+.blueprint-grid dd { font-weight: 700; }
+@media (max-width: 480px) {
+  .qualification-readiness { padding: 12px; }
+  .exam-details, .exam-overview { padding-inline: 10px; }
+}
 
 /* A measured sticky landmark supplies scroll padding and reveals focused controls.
    Only the toolbar mirror is compact; the full page H1 and authoritative save region stay available. */
@@ -391,17 +408,13 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .certificate-metadata { margin: 1.25rem 0; }
 .certificate-metadata > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: .5rem 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
 .certificate-metadata dd { min-width: 0; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-@media (max-width: 64rem) {
-  .readiness-coverage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .blueprint-grid, .timing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 48rem) {
   .workspace-status-bar { grid-template-columns: minmax(0, 1fr) auto; }
   .workspace-bar-context { grid-column: 1 / -1; }
   .workspace-bar-status { justify-content: flex-start; }
 }
 @media (max-width: 30rem) {
-  .readiness-coverage, .blueprint-grid, .timing-grid, .certificate-metadata > div { grid-template-columns: minmax(0, 1fr); }
+  .certificate-metadata > div { grid-template-columns: minmax(0, 1fr); }
   .workspace-status-bar { padding: .5rem; gap: .5rem; }
   .workspace-bar-meta .demo-badge { font-size: .75rem; }
   .workspace-bar-status { grid-column: 1 / -1; }
@@ -409,10 +422,12 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 }
 @media (min-width: 48rem) { .learning-page .learning-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 64rem) { .learning-page .competency-grid, .learning-page .curriculum-list.learning-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.practice-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 1rem; align-items: end; margin-top: 1.5rem; }
+.practice-filters { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: .65rem 1rem; align-items: end; margin-top: 1.25rem; }
 .practice-filters .form-field { margin: 0; min-width: 0; }
-.practice-filters .secondary-button { margin-bottom: .6rem; }
-.practice-filters .inline-link { margin-bottom: .6rem; }
+.practice-clear { justify-self: start; color: var(--accent-hover); }
+.practice-recommendation { margin-top: 1rem; padding: var(--space-card); border: 1px solid var(--accent); border-inline-start-width: 4px; border-radius: var(--radius-card); background: var(--surface-indigo); }
+.practice-recommendation .primary-button { width: fit-content; max-width: 100%; }
+@media (min-width: 64rem) { .generalist-catalog .practice-catalog { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .practice-evaluation-form { max-width: 52rem; }
 .practice-evaluation-form fieldset { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .6rem; margin: 1.5rem 0; }
 .practice-evaluation-form legend { font-weight: 700; padding: 0 .3rem; }
@@ -437,7 +452,7 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .workflow-lab .workflow-rules h2 { margin-bottom: .15rem; font-size: 1rem; }
 .workflow-progress { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .25rem 1rem; }
 .workflow-progress .workflow-storage-note { margin: 0; color: var(--muted); font-size: .875rem; }
-.workflow-progress .text-button { font-size: .875rem; }
+.workflow-progress .workflow-reset { color: var(--muted); font-size: .875rem; }
 .workflow-step-nav { margin-block: .6rem 1rem; }
 .learning-page .workflow-step-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); gap: .5rem; list-style: none; margin: 0; padding: 0; }
 .learning-page .workflow-step-list > li { min-width: 0; margin: 0; }
@@ -475,8 +490,13 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .workflow-chord > kbd { display: inline-block; max-width: 100%; padding: .05em .3em; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: .3em; background: var(--surface); font: inherit; font-size: .875em; font-weight: 700; line-height: 1.35; }
 .workflow-shortcut-note { margin-top: .5rem; max-width: 72ch; color: var(--muted); font-size: .875rem; }
 .workflow-try { padding: .55rem .75rem; border-inline-start: 3px solid var(--accent); background: var(--surface-indigo); }
+.workflow-setup-card[data-step="1"] .workflow-card-body { gap: .65rem; margin-top: .55rem; }
+.workflow-setup-card[data-step="1"] .workflow-shortcut-reference { margin-top: .75rem; }
+.workflow-setup-card[data-step="1"] .workflow-try { border-inline-start-width: 5px; border-radius: .4rem; }
+.workflow-setup-card[data-step="1"] .workflow-try strong { display: block; color: var(--accent-hover); }
 .workflow-micro-check { margin-top: 1rem; padding: .75rem 1rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface-muted); }
 .workflow-micro-check h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; margin-bottom: .45rem; font-weight: 750; }
+.workflow-check-guidance { margin-bottom: .5rem; color: var(--muted); font-size: .9375rem; }
 .workflow-micro-check .workflow-done { font-size: .875rem; }
 .workflow-check-choices { min-width: 0; }
 .workflow-check-choices legend { max-width: 100%; margin-bottom: .25rem; font-weight: 600; }
