@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { GradingOperations } from "./grading-operations";
+import { gradingStatus, GradingOperations } from "./grading-operations";
 
 vi.mock("./judge-health-control", () => ({ JudgeHealthControl: () => <button>Run judge health check</button> }));
 
@@ -15,6 +15,16 @@ it("renders distinct configured postures, server circuit states and redacted ope
         errors: 1, averageLatencyMs: 172, usage: { inputTokens: { tokens: 42, reports: 1 },
           outputTokens: { tokens: 0, reports: 0 }, totalTokens: { tokens: 142, reports: 2 } } }] }} />);
   for (const text of ["Google Gemini", "gemini-3.1-flash-lite", "Service tier", "Live Free-Tier Demo (Synthetic Inputs Only)",
-    "ZDR-Attested", "Half-open", "Agreed pairs", "Disagreed pairs", "Pending owner reviews", "172 ms", "142 reported", "gemini-version-test",
-    "Owner sign-off is required", "Run judge health check"]) expect(html).toContain(text);
+    "ZDR-Attested", "Half-open", "Agreed pairs", "Disagreed pairs", "Waiting reviews", "172 ms", "142 reported", "gemini-version-test",
+    "Needs attention", "4 of 9 recent successful judge votes", "Owner sign-off is required", "Run judge health check"]) expect(html).toContain(text);
+  expect(html).toContain('<details class="reference-panel operator-technical"><summary>Technical details</summary>');
+});
+
+it("distinguishes configured backup from healthy live judging and describes a complete backup sample", () => {
+  const backup = { judgeSlot: 1, provider: "fixture", model: "Fixture", serviceTier: "Local fixture", posture: "Deterministic Fallback", breaker: "Inactive" } as const;
+  expect(gradingStatus([backup])).toBe("Using backup");
+  expect(gradingStatus([{ ...backup, provider: "openai", serviceTier: "Paid", posture: "ZDR-Attested", breaker: "Closed" }])).toBe("Healthy");
+  const html = renderToStaticMarkup(<GradingOperations metrics={{ pendingDepth: 0, finalizedCount: 0, syntheticJobs: 6, liveJobs: 0 }}
+    judges={[backup]} telemetry={{ sampleSize: 6, receiptLimit: 60, agreements: 0, disagreements: 0, fallbacks: 6, errors: 0, models: [] }} />);
+  expect(html).toContain("All 6 recent successful judge votes came from the backup judge.");
 });

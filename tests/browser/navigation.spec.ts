@@ -50,7 +50,7 @@ test("candidate navigation persists across all learning views, with wide layouts
       await nav.getByRole("link", { name: label, exact: true }).click();
       await expect(page).toHaveURL(path);
       if (path === "/capstone") {
-        await expect(page.getByRole("heading", { name: "Generalist Qualification Exam readiness", exact: true })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Generalist Qualification Exam", exact: true })).toBeVisible();
         await expect(page).toHaveTitle("Generalist Qualification Exam readiness | RaterReady");
       }
       await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
@@ -89,7 +89,7 @@ test("candidate navigation persists across all learning views, with wide layouts
     for (const criterion of ["Factual accuracy", "Instruction following", "Safety & stated policy"]) await expect(guide.getByText(criterion, { exact: true })).toBeVisible();
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("practice-desktop.png"), fullPage: true });
-    for (const path of ["/dashboard", "/practice", `/practice/${scenario.id}`]) {
+    for (const path of ["/dashboard", "/practice", `/practice/${scenario.id}`, "/opportunities"]) {
       await page.goto(path);
       await page.setViewportSize({ width: 320, height: 740 });
       await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -117,17 +117,37 @@ test("reviewer header offers only the console, wide metrics, mobile reflow and s
   await expect(nav.getByRole("link", { name: "Reviewer Console" })).toHaveAttribute("aria-current", "page");
   await expect(nav.getByRole("link", { name: "Reviewer Console" })).toHaveAttribute("href", "/admin");
   await expect(page.getByRole("banner")).toContainText("Michael Anthony Sprague");
+  await expect(page.getByRole("banner").getByText("Operator Console", { exact: true })).toBeVisible();
+  await expect(page.getByRole("contentinfo")).toHaveText("RaterReady · Reviewer operations");
   expect((await page.locator(".app-shell").boundingBox())!.width).toBe(1152);
-  const metrics = page.locator(".operations-grid > div");
-  expect(await metrics.evaluateAll((elements) => elements.every((element) => getComputedStyle(element).boxShadow !== "none" && getComputedStyle(element).borderTopWidth === "3px"))).toBe(true);
-  await expect(page.getByText(/^\d+ pending reviews$/)).toHaveClass(/status-badge/);
+  const attention = page.getByRole("region", { name: "Needs attention", exact: true });
+  await expect(attention.getByRole("link", { name: /^\d+ reviews? waiting$/ })).toBeVisible();
+  await expect(attention.getByRole("link", { name: /^\d+ open appeals?$/ })).toBeVisible();
+  await expect(attention.getByText("Using backup", { exact: true })).toBeVisible();
+  const metrics = page.getByRole("region", { name: "Grading status", exact: true }).locator(":scope > .operator-metrics > div");
+  await expect(metrics).toHaveCount(4);
   expect((await metrics.nth(0).boundingBox())!.y).toBe((await metrics.nth(3).boundingBox())!.y);
+  const jump = page.getByRole("navigation", { name: "Console sections" });
+  await expect(jump.getByRole("link")).toHaveText(["Pending queue", "Grading status", "Credentials", "Opportunity curation"]);
   await accessible(page);
   await page.screenshot({ path: test.info().outputPath("admin-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 320, height: 740 });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   await noOverflow(page); await accessible(page);
   expect((await metrics.nth(1).boundingBox())!.y).toBeGreaterThan((await metrics.nth(0).boundingBox())!.y);
+  await jump.getByRole("link", { name: "Opportunity curation" }).press("Enter");
+  await expect(page).toHaveURL(/#opportunity-curation$/);
+  const curation = page.getByRole("region", { name: "Opportunity curation", exact: true });
+  await expect(curation).toBeFocused();
+  await expect(curation.getByRole("region", { name: "External listings" }).locator("summary")).toHaveCount(3);
+  const example = curation.getByRole("region", { name: "Synthetic examples" });
+  await expect(example.locator("summary").getByText("Synthetic example", { exact: true })).toBeVisible();
+  await expect(example.getByText("Link pending verification")).toBeHidden();
+  await example.locator("summary").press("Enter");
+  await expect(example.getByText("Link pending verification")).toBeVisible();
+  await expect(page.getByRole("main")).not.toContainText("NO_FORMAL_PARTNERSHIP");
+  await expect(page.getByRole("main")).not.toContainText("example.org");
+  await noOverflow(page); await accessible(page);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL("/login");
   await page.goto("/admin"); await expect(page).toHaveURL("/login");
@@ -136,7 +156,10 @@ test("reviewer header offers only the console, wide metrics, mobile reflow and s
 test("admin judge posture and the quota-limited fixture health check reflow with keyboard focus", async ({ page }) => {
   test.setTimeout(60_000);
   await signIn(page, "admin-michael");
+  const details = page.locator("summary", { hasText: /^Technical details$/ });
   const posture = page.getByRole("region", { name: "Current judge posture" });
+  await expect(posture).toBeHidden();
+  await details.press("Enter");
   for (const label of ["Judge A", "Judge B"]) {
     const slot = posture.getByRole("region", { name: label, exact: true });
     await expect(slot).toContainText("Deterministic Fallback");
@@ -146,7 +169,7 @@ test("admin judge posture and the quota-limited fixture health check reflow with
   }
   const telemetry = page.getByRole("region", { name: "Recent receipt telemetry" });
   await expect(telemetry.getByText("Agreed pairs", { exact: true })).toBeVisible();
-  await expect(telemetry.getByText("Fallback votes", { exact: true })).toBeVisible();
+  await expect(telemetry.getByText("Backup votes", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 740 });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   const health = page.getByRole("region", { name: /^Judge health check/ });
@@ -163,9 +186,9 @@ test("admin judge posture and the quota-limited fixture health check reflow with
   await expect(run).toBeFocused();
   await expect(health.getByRole("status")).toContainText("Health check complete");
   await expect(health.getByText("Valid", { exact: true })).toHaveCount(2);
-  const details = telemetry.locator("summary");
-  if (await details.count()) {
-    await details.press("Enter");
+  const modelDetails = telemetry.locator("summary");
+  if (await modelDetails.count()) {
+    await modelDetails.press("Enter");
     await expect(telemetry.getByText("Mean latency", { exact: true }).first()).toBeVisible();
   }
   await noOverflow(page);

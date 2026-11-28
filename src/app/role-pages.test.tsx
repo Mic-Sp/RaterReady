@@ -109,6 +109,8 @@ describe("protected role-routing shell", () => {
     expect(html.match(/<main /g)).toHaveLength(1);
     expect(html.match(/data-synthetic-badge="true"/g)).toHaveLength(1);
     expect(html).not.toContain("demo-notice");
+    expect(html.includes("Operator Console")).toBe(identity.role === "ADMIN_REVIEWER");
+    expect(html.includes("RaterReady · Reviewer operations")).toBe(identity.role === "ADMIN_REVIEWER");
   });
 
   it("marks early access in the compact public header without implying a learner account is synthetic", async () => {

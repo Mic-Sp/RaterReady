@@ -57,9 +57,15 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await signIn(candidate, "demo-marcus");
       expect((await candidate.goto(path))?.status()).toBe(403);
       expect((await candidate.goto("/admin/reviews/unknown-review"))?.status()).toBe(403);
+      await candidate.goto("/opportunities");
+      const progress = candidate.getByRole("list", { name: "Progress toward queue access" });
+      await expect(progress.locator('[aria-current="step"]')).toContainText("Owner Review");
+      await expect(candidate.getByText("Sample preview", { exact: true })).toHaveCount(2);
+      await expect(candidate.getByRole("link", { name: "Check my exam status", exact: true })).toHaveAttribute("href", "/capstone");
+      expect(await candidate.content()).not.toContain("app.dataannotation.tech");
       await signIn(page, "admin-michael");
       await expect(page.getByRole("heading", { name: "Pending review queue", exact: true })).toBeVisible();
-      await expect(page.getByText("Estimated synthetic API spend: $0.00. Synthetic fixtures make no paid API calls.", { exact: true })).toBeVisible();
+      await expect(page.getByText(/Estimated synthetic fixture spend is \$0\.00/)).toBeHidden();
       await accessible(page);
       await page.getByRole("link", { name: `Adjudicate ${fixture.attempt.id}`, exact: true }).click();
       await expect(page.getByRole("heading", { name: "Stage 1: Independent rubric evaluation", exact: true })).toBeVisible();
@@ -223,7 +229,8 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
       await accessible(candidate);
       if (!passed) {
         await candidate.goto("/opportunities");
-        await expect(candidate.getByRole("heading", { name: "Opportunity queue locked", exact: true })).toBeVisible();
+        await expect(candidate.getByRole("heading", { name: "Unlock your opportunity queue", exact: true })).toBeVisible();
+        await expect(progress.locator('[aria-current="step"]')).toContainText("Qualification Exam");
         expect(await candidate.content()).not.toContain("app.dataannotation.tech"); await accessible(candidate);
         await candidate.goto("/opportunities/referral-demo");
         await expect(candidate.getByRole("heading", { name: "Opportunity queue locked", exact: true })).toBeVisible();
@@ -277,8 +284,9 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         await expect(opportunityAccess.getByText("Your opportunity queue is open", { exact: true })).toBeVisible();
         await opportunityAccess.getByRole("link", { name: "Check curated opportunity queue", exact: true }).click();
         await expect(candidate.getByRole("heading", { name: "Available curated listings", exact: true })).toBeVisible();
-        for (const text of ["Organization:", "Link type:", "Source attribution:", "Last verified:", "Eligibility notes:", "NO_FORMAL_PARTNERSHIP", "Permission note:", "Referral disclosure:"])
+        for (const text of ["Organization:", "Link type:", "Source attribution:", "Last verified:", "Eligibility notes:", "About these links", "Permission note:", "Referral disclosure:"])
           expect((await candidate.getByRole("main").innerText()).includes(text)).toBe(true);
+        expect(await candidate.content()).not.toMatch(/NO_FORMAL_PARTNERSHIP|example\.org/);
         await expect(candidate.getByRole("link", { name: "Open direct public application (external)", exact: true })).toHaveAttribute("href", "https://app.dataannotation.tech/users/sign_up");
         await accessible(candidate);
         await candidate.setViewportSize({ width: 320, height: 740 }); await candidate.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -293,30 +301,40 @@ for (const [subtotal, total, passed] of [[95, 100, true], [79, 84, false]] as co
         await lifecycle.getByLabel("Written lifecycle reason (required)", { exact: true }).fill("DEMO - SYNTHETIC: opportunity gate restriction check.");
         await lifecycle.getByRole("button", { name: "Save credential status", exact: true }).click();
         await expect.poll(async () => (await db.credential.findUniqueOrThrow({ where: { id: issued.id } })).status).toBe("SUSPENDED");
-        await candidate.goto("/opportunities"); await expect(candidate.getByRole("heading", { name: "Opportunity queue locked", exact: true })).toBeVisible();
+        await candidate.goto("/opportunities");
+        await expect(candidate.getByRole("heading", { name: "Unlock your opportunity queue", exact: true })).toBeVisible();
+        await expect(progress.locator('[aria-current="step"]')).toContainText("Queue Unlocked");
+        await expect(candidate.getByText(/The queue opens when your credential is active/)).toBeVisible();
         await lifecycle.getByLabel("Credential lifecycle status", { exact: true }).selectOption("ACTIVE");
         await lifecycle.getByLabel("Written lifecycle reason (required)", { exact: true }).fill("DEMO - SYNTHETIC: gate reinstatement check.");
         await lifecycle.getByRole("button", { name: "Save credential status", exact: true }).click();
         await expect.poll(async () => (await db.credential.findUniqueOrThrow({ where: { id: issued.id } })).status).toBe("ACTIVE");
         const listing = await db.opportunityListing.findUniqueOrThrow({ where: { code: "demo-permitted-personal-referral" } });
         try {
+          const listingSummary = page.getByRole("region", { name: "Synthetic examples" }).locator("summary", { hasText: "Remote response-review contributor" });
+          await listingSummary.press("Enter");
           const curation = page.getByRole("form", { name: `Opportunity curation ${listing.code}`, exact: true });
+          const saveListing = curation.getByRole("button", { name: "Save Remote response-review contributor — personal referral example", exact: true });
+          const date = curation.getByLabel("Example check date (UTC calendar date)", { exact: true });
+          await expect(date).toHaveAccessibleDescription(/Use the date you checked this example/);
           await curation.getByLabel("Listing availability", { exact: true }).selectOption("false");
-          await curation.getByRole("button", { name: "Save opportunity curation", exact: true }).click();
+          await saveListing.click();
           await expect.poll(async () => (await db.opportunityListing.findUniqueOrThrow({ where: { code: listing.code } })).active).toBe(false);
-          await expect(curation.getByRole("status")).toContainText("Opportunity curation saved.");
+          await expect(curation.getByRole("status")).toHaveText("Saved");
           await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("false");
           await page.reload();
+          await listingSummary.press("Enter");
           await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("false");
-          await expect(curation.getByLabel("Last verified date (UTC calendar date)", { exact: true })).toHaveValue(listing.lastVerifiedAt.toISOString().slice(0, 10));
+          await expect(date).toHaveValue(listing.lastVerifiedAt.toISOString().slice(0, 10));
           await candidate.reload(); await expect(candidate.getByRole("heading", { name: "Available curated listings", exact: true })).toBeVisible();
           await expect(candidate.getByRole("link", { name: "Preview synthetic personal referral", exact: true })).toHaveCount(0);
           await curation.getByLabel("Listing availability", { exact: true }).selectOption("true");
-          await curation.getByRole("button", { name: "Save opportunity curation", exact: true }).click();
+          await saveListing.click();
           await expect.poll(async () => (await db.opportunityListing.findUniqueOrThrow({ where: { code: listing.code } })).active).toBe(true);
-          await expect(curation.getByRole("status")).toContainText("Opportunity curation saved.");
+          await expect(curation.getByRole("status")).toHaveText("Saved");
           await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("true");
           await page.reload();
+          await listingSummary.press("Enter");
           await expect(curation.getByLabel("Listing availability", { exact: true })).toHaveValue("true");
           await candidate.reload();
           await expect(candidate.getByRole("link", { name: "Preview synthetic personal referral", exact: true })).toBeVisible();

@@ -9,8 +9,8 @@ import { appealOrder } from "../appeals/projection";
 import { capstoneDatabaseNow } from "../capstone/clock";
 
 const listingSelect = { code: true, title: true, organization: true, url: true, linkType: true, sourceLabel: true, sourceUrl: true,
-  eligibilityNote: true, lastVerifiedAt: true, limitationsNote: true, disclosure: true, partnershipStatus: true,
-  referralDisclosure: true, referralPermissionNote: true, active: true, demoLabel: true } as const;
+  eligibilityNote: true, lastVerifiedAt: true, limitationsNote: true,
+  referralDisclosure: true, referralPermissionNote: true, active: true } as const;
 
 /** Owner RBAC is enforced in the DAL as well as every admin page/action. */
 async function requireOpportunityAdmin() {
@@ -42,7 +42,9 @@ export async function getCandidateOpportunities(db: PrismaClient, includeListing
 /** Owner curation inventory includes paused listings but no candidate data. */
 export async function listAdminOpportunities(db: PrismaClient) {
   await requireOpportunityAdmin();
-  const records = await db.opportunityListing.findMany({ select: listingSelect, orderBy: { code: "asc" } });
+  const records = await db.opportunityListing.findMany({
+    select: { ...listingSelect, disclosure: true, partnershipStatus: true, demoLabel: true }, orderBy: { code: "asc" },
+  });
   return records.map((l) => ({ ...l, lastVerifiedAt: l.lastVerifiedAt.toISOString() }));
 }
 

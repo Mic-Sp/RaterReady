@@ -12,7 +12,7 @@ beforeEach(() => { vi.resetAllMocks(); mocks.guard.mockResolvedValue({ role: "AD
 describe("opportunity curation form parsing", () => {
   it.each([["false", false], ["true", true]])("passes literal FormData %s as boolean %s", async (value, expected) => {
     const form = new FormData(); form.set("code", "demo-listing"); form.set("active", value); form.set("verificationDate", "2026-11-23");
-    expect(await updateOpportunityAction({ error: null, message: null }, form)).toMatchObject({ error: null });
+    expect(await updateOpportunityAction({ error: null, message: null }, form)).toEqual({ error: null, message: "Saved" });
     expect(mocks.update).toHaveBeenCalledWith("TEST_DB", "demo-listing", { active: expected, verificationDate: "2026-11-23" });
     for (const path of ["/admin", "/opportunities", "/opportunities/referral-demo"]) expect(mocks.revalidate).toHaveBeenCalledWith(path);
   });

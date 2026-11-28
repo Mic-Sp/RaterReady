@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requirePageRole } from "../../../server/auth/page-access";
 import { prisma } from "../../../lib/prisma";
 import { getCandidateOpportunities } from "../../../server/opportunities/service";
-import { opportunityIndependenceNotice } from "../../../lib/opportunity-content";
+import { AboutOpportunityLinks } from "../about-links";
 
 /** A guessed referral URL repeats the gate; the Stage A preview never sends an application, referral token or personal data externally. */
 export default async function ReferralDemoPage() {
@@ -15,7 +15,7 @@ export default async function ReferralDemoPage() {
   return <article className="page-card learning-page" aria-labelledby="referral-heading"><h1 id="referral-heading"><SyntheticText>{view.unlocked ? "DEMO - SYNTHETIC: Personal referral preview" : "Opportunity queue locked"}</SyntheticText></h1>
     {listing ? <><p><SyntheticText>{listing.sourceLabel}</SyntheticText></p><p><SyntheticText>{listing.referralPermissionNote}</SyntheticText></p><p><SyntheticText>{listing.referralDisclosure}</SyntheticText></p>
       <p>No live employer application, personal referral permission, paid referral benefit or preferential hiring is represented by this synthetic example.</p></>
-      : <p>A finalized Generalist score of at least 85 and an active credential are required before accessing opportunity or referral details.</p>}
-    <p className="demo-notice"><SyntheticText>{opportunityIndependenceNotice}</SyntheticText></p><Link href="/opportunities" className="inline-link">Return to opportunity queue</Link>
+      : <p>The queue opens after a passing exam result of 85% or higher and an active credential.</p>}
+    <AboutOpportunityLinks /><Link href="/opportunities" className="inline-link">Return to opportunity queue</Link>
   </article>;
 }

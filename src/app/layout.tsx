@@ -11,11 +11,12 @@ export const metadata: Metadata = { title: "RaterReady", description: "Independe
 /** Render the shared shell using verified identity; every protected page keeps its own authorization guard. */
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const user = await optionalPageIdentity();
+  const operator = user?.role === "ADMIN_REVIEWER";
   return (
     <html lang="en">
       <body>
         <a href="#main-content" className="skip-link">Skip to main content</a>
-        <div className={`app-shell${user ? " authenticated-shell max-w-6xl" : ""}`}>
+        <div className={`app-shell${user ? " authenticated-shell max-w-6xl" : ""}${operator ? " operator-shell" : ""}`}>
           <header className="site-header">
             <div className="navigation-chrome">
               <div className="brand-lockup">
@@ -24,13 +25,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   RaterReady
                 </Link>
                 {!user && <span className="role-badge">Closed Alpha</span>}
+                {operator && <span className="operator-mode">Operator Console</span>}
               </div>
               {user && <AuthenticatedNavigation user={user} />}
             </div>
             <AccountBanner user={user} />
           </header>
           <main id="main-content" tabIndex={-1}>{children}</main>
-          <footer className="site-footer">RaterReady · Free, independent AI evaluation training</footer>
+          <footer className="site-footer">{operator ? "RaterReady · Reviewer operations" : "RaterReady · Free, independent AI evaluation training"}</footer>
         </div>
       </body>
     </html>

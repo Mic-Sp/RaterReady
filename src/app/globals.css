@@ -324,12 +324,12 @@ body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { 
    top/left highlights are decorative; controls still use the >=3:1 --border token. */
 .learning-dashboard, .qualification-readiness, .reviewer-layout, .welcome-page,
 .learning-page:has(> .learning-card-grid), .learning-page:has(> .welcome-entry) { background: var(--canvas); }
-.page-card, .learning-card, .level-option, .readiness-summary-card, .operations-grid > div,
+.page-card, .learning-card, .level-option, .readiness-summary-card,
 .review-prompt-card, .certificate-available { box-shadow: inset 1px 1px 0 #ffffffcc, var(--shadow-sm); }
 .page-card, .learning-card, .level-option { border-top-color: #c0ccdb; border-left-color: #c0ccdb; }
-.practice-catalog > li, .operations-grid > div { background: var(--surface); box-shadow: var(--shadow-sm); }
+.practice-catalog > li { background: var(--surface); box-shadow: var(--shadow-sm); }
 .practice-catalog > li:has(> .learning-card) { background: transparent; box-shadow: none; }
-.learning-card-grid > *, .practice-catalog > *, .operations-grid > *, .judge-grid > *, .blueprint-grid > *, .timing-grid > * { min-width: 0; }
+.learning-card-grid > *, .practice-catalog > *, .judge-grid > *, .blueprint-grid > *, .timing-grid > * { min-width: 0; }
 .learning-card-meta > *, .workspace-bar-meta > * { min-width: 0; max-width: 100%; }
 .learning-card, .level-option, .practice-catalog > li:has(> .inline-link) { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
 .learning-card:focus-within, .level-option:focus-within { border-color: var(--accent); box-shadow: var(--shadow-md); }
@@ -397,8 +397,6 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .workspace-reference-content .text-button { display: block; }
 .practice-workspace [tabindex="-1"], .capstone-exam [tabindex="-1"] { scroll-margin-top: var(--workspace-sticky-height, 12rem); }
 
-.operations-grid > div { padding: 1.25rem; border-top: 3px solid var(--accent); }
-.operations-grid dd { color: var(--accent-hover); font-variant-numeric: tabular-nums; }
 .review-prompt-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .independent-rubric-card, .judge-comparison-card { margin-top: 1.25rem; padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
 .judge-comparison-card { border-top: 3px solid var(--accent); background: var(--surface-indigo); }
@@ -535,10 +533,6 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .grading-detail dd { margin: 0; }
 .grading-posture-card h4, .grading-models h4 { font-weight: 700; margin-bottom: .5rem; }
 .grading-models li, .judge-health-results li { padding-block: .65rem; }
-.operations-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
-.operations-grid > div { min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: .65rem; }
-.operations-grid dt { color: var(--muted); }
-.operations-grid dd { font-size: 1.8rem; font-weight: 700; }
 .judge-grid, .criterion-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
 .rubric-list dt { font-weight: 700; margin-top: .7rem; }
 .rubric-list dd { margin: .25rem 0 1rem; }
@@ -547,7 +541,7 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .review-form fieldset { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: .65rem; margin: 1.25rem 0; }
 .review-form legend { padding: 0 .4rem; font-weight: 700; }
 @media (max-width: 760px) {
-  .operations-grid, .judge-grid, .criterion-inputs { grid-template-columns: minmax(0, 1fr); }
+  .judge-grid, .criterion-inputs { grid-template-columns: minmax(0, 1fr); }
   .authenticated-shell, body:has(.practice-workspace, .capstone-exam, .reviewer-workspace) .app-shell { width: calc(100% - 2rem); }
 }
 @media (max-width: 480px) {
@@ -618,3 +612,55 @@ html:has(.workspace-status-bar) { scroll-padding-top: var(--workspace-sticky-hei
 .lesson-practice-card { padding: var(--space-card); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
 .lesson-practice-card ul { margin-top: .65rem; }
 .lesson-footer nav a { text-decoration: underline; text-underline-offset: .2rem; }
+
+/* Opportunity and operator summaries reflow without hiding steps, actions or metrics. */
+.opportunities-page .opportunity-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .65rem; margin-block: 1rem .8rem; padding: 0; list-style: none; }
+.opportunity-steps > li { display: grid; grid-template-columns: 1em minmax(0, 1fr); align-items: baseline; gap: 0 .5rem; min-width: 0; padding: .65rem .75rem; background: var(--surface); border: 1px solid var(--border); border-radius: .65rem; }
+.opportunities-page .opportunity-steps > li + li { margin: 0; }
+.opportunity-steps [aria-current="step"] { border: 2px solid var(--accent); background: var(--surface-indigo); color: var(--accent-hover); }
+.opportunity-step-status { grid-column: 2; font-size: .875rem; }
+.opportunity-sample-label { align-self: flex-start; }
+.opportunity-about { margin-top: 1rem; padding: .75rem .9rem; border-inline-start: 3px solid var(--border); border-radius: .35rem; background: var(--surface-muted); }
+.learning-page .opportunity-about h2 { font-size: 1.125rem; margin-bottom: .25rem; }
+.opportunity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; margin-top: 1.1rem; }
+.opportunity-actions .button-link { width: fit-content; max-width: 100%; margin: 0; }
+
+.operator-shell .navigation-chrome { gap: .6rem 1rem; border-top: 4px solid #263b56; background: #e6edf5; }
+.operator-mode { padding: .25rem .65rem; border-radius: .4rem; background: #263b56; color: #fff; font-weight: 750; font-size: .875rem; }
+.operator-shell .authenticated-navigation > nav { padding-top: .45rem; }
+.operator-shell .site-footer { font-weight: 700; }
+@media (min-width: 52rem) {
+  .operator-shell .navigation-chrome { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .operator-shell .authenticated-navigation > nav { grid-column: 1 / -1; }
+}
+.operator-attention { margin-top: 1rem; padding: .6rem .85rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface); }
+.reviewer-layout .operator-attention h2 { margin: 0; font-size: 1.15rem; }
+.reviewer-layout :is(.operator-attention, .operator-jumps) ul { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem 1rem; padding: 0; list-style: none; }
+.reviewer-layout :is(.operator-attention, .operator-jumps) li { min-width: 0; margin: 0; }
+.operator-attention .inline-link { padding-block: .55rem; font-weight: 700; }
+.operator-jumps { margin-top: .65rem; }
+.operator-jumps a { display: block; min-height: 2.75rem; padding: .5rem .65rem; color: var(--accent-hover); text-decoration: underline; text-underline-offset: .2rem; }
+.reviewer-layout section[id] { scroll-margin-top: 1rem; }
+.operator-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); gap: 1px; margin-block: .85rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--line); }
+.operator-metrics > div { min-width: 0; padding: .6rem .85rem; background: var(--surface); }
+.operator-metrics dt { color: var(--muted); font-size: .875rem; }
+.operator-metrics dd { color: var(--accent-hover); font-weight: 750; font-size: 1.25rem; }
+.operator-technical { margin-top: .85rem; padding-block: .5rem; }
+.operator-technical > summary { padding-block: .4rem; }
+.operator-technical > section:first-of-type { margin-top: .7rem; }
+.operator-technical button { width: fit-content; max-width: 100%; }
+
+.curation-group { margin-block: 1rem; }
+.reviewer-layout .curation-list { display: grid; gap: .55rem; padding: 0; list-style: none; }
+.reviewer-layout .curation-list > li { min-width: 0; margin: 0; }
+.curation-listing { border: 1px solid var(--border); border-radius: .65rem; background: var(--surface); }
+.curation-listing > summary { min-height: 2.75rem; padding: .55rem .75rem; cursor: pointer; font-weight: 700; }
+.curation-listing-body { min-width: 0; padding: .65rem .75rem .85rem; border-top: 1px solid var(--line); }
+.curation-listing-body .inline-link { color: var(--accent-hover); }
+.curation-example-band { display: block; margin-block: .15rem .4rem; padding: .35rem .55rem; border-inline-start: 3px solid var(--accent); background: var(--surface-indigo); }
+.curation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+.curation-actions button { width: fit-content; max-width: 100%; }
+@media (max-width: 480px) {
+  .opportunities-page, .operator-shell .reviewer-layout { padding: 12px; }
+  .curation-listing-body, .operator-technical { padding-inline: 10px; }
+}

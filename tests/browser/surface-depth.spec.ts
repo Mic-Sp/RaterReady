@@ -41,10 +41,18 @@ test("slate canvas, elevated cards and readiness summaries fit desktop, intermed
       await accessible(page);
       await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     }
-    await expect(page.locator(".readiness-coverage > li")).toHaveCount(6);
+    const examDetails = page.locator("details.exam-details");
+    await expect(examDetails.getByText("Passing threshold: 85%", { exact: true })).toBeHidden();
+    await examDetails.locator("summary").press("Enter");
+    await expect(examDetails.getByRole("listitem")).toHaveCount(6);
     await expect(page.locator(".blueprint-grid dd")).toHaveText(["40 points", "30 points", "25 points", "5 points"]);
-    await expect(page.getByText("85% passing standard", { exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Independent-Work Policy", exact: true })).toHaveClass(/independent-policy-card/);
+    await expect(examDetails.getByText("Passing threshold: 85%", { exact: true })).toBeVisible();
+    const policy = page.locator("details.exam-policy");
+    await policy.locator("summary").press("Enter");
+    await expect(policy.getByRole("listitem")).toHaveCount(4);
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await accessible(page);
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: test.info().outputPath("qualification-readiness-cards.png"), fullPage: true });
     await page.goto("/practice");

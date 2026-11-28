@@ -17,6 +17,6 @@ export async function updateOpportunityAction(_previous: CredentialActionState, 
     const active = z.enum(["true", "false"]).parse(form.get("active")) === "true";
     await updateOpportunityListing(prisma, code, { active, verificationDate: form.get("verificationDate") });
     revalidatePath("/admin"); revalidatePath("/opportunities"); revalidatePath("/opportunities/referral-demo");
-    return { error: null, message: "Opportunity curation saved. Changes are recorded in the immutable audit trail." };
+    return { error: null, message: "Saved" };
   } catch { return { error: "Curation could not be saved. Use a valid verification date that is not in the future.", message: null }; }
 }

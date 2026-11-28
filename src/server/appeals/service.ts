@@ -61,12 +61,13 @@ export async function submitGradingAppeal(db: PrismaClient, attemptId: string, i
 export async function listAdminAppeals(db: PrismaClient) {
   await requireAppealAdmin();
   const select = { ...appealSelect, attemptId: true, attempt: { select: { candidate: { select: { user: { select: { name: true } } } } } } } as const;
-  const [pending, resolved] = await Promise.all([
+  const [pending, resolved, openCount] = await Promise.all([
     db.assessmentAppeal.findMany({ where: { status: "OPEN" }, select, orderBy: { submittedAt: "asc" }, take: 50 }),
     db.assessmentAppeal.findMany({ where: { status: "RESOLVED" }, select, orderBy: { resolvedAt: "desc" }, take: 50 }),
+    db.assessmentAppeal.count({ where: { status: "OPEN" } }),
   ]);
   const project = (a: typeof pending[number]) => ({ ...appealView(a), attemptId: a.attemptId, candidateName: a.attempt.candidate.user.name });
-  return { pending: pending.map(project), resolved: resolved.map(project) };
+  return { pending: pending.map(project), resolved: resolved.map(project), openCount };
 }
 
 /** Inspect candidate evidence alongside the current finalized result and the original rubric-first review; no answer keys are returned. */
